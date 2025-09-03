@@ -1,0 +1,50 @@
+{
+  "languages": {
+    "Move": {
+      "language_servers": ["move-analyzer"],
+      "format_on_save": "on",
+      "tab_size": 4,
+      "hard_tabs": false,
+      "preferred_line_length": 100,
+      "soft_wrap": "preferred_line_length"
+    }
+  },
+  "language_servers": {
+    "move-analyzer": {
+      "binary": {
+        "path": "move-analyzer",
+        "arguments": ["--log-level", "info"]
+      },
+      "initialization_options": {
+        "dialect": "sui"
+      }
+    }
+  },
+  "file_types": {
+    "Move": ["move"]
+  },
+  "auto_update": false,
+  "vim_mode": false,
+  "ui_font_size": 16,
+  "buffer_font_size": 14,
+  "theme": {
+    "mode": "system",
+    "light": "One Light",
+    "dark": "One Dark"
+  },
+  "project_panel": {
+    "dock": "left"
+  },
+  "outline_panel": {
+    "dock": "right"
+  },
+  "collaboration_panel": {
+    "dock": "left"
+  },
+  "notification_panel": {
+    "dock": "right"
+  },
+  "assistant": {
+    "dock": "right"
+  }
+}
