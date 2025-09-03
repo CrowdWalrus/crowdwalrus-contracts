@@ -62,7 +62,9 @@ Open the project in Zed for the best development experience:
 - ✅ Syntax highlighting and error detection
 - ✅ Auto-completion for Sui types
 - ✅ Code formatting on save
-- ✅ Integrated build and test tasks
+- ✅ Integrated build and test tasks (Zed native format)
+- ✅ 12 predefined tasks for common workflows
+- ✅ Task validation and format checking
 
 See `.zed/README.md` for detailed Zed setup information.
 
@@ -93,10 +95,13 @@ public struct Project {
 
 ### Using Zed Tasks
 
-1. **Build**: `Cmd+Shift+P` → "Tasks: Build"
-2. **Test**: `Cmd+Shift+P` → "Tasks: Test"
-3. **Clean**: `Cmd+Shift+P` → "Tasks: Clean"
-4. **Format**: `Cmd+Shift+P` → "Tasks: Format"
+1. **Build**: `Cmd+Shift+P` → "task: spawn" → "Build"
+2. **Test**: `Cmd+Shift+P` → "task: spawn" → "Test"
+3. **Clean Build**: `Cmd+Shift+P` → "task: spawn" → "Clean Build"
+4. **Format Code**: `Cmd+Shift+P` → "task: spawn" → "Format Code"
+5. **Deploy to Testnet**: `Cmd+Shift+P` → "task: spawn" → "Deploy to Testnet"
+
+Or use `task: rerun` to repeat the last task.
 
 ### Command Line
 
@@ -176,6 +181,16 @@ sui move test --verbose
 - Use 4 spaces for indentation
 - Maximum line length: 100 characters
 - Follow Sui Move conventions: [Sui Move Conventions](https://docs.sui.io/concepts/sui-move-concepts/conventions)
+
+## Development Tools
+
+### Task Validation
+Validate Zed tasks configuration:
+```bash
+./.zed/validate-tasks.sh
+```
+
+This ensures tasks.json uses proper Zed format (not VS Code format).
 
 ## License
 
