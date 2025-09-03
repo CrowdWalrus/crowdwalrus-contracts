@@ -12,14 +12,19 @@ Project-specific Zed settings that configure:
 - Syntax highlighting for `.move` files
 
 ### `tasks.json`
-Predefined tasks for common Sui Move development workflows:
+Predefined tasks for common Sui Move development workflows using Zed's native task format:
 - **Build**: Compile the Move package
 - **Test**: Run Move unit tests
-- **Clean**: Clean build artifacts
-- **Format**: Format Move code
-- **Lint**: Run Move linter
-- **Deploy (Testnet)**: Deploy to Sui testnet
+- **Clean Build**: Clean build artifacts
+- **Format Code**: Format Move code (auto-hide on success)
+- **Lint Code**: Run Move linter
+- **Deploy to Testnet**: Deploy to Sui testnet (uses new terminal)
 - **Check Dependencies**: Verify package dependencies
+- **Test with Coverage**: Run tests with coverage analysis
+- **Build with Debug**: Build in development mode
+- **Show Package Info**: Display detailed package information
+- **Git Status**: Quick git status check
+- **Current File Path**: Show current file path (uses Zed variables)
 
 ## Prerequisites
 
@@ -45,12 +50,20 @@ Predefined tasks for common Sui Move development workflows:
 ## Usage
 
 ### Running Tasks
-Use Zed's command palette (`Cmd+Shift+P`) and search for "Tasks" to run any of the predefined tasks.
+Use Zed's command palette (`Cmd+Shift+P`) and search for "task: spawn" to run any of the predefined tasks, or use the task modal directly.
 
 ### Quick Actions
 - `Cmd+S`: Save and auto-format
-- `Cmd+Shift+P` → "Build": Compile the project
-- `Cmd+Shift+P` → "Test": Run tests
+- `Cmd+Shift+P` → "task: spawn" → "Build": Compile the project
+- `Cmd+Shift+P` → "task: spawn" → "Test": Run tests
+- `Cmd+Shift+P` → "task: rerun": Rerun the last task
+
+### Task Variables
+Tasks can use Zed environment variables:
+- `$ZED_FILE`: Current file path
+- `$ZED_WORKTREE_ROOT`: Project root directory
+- `$ZED_FILENAME`: Current filename
+- `$ZED_SELECTED_TEXT`: Selected text
 
 ## Troubleshooting
 
@@ -78,5 +91,13 @@ The setup uses:
 - **Tab Size**: 4 spaces
 - **Line Length**: 100 characters
 - **Language Server**: move-analyzer with Sui dialect
+- **Task Format**: Zed native format (not VS Code tasks.json format)
+
+### Task Configuration
+Tasks use Zed's native format with these key properties:
+- `reveal`: Controls when terminal is shown ("always", "no_focus", "never")
+- `hide`: Controls when terminal is hidden ("never", "always", "on_success")
+- `use_new_terminal`: Whether to use a new terminal tab
+- `allow_concurrent_runs`: Whether to allow multiple instances
 
 For global Zed settings, modify `~/.config/zed/settings.json` instead of the project-specific files in this directory.

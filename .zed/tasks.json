@@ -1,112 +1,115 @@
-{
-  "tasks": [
-    {
-      "label": "Build",
-      "command": "sui",
-      "args": ["move", "build"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": [],
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
-    },
-    {
-      "label": "Test",
-      "command": "sui",
-      "args": ["move", "test"],
-      "group": "test",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Clean",
-      "command": "sui",
-      "args": ["move", "build", "--clean"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Format",
-      "command": "sui",
-      "args": ["move", "build", "--format"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "silent",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": false,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Lint",
-      "command": "sui",
-      "args": ["move", "build", "--lint"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Deploy (Testnet)",
-      "command": "sui",
-      "args": ["client", "publish", "--gas-budget", "100000000"],
-      "group": "deploy",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": true,
-        "panel": "dedicated",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Check Dependencies",
-      "command": "sui",
-      "args": ["move", "build", "--check-dependencies"],
-      "group": "build",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "focus": false,
-        "panel": "shared",
-        "showReuseMessage": true,
-        "clear": false
-      },
-      "problemMatcher": []
-    }
-  ]
-}
+[
+  {
+    "label": "Build",
+    "command": "sui",
+    "args": ["move", "build"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Test",
+    "command": "sui",
+    "args": ["move", "test"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Clean Build",
+    "command": "sui",
+    "args": ["move", "build", "--clean"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Format Code",
+    "command": "sui",
+    "args": ["move", "build", "--format"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "no_focus",
+    "hide": "on_success"
+  },
+  {
+    "label": "Lint Code",
+    "command": "sui",
+    "args": ["move", "build", "--lint"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Deploy to Testnet",
+    "command": "sui",
+    "args": ["client", "publish", "--gas-budget", "100000000"],
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Check Dependencies",
+    "command": "sui",
+    "args": ["move", "build", "--check-dependencies"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Test with Coverage",
+    "command": "sui",
+    "args": ["move", "test", "--coverage"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Build with Debug",
+    "command": "sui",
+    "args": ["move", "build", "--dev"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Show Package Info",
+    "command": "sui",
+    "args": [
+      "move",
+      "build",
+      "--dump-bytecode-as-base64",
+      "--dump-source-maps"
+    ],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Git Status",
+    "command": "git",
+    "args": ["status", "--short"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": true,
+    "reveal": "always",
+    "hide": "never"
+  },
+  {
+    "label": "Current File Path",
+    "command": "echo",
+    "args": ["$ZED_FILE"],
+    "use_new_terminal": false,
+    "allow_concurrent_runs": true,
+    "reveal": "always",
+    "hide": "never"
+  }
+]
