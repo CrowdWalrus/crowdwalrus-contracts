@@ -9,7 +9,7 @@ This project contains Move modules for managing crowd-sourced walrus projects wi
 ## Project Structure
 
 ```
-crowd_walrus_move/
+crowd_walrus/
 ├── sources/           # Move source files
 │   ├── admin.move     # Administrative functionality
 │   ├── project.move   # Project management
@@ -46,7 +46,7 @@ crowd_walrus_move/
 ### 1. Clone and Build
 
 ```bash
-cd crowd_walrus_move
+cd crowd_walrus
 sui move build
 ```
 

@@ -1,11 +1,36 @@
-// Singleton Admin
-module crowd_walrus_move::admin {
-    use sui::{dynamic_field as df, event};
+module crowd_walrus::admin {
+    use crowd_walrus::project;
+    use std::string::String;
+    use sui::{dynamic_field as df, event, table};
 
-    // Error codes
+    // === Errors ===
+
     const E_NOT_AUTHORIZED: u64 = 1;
 
-    // Events
+    // === Structs ===
+
+    /// The admin object
+    public struct Admin has key, store {
+        id: UID,
+        version: u64,
+        created_at: u64,
+        projects: table::Table<String, ID>, // Subdomain to project ID
+    }
+
+    /// Capability for admin operations
+    public struct AdminCap has key, store {
+        id: UID,
+        admin_id: ID,
+    }
+
+    /// Capability for validating admin operations
+    public struct ValidateCap has key, store {
+        id: UID,
+        admin_id: ID,
+    }
+
+    // === Events ===
+
     public struct AdminCreated has copy, drop {
         admin_id: ID,
         creator: address,
@@ -17,31 +42,15 @@ module crowd_walrus_move::admin {
         upgraded_by: address,
     }
 
-    // Capability for admin operations
-    public struct AdminCap has key, store {
-        id: UID,
-        admin_id: ID,
-    }
+    // === Init Function ===
 
-    public struct ValidateCap has key, store {
-        id: UID,
-        admin_id: ID,
-    }
-
-    // The singleton admin object
-    public struct Admin has key, store {
-        id: UID,
-        version: u64,
-        created_at: u64,
-        // Dynamic fields can be added for extensibility
-    }
-
-    // Initialize the admin singleton - can only be called once
+    /// Initialize the admin
     fun init(ctx: &mut TxContext) {
         let admin = Admin {
             id: object::new(ctx),
             version: 1,
             created_at: tx_context::epoch(ctx),
+            projects: table::new(ctx),
         };
 
         let admin_id = object::id(&admin);
@@ -65,7 +74,30 @@ module crowd_walrus_move::admin {
         transfer::share_object(admin)
     }
 
-    // Upgrade the admin version
+    // === Public Functions ===
+
+    /// Register a new project
+    public(package) fun create_project(
+        admin: &mut Admin,
+        name: String,
+        description: String,
+        subdomain_name: String,
+        ctx: &mut TxContext,
+    ): project::ProjectOwnerCap {
+        let (project_id, project_owner_cap) = project::new(
+            object::id(admin),
+            name,
+            description,
+            subdomain_name,
+            ctx,
+        );
+        table::add(&mut admin.projects, subdomain_name, project_id);
+        project_owner_cap
+    }
+
+    // === Admin Functions ===
+
+    /// Upgrade the admin version
     public fun upgrade_version(admin: &mut Admin, cap: &AdminCap, ctx: &mut TxContext) {
         assert!(object::id(admin) == cap.admin_id, E_NOT_AUTHORIZED);
 
@@ -78,7 +110,7 @@ module crowd_walrus_move::admin {
         });
     }
 
-    // Add dynamic field for extensibility
+    /// Add dynamic field for extensibility
     public fun add_field<K: copy + drop + store, V: store>(
         admin: &mut Admin,
         cap: &AdminCap,
@@ -90,7 +122,7 @@ module crowd_walrus_move::admin {
         df::add(&mut admin.id, key, value);
     }
 
-    // Remove dynamic field
+    /// Remove dynamic field
     public fun remove_field<K: copy + drop + store, V: store>(
         admin: &mut Admin,
         cap: &AdminCap,
@@ -101,6 +133,7 @@ module crowd_walrus_move::admin {
         df::remove(&mut admin.id, key)
     }
 
+    /// Create a validation capability for a new validator
     public fun create_validate_cap(
         admin: &Admin,
         cap: &AdminCap,
@@ -120,29 +153,22 @@ module crowd_walrus_move::admin {
 
     // === View Functions ===
 
+    /// Get the current version of the admin
     public fun get_version(admin: &Admin): u64 {
         admin.version
     }
 
-    public fun get_created_at(admin: &Admin): u64 {
-        admin.created_at
-    }
-
-    public fun get_admin_id(cap: &AdminCap): ID {
-        cap.admin_id
-    }
-
-    // Check if dynamic field exists
+    /// Check if dynamic field exists
     public fun has_field<K: copy + drop + store>(admin: &Admin, key: K): bool {
         df::exists_(&admin.id, key)
     }
 
-    // Borrow dynamic field
+    /// Borrow dynamic field
     public fun borrow_field<K: copy + drop + store, V: store>(admin: &Admin, key: K): &V {
         df::borrow(&admin.id, key)
     }
 
-    // Borrow mutable dynamic field (requires admin cap)
+    /// Borrow mutable dynamic field (requires admin cap)
     public fun borrow_field_mut<K: copy + drop + store, V: store>(
         admin: &mut Admin,
         cap: &AdminCap,
@@ -154,6 +180,7 @@ module crowd_walrus_move::admin {
     }
 
     // === Test Functions ===
+
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         init(ctx);

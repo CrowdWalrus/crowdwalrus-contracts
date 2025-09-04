@@ -1,18 +1,18 @@
 /*
 #[test_only]
-module crowd_walrus_move::crowd_walrus_move_tests;
+module crowd_walrus::crowd_walrus_tests;
 // uncomment this line to import the module
-// use crowd_walrus_move::crowd_walrus_move;
+// use crowd_walrus::crowd_walrus;
 
 const ENotImplemented: u64 = 0;
 
 #[test]
-fun test_crowd_walrus_move() {
+fun test_crowd_walrus() {
     // pass
 }
 
-#[test, expected_failure(abort_code = ::crowd_walrus_move::crowd_walrus_move_tests::ENotImplemented)]
-fun test_crowd_walrus_move_fail() {
+#[test, expected_failure(abort_code = ::crowd_walrus::crowd_walrus_tests::ENotImplemented)]
+fun test_crowd_walrus_fail() {
     abort ENotImplemented
 }
 */
