@@ -34,8 +34,10 @@ crowd_walrus_move/
 
 2. **Move Analyzer**: Language server for Move development
    ```bash
-   cargo install --git https://github.com/move-language/move move-analyzer --features "address32"
+   cargo install --git https://github.com/MystenLabs/sui.git sui-move-lsp
    ```
+   By default, the Move extension expects to find the move-analyzer binary in ~/.sui/bin. You can either copy the binary to this location from the build directory `~/.cargo/bin` or create a symbolic link.
+
 
 3. **Zed Editor** (recommended): Download from [zed.dev](https://zed.dev)
 
@@ -67,6 +69,26 @@ Open the project in Zed for the best development experience:
 - ✅ Task validation and format checking
 
 See `.zed/README.md` for detailed Zed setup information.
+
+#### Formatting
+
+The project uses Move Prettier for automatic code formatting. To enable formatting, you need to install the required packages:
+
+```bash
+# Install with npm
+npm install
+
+# Or with bun (recommended for faster installation)
+bun install
+
+# Or with yarn
+yarn install
+
+# Or with pnpm
+pnpm install
+```
+
+This will install the Move Prettier formatter and its dependencies defined in `package.json`. Once installed, you can format your Move code using the configured tasks or directly via the command line.
 
 ## Modules
 
