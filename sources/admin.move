@@ -12,7 +12,6 @@ module crowd_walrus::admin {
     /// The admin object
     public struct Admin has key, store {
         id: UID,
-        version: u64,
         created_at: u64,
         projects: table::Table<String, ID>, // Subdomain to project ID
     }
@@ -36,19 +35,12 @@ module crowd_walrus::admin {
         creator: address,
     }
 
-    public struct AdminUpgraded has copy, drop {
-        admin_id: ID,
-        version: u64,
-        upgraded_by: address,
-    }
-
     // === Init Function ===
 
     /// Initialize the admin
     fun init(ctx: &mut TxContext) {
         let admin = Admin {
             id: object::new(ctx),
-            version: 1,
             created_at: tx_context::epoch(ctx),
             projects: table::new(ctx),
         };
@@ -96,20 +88,6 @@ module crowd_walrus::admin {
     }
 
     // === Admin Functions ===
-
-    /// Upgrade the admin version
-    public fun upgrade_version(admin: &mut Admin, cap: &AdminCap, ctx: &mut TxContext) {
-        assert!(object::id(admin) == cap.admin_id, E_NOT_AUTHORIZED);
-
-        admin.version = admin.version + 1;
-
-        event::emit(AdminUpgraded {
-            admin_id: object::id(admin),
-            version: admin.version,
-            upgraded_by: tx_context::sender(ctx),
-        });
-    }
-
     /// Add dynamic field for extensibility
     public fun add_field<K: copy + drop + store, V: store>(
         admin: &mut Admin,
@@ -152,11 +130,6 @@ module crowd_walrus::admin {
     }
 
     // === View Functions ===
-
-    /// Get the current version of the admin
-    public fun get_version(admin: &Admin): u64 {
-        admin.version
-    }
 
     /// Check if dynamic field exists
     public fun has_field<K: copy + drop + store>(admin: &Admin, key: K): bool {
