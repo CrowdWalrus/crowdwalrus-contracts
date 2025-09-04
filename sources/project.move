@@ -44,4 +44,8 @@ module crowd_walrus::project {
     public fun subdomain_name(project: &Project): String {
         project.subdomain_name
     }
+
+    public fun project_id(project_owner_cap: &ProjectOwnerCap): ID {
+        project_owner_cap.project_id
+    }
 }

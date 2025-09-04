@@ -130,6 +130,14 @@ module crowd_walrus::admin {
     }
 
     // === View Functions ===
+    // Get Subdomain Name
+    public fun get_project(admin: &Admin, subdomain_name: String): Option<ID> {
+        if (table::contains(&admin.projects, subdomain_name)) {
+            option::some(*table::borrow(&admin.projects, subdomain_name))
+        } else {
+            option::none()
+        }
+    }
 
     /// Check if dynamic field exists
     public fun has_field<K: copy + drop + store>(admin: &Admin, key: K): bool {
@@ -152,10 +160,50 @@ module crowd_walrus::admin {
         df::borrow_mut(&mut admin.id, key)
     }
 
-    // === Test Functions ===
+    #[test]
+    public fun test_init() {
+        let mut ctx = tx_context::dummy();
+        init(&mut ctx);
+    }
 
     #[test_only]
-    public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx);
+    public fun create_admin(ctx: &mut TxContext): Admin {
+        Admin {
+            id: object::new(ctx),
+            created_at: tx_context::epoch(ctx),
+            projects: table::new(ctx),
+        }
     }
+
+    #[test_only]
+    public fun create_and_share_admin(ctx: &mut TxContext): ID {
+        let admin = create_admin(ctx);
+        let admin_id = object::id(&admin);
+        transfer::share_object(admin);
+        admin_id
+    }
+
+    // === Test Functions ===
+    // #[test]
+    // public fun test_create_project() {
+    //     let ctx = &mut tx_context::dummy();
+
+    //     // Create test admin for testing
+    //     let admin = create_admin(ctx);
+
+    //     // Create project
+    //     let project_owner_cap = create_project(
+    //         &mut admin,
+    //         string::utf8(b"Test Project"),
+    //         string::utf8(b"A test project description"),
+    //         string::utf8(b"test-subdomain"),
+    //         ctx,
+    //     );
+
+    //     // Verify project was added to admin's projects table
+    //     assert!(table::contains(&admin.projects, string::utf8(b"test-subdomain")), 0);
+
+    //     // Clean up
+    //     transfer::public_transfer(project_owner_cap, tx_context::sender(ctx));
+    // }
 }
