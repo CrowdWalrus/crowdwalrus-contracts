@@ -113,3 +113,7 @@ temp/
 *.mv
 *.so
 *.a
+
+# *-lock.json
+package-lock.json
+bun.lock

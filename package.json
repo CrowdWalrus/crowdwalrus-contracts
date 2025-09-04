@@ -1,0 +1,7 @@
+{
+  "name": "crowd_walrus_move",
+  "devDependencies": {
+    "@mysten/prettier-plugin-move": "^0.3.1",
+    "prettier": "^3.6.2"
+  }
+}
