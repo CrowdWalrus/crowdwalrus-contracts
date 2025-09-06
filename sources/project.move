@@ -4,7 +4,6 @@ module crowd_walrus::project {
     public struct Project has key, store {
         id: UID,
         admin_id: ID,
-        listed: bool,
         name: String,
         description: String,
         subdomain_name: String,
@@ -25,7 +24,6 @@ module crowd_walrus::project {
         let project = Project {
             id: object::new(ctx),
             admin_id,
-            listed: false,
             name,
             description,
             subdomain_name,
