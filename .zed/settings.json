@@ -1,11 +1,10 @@
 {
   "languages": {
     "Move": {
-      "language_servers": ["move-analyzer"],
       "format_on_save": "on",
       "tab_size": 4,
       "hard_tabs": false,
-      "preferred_line_length": 100,
+      "preferred_line_length": 120,
       "soft_wrap": "preferred_line_length",
       "formatter": {
         "external": {
@@ -19,9 +18,6 @@
         }
       }
     }
-  },
-  "file_types": {
-    "Move": ["move"]
   },
   "auto_update": false,
   "vim_mode": false,
