@@ -11,8 +11,9 @@ public struct MANAGER has drop {}
 // === Errors ===
 
 const E_NOT_AUTHORIZED: u64 = 1;
-const E_ALREADY_VALIDATED: u64 = 2;
-const E_NOT_VALIDATED: u64 = 3;
+const E_PROJECT_ALREADY_EXISTS: u64 = 2;
+const E_ALREADY_VALIDATED: u64 = 3;
+const E_NOT_VALIDATED: u64 = 4;
 
 // === Structs ===
 
@@ -27,19 +28,19 @@ public struct CrowdWalrus has key, store {
 /// Capability for admin operations
 public struct AdminCap has key, store {
     id: UID,
-    admin_id: ID,
+    crowd_walrus_id: ID,
 }
 
 /// Capability for validating admin operations
 public struct ValidateCap has key, store {
     id: UID,
-    admin_id: ID,
+    crowd_walrus_id: ID,
 }
 
 // === Events ===
 
 public struct AdminCreated has copy, drop {
-    admin_id: ID,
+    crowd_walrus_id: ID,
     creator: address,
 }
 
@@ -48,7 +49,7 @@ public struct ProjectValidated has copy, drop {
     validator: address,
 }
 
-public struct ProjectValidationRevoked has copy, drop {
+public struct ProjectUnvalidated has copy, drop {
     project_id: ID,
     unvalidator: address,
 }
@@ -64,17 +65,17 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
         validated_projects: table::new(ctx),
     };
 
-    let admin_id = object::id(&crowd_walrus);
+    let crowd_walrus_id = object::id(&crowd_walrus);
 
     // Create admin capability for the creator
     let admin_cap = AdminCap {
         id: object::new(ctx),
-        admin_id,
+        crowd_walrus_id,
     };
 
     // Emit creation event
     event::emit(AdminCreated {
-        admin_id,
+        crowd_walrus_id,
         creator: tx_context::sender(ctx),
     });
 
@@ -95,6 +96,8 @@ entry fun create_project(
     subdomain_name: String,
     ctx: &mut TxContext,
 ) {
+    assert!(!crowd_walrus.projects.contains(subdomain_name), E_PROJECT_ALREADY_EXISTS);
+
     let (project_id, project_owner_cap) = project::new(
         object::id(crowd_walrus),
         name,
@@ -102,6 +105,7 @@ entry fun create_project(
         subdomain_name,
         ctx,
     );
+
     table::add(&mut crowd_walrus.projects, subdomain_name, project_id);
     transfer::public_transfer(project_owner_cap, tx_context::sender(ctx));
 }
@@ -115,7 +119,7 @@ entry fun validate_project(
 ) {
     let project_id = object::id(project);
 
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(!table::contains(&crowd_walrus.validated_projects, project_id), E_ALREADY_VALIDATED);
 
     table::add(&mut crowd_walrus.validated_projects, project_id, true);
@@ -135,13 +139,13 @@ entry fun unvalidate_project(
 ) {
     let project_id = object::id(project);
 
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(table::contains(&crowd_walrus.validated_projects, project_id), E_NOT_VALIDATED);
 
     table::remove(&mut crowd_walrus.validated_projects, project_id);
 
     // event
-    event::emit(ProjectValidationRevoked {
+    event::emit(ProjectUnvalidated {
         project_id,
         unvalidator: tx_context::sender(ctx),
     });
@@ -155,7 +159,7 @@ public fun add_field<K: copy + drop + store, V: store>(
     key: K,
     value: V,
 ) {
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     df::add(&mut crowd_walrus.id, key, value);
 }
@@ -166,7 +170,7 @@ public fun remove_field<K: copy + drop + store, V: store>(
     cap: &AdminCap,
     key: K,
 ): V {
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     df::remove(&mut crowd_walrus.id, key)
 }
@@ -178,12 +182,12 @@ public fun create_validate_cap(
     new_validator: address,
     ctx: &mut TxContext,
 ) {
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     transfer::transfer(
         ValidateCap {
             id: object::new(ctx),
-            admin_id: object::id(crowd_walrus),
+            crowd_walrus_id: object::id(crowd_walrus),
         },
         new_validator,
     )
@@ -197,6 +201,16 @@ public fun get_project(crowd_walrus: &CrowdWalrus, subdomain_name: String): Opti
     } else {
         option::none()
     }
+}
+
+// Get Admin Cap crowd_walrus_id
+public fun crowd_walrus_id(cap: &AdminCap): ID {
+    cap.crowd_walrus_id
+}
+
+/// Check if a project is validated
+public fun is_project_validated(crowd_walrus: &CrowdWalrus, project_id: ID): bool {
+    table::contains(&crowd_walrus.validated_projects, project_id)
 }
 
 /// Check if dynamic field exists
@@ -215,15 +229,14 @@ public fun borrow_field_mut<K: copy + drop + store, V: store>(
     cap: &AdminCap,
     key: K,
 ): &mut V {
-    assert!(object::id(crowd_walrus) == cap.admin_id, E_NOT_AUTHORIZED);
+    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     df::borrow_mut(&mut crowd_walrus.id, key)
 }
 
-#[test]
-public fun test_init() {
-    let mut ctx = tx_context::dummy();
-    init(MANAGER {}, &mut ctx);
+#[test_only]
+public fun test_init(ctx: &mut TxContext) {
+    init(MANAGER {}, ctx);
 }
 
 #[test_only]
@@ -242,4 +255,15 @@ public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
     let crowd_walrus_id = object::id(&crowd_walrus);
     transfer::share_object(crowd_walrus);
     crowd_walrus_id
+}
+
+#[test_only]
+public fun create_admin_cap_for_user(ctx: &mut TxContext, crowd_walrus_id: ID, user: address): ID {
+    let admin_cap = AdminCap {
+        id: object::new(ctx),
+        crowd_walrus_id: crowd_walrus_id,
+    };
+    let admin_cap_id = object::id(&admin_cap);
+    transfer::transfer(admin_cap, user);
+    admin_cap_id
 }
