@@ -22,7 +22,8 @@ public struct CrowdWalrus has key, store {
     id: UID,
     created_at: u64,
     registered_subdomains: table::Table<String, ID>, // Subdomain to project ID
-    validated_projects: table::Table<ID, bool>,
+    validated_maps: table::Table<ID, bool>,
+    validated_projects_list: vector<ID>,
 }
 
 /// Capability for admin operations
@@ -62,7 +63,8 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
         registered_subdomains: table::new(ctx),
-        validated_projects: table::new(ctx),
+        validated_maps: table::new(ctx),
+        validated_projects_list: vector::empty(),
     };
 
     let crowd_walrus_id = object::id(&crowd_walrus);
@@ -120,9 +122,10 @@ entry fun validate_project(
     let project_id = object::id(project);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(!table::contains(&crowd_walrus.validated_projects, project_id), E_ALREADY_VALIDATED);
+    assert!(!table::contains(&crowd_walrus.validated_maps, project_id), E_ALREADY_VALIDATED);
 
-    table::add(&mut crowd_walrus.validated_projects, project_id, true);
+    table::add(&mut crowd_walrus.validated_maps, project_id, true);
+    vector::push_back(&mut crowd_walrus.validated_projects_list, project_id);
 
     // event
     event::emit(ProjectValidated {
@@ -140,11 +143,21 @@ entry fun unvalidate_project(
     let project_id = object::id(project);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(table::contains(&crowd_walrus.validated_projects, project_id), E_NOT_VALIDATED);
+    assert!(table::contains(&crowd_walrus.validated_maps, project_id), E_NOT_VALIDATED);
 
-    table::remove(&mut crowd_walrus.validated_projects, project_id);
+    table::remove(&mut crowd_walrus.validated_maps, project_id);
 
-    // event
+    let mut i: u64 = 0;
+    let length = crowd_walrus.validated_projects_list.length();
+
+    while (i < length) {
+        if (crowd_walrus.validated_projects_list[i] == project_id) {
+            vector::remove(&mut crowd_walrus.validated_projects_list, i);
+            break
+        } else {
+            i = i + 1;
+        }
+    };
     event::emit(ProjectUnvalidated {
         project_id,
         unvalidator: tx_context::sender(ctx),
@@ -193,8 +206,8 @@ public fun create_validate_cap(
     )
 }
 
-// === View Functions ===
-// Get Subdomain Name
+/// === View Functions ===
+/// Get Subdomain Name
 public fun get_project(crowd_walrus: &CrowdWalrus, subdomain_name: String): Option<ID> {
     if (table::contains(&crowd_walrus.registered_subdomains, subdomain_name)) {
         option::some(*table::borrow(&crowd_walrus.registered_subdomains, subdomain_name))
@@ -203,15 +216,22 @@ public fun get_project(crowd_walrus: &CrowdWalrus, subdomain_name: String): Opti
     }
 }
 
-// Get Admin Cap crowd_walrus_id
+/// Get Admin Cap crowd_walrus_id
 public fun crowd_walrus_id(cap: &AdminCap): ID {
     cap.crowd_walrus_id
 }
 
 /// Check if a project is validated
 public fun is_project_validated(crowd_walrus: &CrowdWalrus, project_id: ID): bool {
-    table::contains(&crowd_walrus.validated_projects, project_id)
+    table::contains(&crowd_walrus.validated_maps, project_id)
 }
+
+/// Get the validated projects list
+public fun get_validated_projects_list(crowd_walrus: &CrowdWalrus): vector<ID> {
+    crowd_walrus.validated_projects_list
+}
+
+/// ==== Dynamic Field Functions ====
 
 /// Check if dynamic field exists
 public fun has_field<K: copy + drop + store>(crowd_walrus: &CrowdWalrus, key: K): bool {
@@ -245,7 +265,8 @@ public fun create_crowd_walrus(ctx: &mut TxContext): CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
         registered_subdomains: table::new(ctx),
-        validated_projects: table::new(ctx),
+        validated_maps: table::new(ctx),
+        validated_projects_list: vector::empty(),
     }
 }
 

@@ -134,12 +134,20 @@ public fun test_validate_project() {
 
         // Before validate
         assert!(!crowd_walrus.is_project_validated(object::id(&project)));
+        assert_eq(crowd_walrus.get_validated_projects_list().length(), 0);
 
         // Validate
         crowd_walrus.validate_project(&validate_cap, &project, ctx);
 
         // After validate
         assert!(crowd_walrus.is_project_validated(object::id(&project)));
+        assert_eq(crowd_walrus.get_validated_projects_list().length(), 1);
+        assert!(
+            vector::contains<ID>(
+                &crowd_walrus.get_validated_projects_list(),
+                &object::id(&project),
+            ),
+        );
 
         // Clean up
         ts::return_shared(project);
@@ -154,6 +162,7 @@ public fun test_validate_project() {
         crowd_walrus.unvalidate_project(&validate_cap, &project, ctx);
 
         assert!(!crowd_walrus.is_project_validated(object::id(&project)));
+        assert_eq(crowd_walrus.get_validated_projects_list().length(), 0);
 
         // Clean up
         ts::return_shared(project);
