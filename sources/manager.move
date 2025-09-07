@@ -21,7 +21,7 @@ const E_NOT_VALIDATED: u64 = 4;
 public struct CrowdWalrus has key, store {
     id: UID,
     created_at: u64,
-    projects: table::Table<String, ID>, // Subdomain to project ID
+    registered_subdomains: table::Table<String, ID>, // Subdomain to project ID
     validated_projects: table::Table<ID, bool>,
 }
 
@@ -61,7 +61,7 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        projects: table::new(ctx),
+        registered_subdomains: table::new(ctx),
         validated_projects: table::new(ctx),
     };
 
@@ -96,7 +96,7 @@ entry fun create_project(
     subdomain_name: String,
     ctx: &mut TxContext,
 ) {
-    assert!(!crowd_walrus.projects.contains(subdomain_name), E_PROJECT_ALREADY_EXISTS);
+    assert!(!crowd_walrus.registered_subdomains.contains(subdomain_name), E_PROJECT_ALREADY_EXISTS);
 
     let (project_id, project_owner_cap) = project::new(
         object::id(crowd_walrus),
@@ -106,7 +106,7 @@ entry fun create_project(
         ctx,
     );
 
-    table::add(&mut crowd_walrus.projects, subdomain_name, project_id);
+    table::add(&mut crowd_walrus.registered_subdomains, subdomain_name, project_id);
     transfer::public_transfer(project_owner_cap, tx_context::sender(ctx));
 }
 
@@ -196,8 +196,8 @@ public fun create_validate_cap(
 // === View Functions ===
 // Get Subdomain Name
 public fun get_project(crowd_walrus: &CrowdWalrus, subdomain_name: String): Option<ID> {
-    if (table::contains(&crowd_walrus.projects, subdomain_name)) {
-        option::some(*table::borrow(&crowd_walrus.projects, subdomain_name))
+    if (table::contains(&crowd_walrus.registered_subdomains, subdomain_name)) {
+        option::some(*table::borrow(&crowd_walrus.registered_subdomains, subdomain_name))
     } else {
         option::none()
     }
@@ -244,7 +244,7 @@ public fun create_crowd_walrus(ctx: &mut TxContext): CrowdWalrus {
     CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        projects: table::new(ctx),
+        registered_subdomains: table::new(ctx),
         validated_projects: table::new(ctx),
     }
 }
