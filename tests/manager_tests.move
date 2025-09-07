@@ -164,3 +164,84 @@ public fun test_validate_project() {
     ts::return_shared(crowd_walrus);
     sc.end();
 }
+
+#[test, expected_failure(abort_code = manager::E_ALREADY_VALIDATED)]
+public fun test_validate_project_twice() {
+    let validator = USER1;
+    let project_owner = USER2;
+    let ctx = &mut tx_context::dummy();
+    let mut sc = ts::begin(ADMIN);
+    // Create crowd walrus
+    { manager::test_init(ctx); sc.next_tx(ADMIN); };
+    let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+    manager::create_validate_cap_for_user(
+        object::id(&crowd_walrus),
+        validator,
+        ctx,
+    );
+    // Create project
+    {
+        sc.next_tx(project_owner);
+        crowd_walrus.create_project(
+            string::utf8(b"Test Project"),
+            string::utf8(b"A test project description"),
+            string::utf8(b"test-subdomain"),
+            ctx,
+        );
+    };
+    // Validate project
+    {
+        sc.next_tx(validator);
+        let validate_cap = sc.take_from_sender<ValidateCap>();
+        let project = sc.take_shared<Project>();
+        crowd_walrus.validate_project(&validate_cap, &project, ctx);
+        sc.return_to_sender(validate_cap);
+        ts::return_shared(project);
+    };
+    // Validate project again
+    {
+        sc.next_tx(validator);
+        let validate_cap = sc.take_from_sender<ValidateCap>();
+        let project = sc.take_shared<Project>();
+        crowd_walrus.validate_project(&validate_cap, &project, ctx);
+        sc.return_to_sender(validate_cap);
+        ts::return_shared(project);
+    };
+
+    ts::return_shared(crowd_walrus);
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = manager::E_NOT_VALIDATED)]
+public fun test_unvalidate_project_twice() {
+    let validator = USER1;
+    let project_owner = USER2;
+    let ctx = &mut tx_context::dummy();
+    let mut sc = ts::begin(ADMIN);
+    // Create crowd walrus
+    { manager::test_init(ctx); sc.next_tx(ADMIN); };
+    let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+    manager::create_validate_cap_for_user(object::id(&crowd_walrus), validator, ctx);
+    // Test create project
+    {
+        sc.next_tx(project_owner);
+        crowd_walrus.create_project(
+            string::utf8(b"Test Project"),
+            string::utf8(b"A test project description"),
+            string::utf8(b"test-subdomain"),
+            ctx,
+        );
+    };
+    // Test unvalidate project
+    {
+        sc.next_tx(validator);
+        let validate_cap = sc.take_from_sender<ValidateCap>();
+        let project = sc.take_shared<Project>();
+        crowd_walrus.unvalidate_project(&validate_cap, &project, ctx);
+        sc.return_to_sender(validate_cap);
+        ts::return_shared(project);
+    };
+
+    ts::return_shared(crowd_walrus);
+    sc.end();
+}

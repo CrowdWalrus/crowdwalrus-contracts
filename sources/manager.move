@@ -258,7 +258,7 @@ public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
 }
 
 #[test_only]
-public fun create_admin_cap_for_user(ctx: &mut TxContext, crowd_walrus_id: ID, user: address): ID {
+public fun create_admin_cap_for_user(crowd_walrus_id: ID, user: address, ctx: &mut TxContext): ID {
     let admin_cap = AdminCap {
         id: object::new(ctx),
         crowd_walrus_id: crowd_walrus_id,
@@ -266,4 +266,19 @@ public fun create_admin_cap_for_user(ctx: &mut TxContext, crowd_walrus_id: ID, u
     let admin_cap_id = object::id(&admin_cap);
     transfer::transfer(admin_cap, user);
     admin_cap_id
+}
+
+#[test_only]
+public fun create_validate_cap_for_user(
+    crowd_walrus_id: ID,
+    user: address,
+    ctx: &mut TxContext,
+): ID {
+    let validate_cap = ValidateCap {
+        id: object::new(ctx),
+        crowd_walrus_id: crowd_walrus_id,
+    };
+    let validate_cap_id = object::id(&validate_cap);
+    transfer::transfer(validate_cap, user);
+    validate_cap_id
 }
