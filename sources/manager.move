@@ -189,7 +189,7 @@ public fun remove_field<K: copy + drop + store, V: store>(
 }
 
 /// Create a validation capability for a new validator
-public fun create_validate_cap(
+entry fun create_validate_cap(
     crowd_walrus: &CrowdWalrus,
     cap: &AdminCap,
     new_validator: address,
