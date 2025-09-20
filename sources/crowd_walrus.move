@@ -1,6 +1,6 @@
 module crowd_walrus::manager;
 
-use crowd_walrus::project;
+use crowd_walrus::campaign;
 use std::string::String;
 use sui::dynamic_field as df;
 use sui::event;
@@ -11,19 +11,17 @@ public struct MANAGER has drop {}
 // === Errors ===
 
 const E_NOT_AUTHORIZED: u64 = 1;
-const E_PROJECT_ALREADY_EXISTS: u64 = 2;
-const E_ALREADY_VALIDATED: u64 = 3;
-const E_NOT_VALIDATED: u64 = 4;
+const E_ALREADY_VALIDATED: u64 = 2;
+const E_NOT_VALIDATED: u64 = 3;
 
 // === Structs ===
 
-/// The admin object
+/// The crowd walrus object
 public struct CrowdWalrus has key, store {
     id: UID,
     created_at: u64,
-    registered_subdomains: table::Table<String, ID>, // Subdomain to project ID
     validated_maps: table::Table<ID, bool>,
-    validated_projects_list: vector<ID>,
+    validated_campaigns_list: vector<ID>,
 }
 
 /// Capability for admin operations
@@ -38,22 +36,32 @@ public struct ValidateCap has key, store {
     crowd_walrus_id: ID,
 }
 
-// === Events ===
+// === Events ====
 
 public struct AdminCreated has copy, drop {
     crowd_walrus_id: ID,
     creator: address,
 }
 
-public struct ProjectValidated has copy, drop {
-    project_id: ID,
+public struct CampaignValidated has copy, drop {
+    campaign_id: ID,
     validator: address,
 }
 
-public struct ProjectUnvalidated has copy, drop {
-    project_id: ID,
+// public struct ProjectValidated has copy, drop {
+//     campaign_id: ID,
+//     validator: address,
+// }
+
+public struct CampaignUnvalidated has copy, drop {
+    campaign_id: ID,
     unvalidator: address,
 }
+
+// public struct ProjectUnvalidated has copy, drop {
+//     campaign_id: ID,
+//     unvalidator: address,
+// }
 
 // === Init Function ===
 
@@ -62,9 +70,8 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        registered_subdomains: table::new(ctx),
         validated_maps: table::new(ctx),
-        validated_projects_list: vector::empty(),
+        validated_campaigns_list: vector::empty(),
     };
 
     let crowd_walrus_id = object::id(&crowd_walrus);
@@ -90,17 +97,18 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
 
 // === Public Functions ===
 
-/// Register a new project
-entry fun create_project(
+/// Register a new campaign
+entry fun create_campaign(
     crowd_walrus: &mut CrowdWalrus,
     name: String,
     description: String,
     subdomain_name: String,
     ctx: &mut TxContext,
 ) {
-    assert!(!crowd_walrus.registered_subdomains.contains(subdomain_name), E_PROJECT_ALREADY_EXISTS);
+    // register subname
+    // TODO: register on suins manager
 
-    let (project_id, project_owner_cap) = project::new(
+    let (campaign_id, campaign_owner_cap) = campaign::new(
         object::id(crowd_walrus),
         name,
         description,
@@ -108,58 +116,57 @@ entry fun create_project(
         ctx,
     );
 
-    table::add(&mut crowd_walrus.registered_subdomains, subdomain_name, project_id);
-    transfer::public_transfer(project_owner_cap, tx_context::sender(ctx));
+    transfer::public_transfer(campaign_owner_cap, tx_context::sender(ctx));
 }
 
-/// Validate a project
-entry fun validate_project(
+/// Validate a campaign
+entry fun validate_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &ValidateCap,
-    project: &project::Project,
+    campaign: &campaign::Campaign,
     ctx: &TxContext,
 ) {
-    let project_id = object::id(project);
+    let campaign_id = object::id(campaign);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(!table::contains(&crowd_walrus.validated_maps, project_id), E_ALREADY_VALIDATED);
+    assert!(!table::contains(&crowd_walrus.validated_maps, campaign_id), E_ALREADY_VALIDATED);
 
-    table::add(&mut crowd_walrus.validated_maps, project_id, true);
-    vector::push_back(&mut crowd_walrus.validated_projects_list, project_id);
+    table::add(&mut crowd_walrus.validated_maps, campaign_id, true);
+    vector::push_back(&mut crowd_walrus.validated_campaigns_list, campaign_id);
 
     // event
-    event::emit(ProjectValidated {
-        project_id,
+    event::emit(CampaignValidated {
+        campaign_id,
         validator: tx_context::sender(ctx),
     });
 }
 
-entry fun unvalidate_project(
+entry fun unvalidate_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &ValidateCap,
-    project: &project::Project,
+    campaign: &campaign::Campaign,
     ctx: &TxContext,
 ) {
-    let project_id = object::id(project);
+    let campaign_id = object::id(campaign);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(table::contains(&crowd_walrus.validated_maps, project_id), E_NOT_VALIDATED);
+    assert!(table::contains(&crowd_walrus.validated_maps, campaign_id), E_NOT_VALIDATED);
 
-    table::remove(&mut crowd_walrus.validated_maps, project_id);
+    table::remove(&mut crowd_walrus.validated_maps, campaign_id);
 
     let mut i: u64 = 0;
-    let length = crowd_walrus.validated_projects_list.length();
+    let length = crowd_walrus.validated_campaigns_list.length();
 
     while (i < length) {
-        if (crowd_walrus.validated_projects_list[i] == project_id) {
-            vector::remove(&mut crowd_walrus.validated_projects_list, i);
+        if (crowd_walrus.validated_campaigns_list[i] == campaign_id) {
+            vector::remove(&mut crowd_walrus.validated_campaigns_list, i);
             break
         } else {
             i = i + 1;
         }
     };
-    event::emit(ProjectUnvalidated {
-        project_id,
+    event::emit(CampaignUnvalidated {
+        campaign_id,
         unvalidator: tx_context::sender(ctx),
     });
 }
@@ -206,29 +213,20 @@ entry fun create_validate_cap(
     )
 }
 
-/// === View Functions ===
-/// Get Subdomain Name
-public fun get_project(crowd_walrus: &CrowdWalrus, subdomain_name: String): Option<ID> {
-    if (table::contains(&crowd_walrus.registered_subdomains, subdomain_name)) {
-        option::some(*table::borrow(&crowd_walrus.registered_subdomains, subdomain_name))
-    } else {
-        option::none()
-    }
-}
-
+// === View Functions ===
 /// Get Admin Cap crowd_walrus_id
 public fun crowd_walrus_id(cap: &AdminCap): ID {
     cap.crowd_walrus_id
 }
 
-/// Check if a project is validated
-public fun is_project_validated(crowd_walrus: &CrowdWalrus, project_id: ID): bool {
-    table::contains(&crowd_walrus.validated_maps, project_id)
+/// Check if a campaign is validated
+public fun is_campaign_validated(crowd_walrus: &CrowdWalrus, campaign_id: ID): bool {
+    table::contains(&crowd_walrus.validated_maps, campaign_id)
 }
 
-/// Get the validated projects list
-public fun get_validated_projects_list(crowd_walrus: &CrowdWalrus): vector<ID> {
-    crowd_walrus.validated_projects_list
+/// Get the validated campaigns list
+public fun get_validated_campaigns_list(crowd_walrus: &CrowdWalrus): vector<ID> {
+    crowd_walrus.validated_campaigns_list
 }
 
 /// ==== Dynamic Field Functions ====
@@ -264,9 +262,8 @@ public fun create_crowd_walrus(ctx: &mut TxContext): CrowdWalrus {
     CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        registered_subdomains: table::new(ctx),
         validated_maps: table::new(ctx),
-        validated_projects_list: vector::empty(),
+        validated_campaigns_list: vector::empty(),
     }
 }
 
