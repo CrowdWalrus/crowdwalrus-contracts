@@ -1,5 +1,5 @@
 #[test_only]
-module crowd_walrus::admin_test;
+module crowd_walrus::crowd_walrus_tests;
 
 use crowd_walrus::campaign::{Campaign, CampaignOwnerCap};
 use crowd_walrus::manager::{Self, CrowdWalrus, AdminCap, ValidateCap};

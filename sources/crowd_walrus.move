@@ -65,7 +65,7 @@ public struct CampaignUnvalidated has copy, drop {
 
 // === Init Function ===
 
-/// Initialize the admin
+/// Initialize the crowd walrus
 fun init(_otw: MANAGER, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
@@ -91,7 +91,7 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
     // Transfer capability to creator
     transfer::transfer(admin_cap, tx_context::sender(ctx));
 
-    // Share admin object with creator
+    // Share crowd walrus object with creator
     transfer::share_object(crowd_walrus)
 }
 
@@ -99,12 +99,12 @@ fun init(_otw: MANAGER, ctx: &mut TxContext) {
 
 /// Register a new campaign
 entry fun create_campaign(
-    crowd_walrus: &mut CrowdWalrus,
+    crowd_walrus: &CrowdWalrus,
     name: String,
     description: String,
     subdomain_name: String,
     ctx: &mut TxContext,
-) {
+): ID {
     // register subname
     // TODO: register on suins manager
 
@@ -117,6 +117,7 @@ entry fun create_campaign(
     );
 
     transfer::public_transfer(campaign_owner_cap, tx_context::sender(ctx));
+    campaign_id
 }
 
 /// Validate a campaign
