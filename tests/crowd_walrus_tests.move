@@ -20,13 +20,13 @@ public fun test_create_campaign() {
 
     {
         sc.next_tx(USER1);
-        let mut crowd_walrus = sc.take_shared_by_id<CrowdWalrus>(crowd_walrus_id);
+        let crowd_walrus = sc.take_shared_by_id<CrowdWalrus>(crowd_walrus_id);
 
         // Test admin id equals admin_id
         assert_eq(object::id(&crowd_walrus), crowd_walrus_id);
 
         manager::create_campaign(
-            &mut crowd_walrus,
+            &crowd_walrus,
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign description"),
             subdomain_name,

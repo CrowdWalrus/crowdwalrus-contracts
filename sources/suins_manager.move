@@ -1,12 +1,12 @@
 module crowd_walrus::suins_manager;
 
 use std::string::String;
+use subdomains::subdomains::{new_leaf, remove_leaf};
 use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::dynamic_object_field as dof;
 use suins::suins::SuiNS;
 use suins::suins_registration::SuinsRegistration;
-use suins_subdomains::subdomains::{new_leaf, remove_leaf};
 
 const E_SUINS_NFT_ALREADY_REGISTERED: u64 = 1;
 const E_SUINS_NFT_NOT_FOUND: u64 = 2;
@@ -113,6 +113,7 @@ public fun register_subdomain<App: drop>(
     ctx: &mut TxContext,
 ) {
     self.assert_app_is_authorized<App>();
+
     new_leaf(
         suins,
         get_suins_nft(self),

@@ -2,48 +2,76 @@
 
 [move]
 version = 3
-manifest_digest = "4AFDAA0679F3008172F521E00CD967EF9B591995C0719366CA8E3B088789340A"
-deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
+manifest_digest = "21065D071226ACD4DFC41DE2015E385C1E5635DB27A8513F33EBA91DC5A8FADB"
+deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
 dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
-  { id = "suins_subdomains", name = "suins_subdomains" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "subdomains", name = "subdomains" },
+  { id = "suins", name = "suins" },
+]
+
+[[move.package]]
+id = "Bridge"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/bridge" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [[move.package]]
 id = "MoveStdlib"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/mainnet", subdir = "crates/sui-framework/packages/move-stdlib" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
 id = "Sui"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/mainnet", subdir = "crates/sui-framework/packages/sui-framework" }
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/sui-framework" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
 ]
 
 [[move.package]]
+id = "SuiSystem"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/sui-system" }
+
+dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "denylist"
+source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/denylist" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "suins", name = "suins" },
+]
+
+[[move.package]]
+id = "subdomains"
+source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/subdomains" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "denylist", name = "denylist" },
+  { id = "suins", name = "suins" },
+]
+
+[[move.package]]
 id = "suins"
-source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains/../suins" }
+source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/suins" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
-[[move.package]]
-id = "suins_denylist"
-source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains/../denylist" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "suins", name = "suins" },
-]
-
-[[move.package]]
-id = "suins_subdomains"
-source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-  { id = "suins", name = "suins" },
-  { id = "suins_denylist", name = "suins_denylist" },
-]
+[move.toolchain-version]
+compiler-version = "1.55.0"
+edition = "2024.beta"
+flavor = "sui"
