@@ -2,11 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "378918B922AAEEBBFC4AE1DFDFDCA1D87ED66E4F2233E667C7D6B3D9975206DC"
+manifest_digest = "4AFDAA0679F3008172F521E00CD967EF9B591995C0719366CA8E3B088789340A"
 deps_digest = "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600"
 dependencies = [
   { id = "Sui", name = "Sui" },
-  { id = "suins", name = "suins" },
+  { id = "suins_subdomains", name = "suins_subdomains" },
 ]
 
 [[move.package]]
@@ -23,21 +23,27 @@ dependencies = [
 
 [[move.package]]
 id = "suins"
-source = { git = "https://github.com/MystenLabs/suins-contracts.git", rev = "main", subdir = "packages/suins" }
+source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains/../suins" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
-[move.toolchain-version]
-compiler-version = "1.55.0"
-edition = "2024.beta"
-flavor = "sui"
+[[move.package]]
+id = "suins_denylist"
+source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains/../denylist" }
 
-[env]
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "suins", name = "suins" },
+]
 
-[env.testnet]
-chain-id = "4c78adac"
-original-published-id = "0x84d7857ed6aa6c2e4b7a9fa7600f0bc51a114437f35c10dd8cf5d76f735ccea7"
-latest-published-id = "0x84d7857ed6aa6c2e4b7a9fa7600f0bc51a114437f35c10dd8cf5d76f735ccea7"
-published-version = "1"
+[[move.package]]
+id = "suins_subdomains"
+source = { git = "https://github.com/MystenLabs/suins-contracts", rev = "releases/subdomains/2", subdir = "packages/subdomains" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "suins", name = "suins" },
+  { id = "suins_denylist", name = "suins_denylist" },
+]
