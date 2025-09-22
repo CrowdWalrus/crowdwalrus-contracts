@@ -1,4 +1,4 @@
-module crowd_walrus::manager;
+module crowd_walrus::crowd_walrus;
 
 use crowd_walrus::campaign;
 use std::string::String;
@@ -6,7 +6,7 @@ use sui::dynamic_field as df;
 use sui::event;
 use sui::table;
 
-public struct MANAGER has drop {}
+public struct CROWD_WALRUS has drop {}
 
 // === Errors ===
 
@@ -66,7 +66,7 @@ public struct CampaignUnvalidated has copy, drop {
 // === Init Function ===
 
 /// Initialize the crowd walrus
-fun init(_otw: MANAGER, ctx: &mut TxContext) {
+fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
@@ -255,7 +255,7 @@ public fun borrow_field_mut<K: copy + drop + store, V: store>(
 
 #[test_only]
 public fun test_init(ctx: &mut TxContext) {
-    init(MANAGER {}, ctx);
+    init(CROWD_WALRUS {}, ctx);
 }
 
 #[test_only]

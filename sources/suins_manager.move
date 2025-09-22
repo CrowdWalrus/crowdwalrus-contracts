@@ -17,9 +17,6 @@ public struct RegKey has copy, drop, store {}
 
 public struct SuiNSManager has key {
     id: UID,
-    suins_id: ID,
-    crowd_walrus_id: ID,
-    domain_name: vector<u8>,
 }
 
 /// Capability for the admin of the SuiNSManager
@@ -37,12 +34,12 @@ public struct AdminCap has key, store {
 public struct AppKey<phantom App: drop> has copy, drop, store {}
 
 /// Authorize an application to access protected features of the SuiNS.
-public fun authorize_app<App: drop>(_: &AdminCap, self: &mut SuiNSManager) {
+public fun authorize_app<App: drop>(self: &mut SuiNSManager, _: &AdminCap) {
     df::add(&mut self.id, AppKey<App> {}, true);
 }
 
 /// Deauthorize an application by removing its authorization key.
-public fun deauthorize_app<App: drop>(_: &AdminCap, self: &mut SuiNSManager): bool {
+public fun deauthorize_app<App: drop>(self: &mut SuiNSManager, _: &AdminCap): bool {
     df::remove(&mut self.id, AppKey<App> {})
 }
 
@@ -60,7 +57,7 @@ public fun assert_app_is_authorized<App: drop>(self: &SuiNSManager) {
 
 // === SuiNS Registry ===
 
-public fun add_suins_nft(_: &AdminCap, self: &mut SuiNSManager, suins_nft: SuinsRegistration) {
+public fun set_suins_nft(_: &AdminCap, self: &mut SuiNSManager, suins_nft: SuinsRegistration) {
     assert!(!dof::exists_(&self.id, RegKey {}), E_SUINS_NFT_ALREADY_REGISTERED);
     dof::add(&mut self.id, RegKey {}, suins_nft);
 }
@@ -76,17 +73,9 @@ fun get_suins_nft(self: &SuiNSManager): &SuinsRegistration {
 }
 
 // === Protected Functions ===
-public(package) fun new(
-    suins_id: ID,
-    crowd_walrus_id: ID,
-    domain_name: vector<u8>,
-    ctx: &mut TxContext,
-): (ID, AdminCap) {
+public(package) fun new(ctx: &mut TxContext): (ID, AdminCap) {
     let suins_manager = SuiNSManager {
         id: object::new(ctx),
-        suins_id: suins_id,
-        crowd_walrus_id: crowd_walrus_id,
-        domain_name: domain_name,
     };
 
     let suins_manager_id = object::id(&suins_manager);
@@ -134,4 +123,30 @@ public fun remove_subdomain(
     clock: &Clock,
 ) {
     remove_leaf(suins, get_suins_nft(self), clock, subdomain_name);
+}
+
+#[test_only]
+public fun create_suins_manager(ctx: &mut TxContext): SuiNSManager {
+    SuiNSManager {
+        id: object::new(ctx),
+    }
+}
+
+#[test_only]
+public fun create_and_share_suins_manager(ctx: &mut TxContext): ID {
+    let suins_manager = create_suins_manager(ctx);
+    let suins_manager_id = object::id(&suins_manager);
+    transfer::share_object(suins_manager);
+    suins_manager_id
+}
+
+#[test_only]
+public fun create_admin_cap_for_user(suins_manager_id: ID, user: address, ctx: &mut TxContext): ID {
+    let admin_cap = AdminCap {
+        id: object::new(ctx),
+        suins_manager_id: suins_manager_id,
+    };
+    let admin_cap_id = object::id(&admin_cap);
+    transfer::transfer(admin_cap, user);
+    admin_cap_id
 }
