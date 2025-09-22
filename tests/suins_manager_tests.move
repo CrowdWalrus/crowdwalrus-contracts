@@ -109,14 +109,15 @@ fun test_remove_subdomain() {
     scenario.end();
 }
 
-#[test, expected_failure]
+#[test, expected_failure(abort_code = suins::registry::ERecordNotExpired)]
 fun test_double_register_subdomain() {
     let mut scenario = subdomain_tests::test_init();
     test_init(&mut scenario, ADMIN);
     authorize_app(&mut scenario, ADMIN, TestApp {});
 
-    let subdomain_name = utf8(b"sub.test.sui");
+    scenario.next_tx(USER1);
 
+    let subdomain_name = utf8(b"sub.test.sui");
     let suins_manager = scenario.take_shared<SuiNSManager>();
     let mut suins = scenario.take_shared<SuiNS>();
     let clock = scenario.take_shared<Clock>();
