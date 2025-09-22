@@ -63,14 +63,14 @@ fun test_remove_subdomain() {
     test_init(&mut scenario, ADMIN);
     authorize_app(&mut scenario, ADMIN, TestApp {});
 
+    scenario.next_tx(USER1);
     let subdomain_name = utf8(b"sub.test.sui");
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock = scenario.take_shared<Clock>();
 
     // Create subdomain
     {
-        scenario.next_tx(USER1);
-        let suins_manager = scenario.take_shared<SuiNSManager>();
-        let mut suins = scenario.take_shared<SuiNS>();
-        let clock = scenario.take_shared<Clock>();
         suins_manager::register_subdomain(
             &TestApp {},
             &suins_manager,
@@ -83,17 +83,10 @@ fun test_remove_subdomain() {
 
         let record = suins.registry<Registry>().lookup(domain::new(subdomain_name));
         assert!(record.is_some());
-
-        ts::return_shared(suins);
-        ts::return_shared(clock);
-        ts::return_shared(suins_manager);
     };
     // Remove subdomain
     {
         scenario.next_tx(USER1);
-        let suins_manager = scenario.take_shared<SuiNSManager>();
-        let mut suins = scenario.take_shared<SuiNS>();
-        let clock = scenario.take_shared<Clock>();
         let admin_cap = scenario.take_from_address<suins_manager::AdminCap>(ADMIN);
 
         suins_manager::remove_subdomain(
@@ -107,11 +100,58 @@ fun test_remove_subdomain() {
         let record = suins.registry<Registry>().lookup(domain::new(subdomain_name));
         assert!(record.is_none());
 
-        ts::return_shared(suins);
-        ts::return_shared(clock);
-        ts::return_shared(suins_manager);
         ts::return_to_address(ADMIN, admin_cap);
     };
+
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
+    scenario.end();
+}
+
+#[test, expected_failure]
+fun test_double_register_subdomain() {
+    let mut scenario = subdomain_tests::test_init();
+    test_init(&mut scenario, ADMIN);
+    authorize_app(&mut scenario, ADMIN, TestApp {});
+
+    let subdomain_name = utf8(b"sub.test.sui");
+
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock = scenario.take_shared<Clock>();
+    // Create subdomain
+    {
+        scenario.next_tx(USER1);
+        suins_manager::register_subdomain(
+            &TestApp {},
+            &suins_manager,
+            &mut suins,
+            &clock,
+            subdomain_name,
+            TEST_ADDRESS,
+            ctx(&mut scenario),
+        );
+
+        let record = suins.registry<Registry>().lookup(domain::new(subdomain_name));
+        assert!(record.is_some());
+    };
+    // Double register same subdomain
+    {
+        scenario.next_tx(USER1);
+        suins_manager::register_subdomain(
+            &TestApp {},
+            &suins_manager,
+            &mut suins,
+            &clock,
+            subdomain_name,
+            TEST_ADDRESS,
+            ctx(&mut scenario),
+        );
+    };
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
     scenario.end();
 }
 
