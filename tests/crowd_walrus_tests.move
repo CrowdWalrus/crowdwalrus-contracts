@@ -127,7 +127,7 @@ public fun test_validate_campaign() {
     {
         sc.next_tx(validator);
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        let campaign = sc.take_shared<Campaign>();
+        let mut campaign = sc.take_shared<Campaign>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
 
         // Before validate
@@ -135,7 +135,7 @@ public fun test_validate_campaign() {
         assert_eq(crowd_walrus.get_validated_campaigns_list().length(), 0);
 
         // Validate
-        crowd_walrus.validate_campaign(&validate_cap, &campaign, ctx(&mut sc));
+        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         // After validate
         assert!(crowd_walrus.is_campaign_validated(object::id(&campaign)));
@@ -146,6 +146,7 @@ public fun test_validate_campaign() {
                 &object::id(&campaign),
             ),
         );
+        assert!(campaign.is_validated());
 
         // Clean up
         ts::return_shared(campaign);
@@ -156,13 +157,15 @@ public fun test_validate_campaign() {
     // Test unvalidate campaign
     {
         sc.next_tx(validator);
-        let campaign = sc.take_shared<Campaign>();
+        let mut campaign = sc.take_shared<Campaign>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        crowd_walrus.unvalidate_campaign(&validate_cap, &campaign, ctx(&mut sc));
+        crowd_walrus.unvalidate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
         assert_eq(crowd_walrus.get_validated_campaigns_list().length(), 0);
+
+        assert!(!campaign.is_validated());
 
         // Clean up
         ts::return_shared(campaign);
@@ -206,10 +209,10 @@ public fun test_validate_campaign_twice() {
     // Validate campaign
     {
         sc.next_tx(validator);
-        let campaign = sc.take_shared<Campaign>();
+        let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
-        crowd_walrus.validate_campaign(&validate_cap, &campaign, ctx(&mut sc));
+        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         // Clean up
         ts::return_shared(campaign);
@@ -220,10 +223,10 @@ public fun test_validate_campaign_twice() {
     // Validate campaign again
     {
         sc.next_tx(validator);
-        let campaign = sc.take_shared<Campaign>();
+        let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
-        crowd_walrus.validate_campaign(&validate_cap, &campaign, ctx(&mut sc));
+        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         // Clean up
         ts::return_shared(campaign);
@@ -268,9 +271,9 @@ public fun test_unvalidate_invalid_campaign() {
     {
         sc.next_tx(validator);
         let validate_cap = sc.take_from_sender<ValidateCap>();
-        let campaign = sc.take_shared<Campaign>();
+        let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        crowd_walrus.unvalidate_campaign(&validate_cap, &campaign, ctx(&mut sc));
+        crowd_walrus.unvalidate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
         sc.return_to_sender(validate_cap);
         ts::return_shared(campaign);
         ts::return_shared(crowd_walrus);
@@ -298,7 +301,7 @@ public fun test_init(admin_address: address): Scenario {
         let mut suins_manager = scenario.take_shared<SuiNSManager>();
         let suins_manager_cap = scenario.take_from_sender<SuiNSManagerAdminCap>();
 
-        suins_manager_authorize_app<crowd_walrus::CROWD_WALRUS>(
+        suins_manager_authorize_app<crowd_walrus::CrowdWalrusApp>(
             &mut suins_manager,
             &suins_manager_cap,
         );

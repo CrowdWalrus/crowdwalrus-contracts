@@ -1,6 +1,9 @@
 module crowd_walrus::campaign;
 
 use std::string::String;
+use sui::dynamic_field as df;
+
+const E_APP_NOT_AUTHORIZED: u64 = 1;
 
 public struct Campaign has key, store {
     id: UID,
@@ -9,6 +12,7 @@ public struct Campaign has key, store {
     description: String,
     subdomain_name: String,
     created_at: u64,
+    validated: bool,
 }
 
 public struct CampaignOwnerCap has key, store {
@@ -16,20 +20,54 @@ public struct CampaignOwnerCap has key, store {
     campaign_id: ID,
 }
 
-public(package) fun new(
+// === App Auth ===
+
+/// An authorization Key kept in the Campaign - allows applications access
+/// protected features of the Campaign.
+/// The `App` type parameter is a witness which should be defined in the
+/// original module (CrowdWalrusApp in this case).
+public struct AppKey<phantom App: drop> has copy, drop, store {}
+
+// === Authorization Functions ===
+
+/// Authorize an application to access protected features of the Campaign.
+public fun authorize_app<App: drop>(self: &mut Campaign, _: &CampaignOwnerCap) {
+    df::add(&mut self.id, AppKey<App> {}, true);
+}
+
+/// Deauthorize an application by removing its authorization key.
+public fun deauthorize_app<App: drop>(self: &mut Campaign, _: &CampaignOwnerCap): bool {
+    df::remove(&mut self.id, AppKey<App> {})
+}
+
+/// Check if an application is authorized to access protected features of
+/// the Campaign.
+public fun is_app_authorized<App: drop>(self: &Campaign): bool {
+    df::exists_(&self.id, AppKey<App> {})
+}
+
+/// Assert that an application is authorized to access protected features of
+/// the Campaign. Aborts with `E_APP_NOT_AUTHORIZED` if not.
+public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
+    assert!(self.is_app_authorized<App>(), E_APP_NOT_AUTHORIZED);
+}
+
+public(package) fun new<App: drop>(
+    _: &App,
     admin_id: ID,
     name: String,
     description: String,
     subdomain_name: String,
     ctx: &mut TxContext,
 ): (ID, CampaignOwnerCap) {
-    let campaign = Campaign {
+    let mut campaign = Campaign {
         id: object::new(ctx),
         admin_id,
         name,
         description,
         subdomain_name,
         created_at: tx_context::epoch(ctx),
+        validated: false,
     };
 
     let campaign_id = object::id(&campaign);
@@ -37,6 +75,9 @@ public(package) fun new(
         id: object::new(ctx),
         campaign_id,
     };
+
+    // Authorize the passed app
+    df::add(&mut campaign.id, AppKey<App> {}, true);
 
     transfer::share_object(campaign);
     (campaign_id, campaign_owner_cap)
@@ -48,4 +89,15 @@ public fun subdomain_name(campaign: &Campaign): String {
 
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): ID {
     campaign_owner_cap.campaign_id
+}
+
+public fun set_validated<App: drop>(campaign: &mut Campaign, _: &App, validated: bool) {
+    campaign.assert_app_is_authorized<App>();
+    campaign.validated = validated
+}
+
+// === View Functions ===
+
+public fun is_validated(campaign: &Campaign): bool {
+    campaign.validated
 }

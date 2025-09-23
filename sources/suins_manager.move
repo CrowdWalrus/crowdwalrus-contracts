@@ -5,6 +5,7 @@ use subdomains::subdomains::{new_leaf, remove_leaf};
 use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::dynamic_object_field as dof;
+use sui::event;
 use suins::suins::SuiNS;
 use suins::suins_registration::SuinsRegistration;
 
@@ -23,6 +24,18 @@ public struct SuiNSManager has key {
 public struct AdminCap has key, store {
     id: UID,
     suins_manager_id: ID,
+}
+
+/// === Events ===
+public struct SuiNSManagerCreated has copy, drop {
+    suins_manager_id: ID,
+    creator: address,
+}
+
+public struct AdminCreated has copy, drop {
+    suins_manager_id: ID,
+    admin_id: ID,
+    creator: address,
 }
 
 // === App Auth ===
@@ -73,16 +86,27 @@ fun get_suins_nft(self: &SuiNSManager): &SuinsRegistration {
 }
 
 // === Protected Functions ===
-public(package) fun new(ctx: &mut TxContext): (ID, AdminCap) {
-    let suins_manager = SuiNSManager {
+public(package) fun new<App: drop>(_: &App, ctx: &mut TxContext): (ID, AdminCap) {
+    let mut suins_manager = SuiNSManager {
         id: object::new(ctx),
     };
+    df::add(&mut suins_manager.id, AppKey<App> {}, true);
+
+    event::emit(SuiNSManagerCreated {
+        suins_manager_id: object::id(&suins_manager),
+        creator: tx_context::sender(ctx),
+    });
 
     let suins_manager_id = object::id(&suins_manager);
     let suins_manager_cap = AdminCap {
         id: object::new(ctx),
         suins_manager_id: suins_manager_id,
     };
+    event::emit(AdminCreated {
+        suins_manager_id: suins_manager_id,
+        admin_id: object::id(&suins_manager_cap),
+        creator: tx_context::sender(ctx),
+    });
 
     transfer::share_object(suins_manager);
     (suins_manager_id, suins_manager_cap)

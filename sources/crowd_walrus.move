@@ -1,15 +1,18 @@
 module crowd_walrus::crowd_walrus;
 
 use crowd_walrus::campaign;
-use crowd_walrus::suins_manager::{SuiNSManager, register_subdomain};
+use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager, register_subdomain};
 use std::string::String;
 use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::event;
 use sui::table;
+use sui::test_scenario::{Self as ts, ctx};
 use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
+/// Authorization token for the app.
+public struct CrowdWalrusApp has drop {}
 
 // === Errors ===
 
@@ -43,6 +46,7 @@ public struct ValidateCap has key, store {
 
 public struct AdminCreated has copy, drop {
     crowd_walrus_id: ID,
+    admin_id: ID,
     creator: address,
 }
 
@@ -88,6 +92,7 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
     // Emit creation event
     event::emit(AdminCreated {
         crowd_walrus_id,
+        admin_id: object::id(&admin_cap),
         creator: tx_context::sender(ctx),
     });
 
@@ -95,7 +100,13 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
     transfer::transfer(admin_cap, tx_context::sender(ctx));
 
     // Share crowd walrus object with creator
-    transfer::share_object(crowd_walrus)
+    transfer::share_object(crowd_walrus);
+    let (_, suins_manager_cap) = suins_manager::new(
+        &CrowdWalrusApp {},
+        ctx,
+    );
+
+    transfer::public_transfer(suins_manager_cap, tx_context::sender(ctx));
 }
 
 // === Public Functions ===
@@ -114,9 +125,10 @@ entry fun create_campaign(
     // register subname
     // TODO: register on suins manager
 
-    let app = get_app();
+    let app = CrowdWalrusApp {};
 
     let (campaign_id, campaign_owner_cap) = campaign::new(
+        &app,
         object::id(crowd_walrus),
         name,
         description,
@@ -141,7 +153,7 @@ entry fun create_campaign(
 entry fun validate_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &ValidateCap,
-    campaign: &campaign::Campaign,
+    campaign: &mut campaign::Campaign,
     ctx: &TxContext,
 ) {
     let campaign_id = object::id(campaign);
@@ -151,6 +163,8 @@ entry fun validate_campaign(
 
     table::add(&mut crowd_walrus.validated_maps, campaign_id, true);
     vector::push_back(&mut crowd_walrus.validated_campaigns_list, campaign_id);
+
+    campaign::set_validated(campaign, &CrowdWalrusApp {}, true);
 
     // event
     event::emit(CampaignValidated {
@@ -162,13 +176,15 @@ entry fun validate_campaign(
 entry fun unvalidate_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &ValidateCap,
-    campaign: &campaign::Campaign,
+    campaign: &mut campaign::Campaign,
     ctx: &TxContext,
 ) {
     let campaign_id = object::id(campaign);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(table::contains(&crowd_walrus.validated_maps, campaign_id), E_NOT_VALIDATED);
+
+    campaign::set_validated(campaign, &CrowdWalrusApp {}, false);
 
     table::remove(&mut crowd_walrus.validated_maps, campaign_id);
 
@@ -270,9 +286,36 @@ public fun borrow_field_mut<K: copy + drop + store, V: store>(
     df::borrow_mut(&mut crowd_walrus.id, key)
 }
 
+#[test]
+public fun test_init_function() {
+    let publisher_address: address = @0xA;
+    let mut scenario = ts::begin(publisher_address);
+
+    init(CROWD_WALRUS {}, ctx(&mut scenario));
+
+    scenario.next_tx(publisher_address);
+
+    let crowd_walrus = scenario.take_shared<CrowdWalrus>();
+    let crowd_walrus_cap = scenario.take_from_sender<AdminCap>();
+    assert!(object::id(&crowd_walrus) == crowd_walrus_cap.crowd_walrus_id);
+
+    let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
+    let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
+
+    assert!(suins_manager.is_app_authorized<CrowdWalrusApp>());
+
+    // clean up
+    scenario.return_to_sender(crowd_walrus_cap);
+    scenario.return_to_sender(suins_manager_cap);
+    ts::return_shared(crowd_walrus);
+    ts::return_shared(suins_manager);
+
+    scenario.end();
+}
+
 #[test_only]
-public fun get_app(): CROWD_WALRUS {
-    CROWD_WALRUS {}
+public fun get_app(): CrowdWalrusApp {
+    CrowdWalrusApp {}
 }
 
 #[test_only]
