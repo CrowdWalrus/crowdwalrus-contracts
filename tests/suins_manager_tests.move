@@ -154,6 +154,40 @@ fun test_double_register_subdomain() {
     scenario.end();
 }
 
+#[test, expected_failure(abort_code = domain::EInvalidDomain)]
+fun test_register_invalid_subdomain() {
+    let mut scenario = test_init(ADMIN);
+    authorize_app(&mut scenario, ADMIN, TestApp {});
+
+    scenario.next_tx(USER1);
+
+    // let subdomain_name = get_test_subdomain_name(b"sub");
+    let subdomain_name = utf8(b"sub.invalid_domain.sui");
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock = scenario.take_shared<Clock>();
+    // Create subdomain
+    {
+        scenario.next_tx(USER1);
+        suins_manager::register_subdomain(
+            &TestApp {},
+            &suins_manager,
+            &mut suins,
+            &clock,
+            subdomain_name,
+            TEST_ADDRESS,
+            ctx(&mut scenario),
+        );
+
+        let record = suins.registry<Registry>().lookup(domain::new(subdomain_name));
+        assert!(record.is_some());
+    };
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
+    scenario.end();
+}
+
 public fun test_init(admin_address: address): Scenario {
     let mut scenario_val = subdomain_tests::test_init();
     let scenario = &mut scenario_val;
