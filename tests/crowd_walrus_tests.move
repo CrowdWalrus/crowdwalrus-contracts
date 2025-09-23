@@ -1,11 +1,22 @@
 #[test_only]
+#[allow(unused_const)]
 module crowd_walrus::crowd_walrus_tests;
 
 use crowd_walrus::campaign::{Campaign, CampaignOwnerCap};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, ValidateCap};
+use crowd_walrus::suins_manager::{
+    AdminCap as SuiNSManagerAdminCap,
+    SuiNSManager,
+    authorize_app as suins_manager_authorize_app
+};
+use crowd_walrus::suins_manager_tests::{Self as suins_manager_tests, get_test_subdomain_name};
 use std::string::{Self, String};
-use sui::test_scenario::{Self as ts, ctx};
+use sui::clock::Clock;
+use sui::test_scenario::{Self as ts, ctx, Scenario};
 use sui::test_utils::{Self as tu, assert_eq};
+use suins::domain;
+use suins::registry::Registry;
+use suins::suins::SuiNS;
 
 const ADMIN: address = @0xA;
 const USER1: address = @0xB;
@@ -13,27 +24,27 @@ const USER2: address = @0xC;
 
 #[test]
 public fun test_create_campaign() {
-    let mut sc = ts::begin(ADMIN);
-    let crowd_walrus_id = crowd_walrus::create_and_share_crowd_walrus(ctx(&mut sc));
-    let subdomain_name: String = string::utf8(b"test-subdomain");
-
+    let mut sc = test_init(ADMIN);
+    let subdomain_name = get_test_subdomain_name(b"sub");
     {
         sc.next_tx(USER1);
-        let crowd_walrus = sc.take_shared_by_id<CrowdWalrus>(crowd_walrus_id);
 
-        // Test admin id equals admin_id
-        assert_eq(object::id(&crowd_walrus), crowd_walrus_id);
-
-        crowd_walrus::create_campaign(
-            &crowd_walrus,
+        let campaign_id = create_test_campaign(
+            &mut sc,
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign description"),
-            subdomain_name,
-            ctx(&mut sc),
+            b"sub",
         );
 
+        sc.next_tx(USER1);
+        let suins = sc.take_shared<SuiNS>();
+        let mut subname_option = suins.registry<Registry>().lookup(domain::new(subdomain_name));
+        assert!(subname_option.is_some());
+        let subname_record = subname_option.extract();
+        assert_eq(subname_record.target_address(), option::some(campaign_id.to_address()));
+
         // Clean up
-        ts::return_shared(crowd_walrus);
+        ts::return_shared(suins);
     };
 
     {
@@ -51,81 +62,71 @@ public fun test_create_campaign() {
     sc.end();
 }
 
-// #[test, expected_failure(abort_code = manager::E_CAMPAIGN_ALREADY_EXISTS)]
-// public fun test_create_campaign_with_duplicate_subdomain_name() {
-//     let mut sc = ts::begin(ADMIN);
-//     let ctx = &mut tx_context::dummy();
-//     let crowd_walrus_id = manager::create_and_share_crowd_walrus(ctx);
-//     let subdomain_name: String = string::utf8(b"test-subdomain");
+#[test, expected_failure(abort_code = suins::registry::ERecordNotExpired)]
+public fun test_create_campaign_with_duplicate_subdomain_name() {
+    let mut sc = test_init(ADMIN);
 
-//     // First creation
-//     {
-//         sc.next_tx(USER1);
-//         let mut crowd_walrus = sc.take_shared_by_id<CrowdWalrus>(crowd_walrus_id);
+    // First creation
+    {
+        sc.next_tx(USER1);
 
-//         manager::create_campaign(
-//             &mut crowd_walrus,
-//             string::utf8(b"Test Campaign 1"),
-//             string::utf8(b"A test campaign description 1"),
-//             subdomain_name,
-//             ctx,
-//         );
+        create_test_campaign(
+            &mut sc,
+            string::utf8(b"Test Campaign 1"),
+            string::utf8(b"A test campaign description 1"),
+            b"sub",
+        );
+    };
 
-//         // Clean up
-//         ts::return_shared(crowd_walrus);
-//     };
+    // Second creation
+    {
+        sc.next_tx(USER2);
 
-//     // Second creation
-//     {
-//         sc.next_tx(USER2);
-//         let mut crowd_walrus = sc.take_shared_by_id<CrowdWalrus>(crowd_walrus_id);
-//         manager::create_campaign(
-//             &mut crowd_walrus,
-//             string::utf8(b"Test Campaign 2"),
-//             string::utf8(b"A test campaign description 2"),
-//             subdomain_name,
-//             ctx,
-//         );
-//         ts::return_shared(crowd_walrus);
-//     };
+        create_test_campaign(
+            &mut sc,
+            string::utf8(b"Test Campaign 2"),
+            string::utf8(b"A test campaign description 2"),
+            b"sub",
+        );
+    };
 
-//     sc.end();
-// }
+    sc.end();
+}
 
 #[test]
 public fun test_validate_campaign() {
     let validator = USER1;
     let campaign_owner = USER2;
 
-    let mut sc = ts::begin(ADMIN);
-    // Create crowd walrus
-    { crowd_walrus::test_init(ctx(&mut sc)); sc.next_tx(ADMIN); };
-
-    let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let mut sc = test_init(ADMIN);
 
     // Test create validate cap
     {
+        sc.next_tx(ADMIN);
         let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
 
         crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
 
         sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd_walrus);
     };
 
     // Test create campaign
     {
         sc.next_tx(campaign_owner);
-        crowd_walrus.create_campaign(
+        create_test_campaign(
+            &mut sc,
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign description"),
-            string::utf8(b"test-subdomain"),
-            ctx(&mut sc),
+            b"sub",
         );
     };
 
     // Test validate campaign
     {
         sc.next_tx(validator);
+        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         let campaign = sc.take_shared<Campaign>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
 
@@ -149,6 +150,7 @@ public fun test_validate_campaign() {
         // Clean up
         ts::return_shared(campaign);
         sc.return_to_sender(validate_cap);
+        ts::return_shared(crowd_walrus);
     };
 
     // Test unvalidate campaign
@@ -156,6 +158,7 @@ public fun test_validate_campaign() {
         sc.next_tx(validator);
         let campaign = sc.take_shared<Campaign>();
         let validate_cap = sc.take_from_sender<ValidateCap>();
+        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         crowd_walrus.unvalidate_campaign(&validate_cap, &campaign, ctx(&mut sc));
 
         assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
@@ -164,10 +167,9 @@ public fun test_validate_campaign() {
         // Clean up
         ts::return_shared(campaign);
         sc.return_to_sender(validate_cap);
+        ts::return_shared(crowd_walrus);
     };
 
-    // Clean up
-    ts::return_shared(crowd_walrus);
     sc.end();
 }
 
@@ -175,77 +177,161 @@ public fun test_validate_campaign() {
 public fun test_validate_campaign_twice() {
     let validator = USER1;
     let campaign_owner = USER2;
-    let mut sc = ts::begin(ADMIN);
-    // Create crowd walrus
-    { crowd_walrus::test_init(ctx(&mut sc)); sc.next_tx(ADMIN); };
-    let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-    crowd_walrus::create_validate_cap_for_user(
-        object::id(&crowd_walrus),
-        validator,
-        ctx(&mut sc),
-    );
-    // Create campaign
+
+    let mut sc = test_init(ADMIN);
+
+    // Test create validate cap
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
+
+        crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
+
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd_walrus);
+    };
+
+    // Test create campaign
     {
         sc.next_tx(campaign_owner);
-        crowd_walrus.create_campaign(
+        create_test_campaign(
+            &mut sc,
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign description"),
-            string::utf8(b"test-subdomain"),
-            ctx(&mut sc),
+            b"sub",
         );
     };
+
     // Validate campaign
     {
         sc.next_tx(validator);
-        let validate_cap = sc.take_from_sender<ValidateCap>();
         let campaign = sc.take_shared<Campaign>();
+        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let validate_cap = sc.take_from_sender<ValidateCap>();
         crowd_walrus.validate_campaign(&validate_cap, &campaign, ctx(&mut sc));
-        sc.return_to_sender(validate_cap);
+
+        // Clean up
         ts::return_shared(campaign);
+        sc.return_to_sender(validate_cap);
+        ts::return_shared(crowd_walrus);
     };
+
     // Validate campaign again
     {
         sc.next_tx(validator);
-        let validate_cap = sc.take_from_sender<ValidateCap>();
         let campaign = sc.take_shared<Campaign>();
+        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let validate_cap = sc.take_from_sender<ValidateCap>();
         crowd_walrus.validate_campaign(&validate_cap, &campaign, ctx(&mut sc));
-        sc.return_to_sender(validate_cap);
+
+        // Clean up
         ts::return_shared(campaign);
+        sc.return_to_sender(validate_cap);
+        ts::return_shared(crowd_walrus);
     };
 
-    ts::return_shared(crowd_walrus);
     sc.end();
 }
 
 #[test, expected_failure(abort_code = crowd_walrus::E_NOT_VALIDATED)]
-public fun test_unvalidate_campaign_twice() {
+public fun test_unvalidate_invalid_campaign() {
     let validator = USER1;
     let campaign_owner = USER2;
-    let mut sc = ts::begin(ADMIN);
-    // Create crowd walrus
-    { crowd_walrus::test_init(ctx(&mut sc)); sc.next_tx(ADMIN); };
-    let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-    crowd_walrus::create_validate_cap_for_user(object::id(&crowd_walrus), validator, ctx(&mut sc));
+
+    let mut sc = test_init(ADMIN);
+
+    // Test create validate cap
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
+
+        crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
+
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd_walrus);
+    };
+
     // Test create campaign
     {
         sc.next_tx(campaign_owner);
-        crowd_walrus.create_campaign(
+        create_test_campaign(
+            &mut sc,
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign description"),
-            string::utf8(b"test-subdomain"),
-            ctx(&mut sc),
+            b"sub",
         );
     };
+
     // Test unvalidate campaign
     {
         sc.next_tx(validator);
         let validate_cap = sc.take_from_sender<ValidateCap>();
         let campaign = sc.take_shared<Campaign>();
+        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         crowd_walrus.unvalidate_campaign(&validate_cap, &campaign, ctx(&mut sc));
         sc.return_to_sender(validate_cap);
         ts::return_shared(campaign);
+        ts::return_shared(crowd_walrus);
     };
 
-    ts::return_shared(crowd_walrus);
     sc.end();
+}
+
+public fun test_init(admin_address: address): Scenario {
+    let mut scenario = suins_manager_tests::test_init(admin_address);
+    let crowd_walrus_id = crowd_walrus::create_and_share_crowd_walrus(ctx(&mut scenario));
+
+    crowd_walrus::create_admin_cap_for_user(
+        crowd_walrus_id,
+        admin_address,
+        ctx(&mut scenario),
+    );
+    {
+        scenario.next_tx(admin_address);
+        suins_manager_tests::authorize_app(&mut scenario, admin_address, crowd_walrus::get_app());
+    };
+
+    {
+        scenario.next_tx(admin_address);
+        let mut suins_manager = scenario.take_shared<SuiNSManager>();
+        let suins_manager_cap = scenario.take_from_sender<SuiNSManagerAdminCap>();
+
+        suins_manager_authorize_app<crowd_walrus::CROWD_WALRUS>(
+            &mut suins_manager,
+            &suins_manager_cap,
+        );
+        ts::return_shared(suins_manager);
+        ts::return_to_address(admin_address, suins_manager_cap);
+    };
+    scenario
+}
+
+public fun create_test_campaign(
+    sc: &mut Scenario,
+    title: String,
+    description: String,
+    subname: vector<u8>,
+): ID {
+    let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let suins_manager = sc.take_shared<SuiNSManager>();
+    let mut suins = sc.take_shared<SuiNS>();
+    let clock = sc.take_shared<Clock>();
+    let subdomain_name = get_test_subdomain_name(subname);
+    let campaign_id = crowd_walrus::create_campaign(
+        &crowd_walrus,
+        &suins_manager,
+        &mut suins,
+        &clock,
+        title,
+        description,
+        subdomain_name,
+        ctx(sc),
+    );
+    ts::return_shared(crowd_walrus);
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
+    campaign_id
 }

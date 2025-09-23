@@ -1,10 +1,13 @@
 module crowd_walrus::crowd_walrus;
 
 use crowd_walrus::campaign;
+use crowd_walrus::suins_manager::{SuiNSManager, register_subdomain};
 use std::string::String;
+use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::event;
 use sui::table;
+use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
 
@@ -100,6 +103,9 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
 /// Register a new campaign
 entry fun create_campaign(
     crowd_walrus: &CrowdWalrus,
+    suins_manager: &SuiNSManager,
+    suins: &mut SuiNS,
+    clock: &Clock,
     name: String,
     description: String,
     subdomain_name: String,
@@ -108,11 +114,22 @@ entry fun create_campaign(
     // register subname
     // TODO: register on suins manager
 
+    let app = get_app();
+
     let (campaign_id, campaign_owner_cap) = campaign::new(
         object::id(crowd_walrus),
         name,
         description,
         subdomain_name,
+        ctx,
+    );
+    register_subdomain(
+        &app,
+        suins_manager,
+        suins,
+        clock,
+        subdomain_name,
+        campaign_id.to_address(),
         ctx,
     );
 
@@ -254,23 +271,18 @@ public fun borrow_field_mut<K: copy + drop + store, V: store>(
 }
 
 #[test_only]
-public fun test_init(ctx: &mut TxContext) {
-    init(CROWD_WALRUS {}, ctx);
-}
-
-#[test_only]
-public fun create_crowd_walrus(ctx: &mut TxContext): CrowdWalrus {
-    CrowdWalrus {
-        id: object::new(ctx),
-        created_at: tx_context::epoch(ctx),
-        validated_maps: table::new(ctx),
-        validated_campaigns_list: vector::empty(),
-    }
+public fun get_app(): CROWD_WALRUS {
+    CROWD_WALRUS {}
 }
 
 #[test_only]
 public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
-    let crowd_walrus = create_crowd_walrus(ctx);
+    let crowd_walrus = CrowdWalrus {
+        id: object::new(ctx),
+        created_at: tx_context::epoch(ctx),
+        validated_maps: table::new(ctx),
+        validated_campaigns_list: vector::empty(),
+    };
     let crowd_walrus_id = object::id(&crowd_walrus);
     transfer::share_object(crowd_walrus);
     crowd_walrus_id

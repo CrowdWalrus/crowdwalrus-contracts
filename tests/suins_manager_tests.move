@@ -3,10 +3,10 @@
 module crowd_walrus::suins_manager_tests;
 
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager};
-use std::string::utf8;
+use std::string::{utf8, String};
 use subdomains::subdomain_tests as subdomain_tests;
 use sui::clock::Clock;
-use sui::test_scenario::{Self as ts, ctx};
+use sui::test_scenario::{Self as ts, ctx, Scenario};
 use sui::test_utils::assert_eq;
 use suins::domain;
 use suins::registry::Registry;
@@ -20,21 +20,21 @@ const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
 
+const TEST_DOMAIN_NAME: vector<u8> = b"test.sui";
+
 // === Appplicaiton Auth ===
 public struct TestApp has drop {}
 
 #[test]
 fun test_register_subdomain() {
-    let mut scenario = subdomain_tests::test_init();
-
-    test_init(&mut scenario, ADMIN);
+    let mut scenario = test_init(ADMIN);
     authorize_app(&mut scenario, ADMIN, TestApp {});
 
     scenario.next_tx(USER1);
     let suins_manager = scenario.take_shared<SuiNSManager>();
     let mut suins = scenario.take_shared<SuiNS>();
     let clock = scenario.take_shared<Clock>();
-    let subdomain_name = utf8(b"sub.test.sui");
+    let subdomain_name = get_test_subdomain_name(b"sub");
     suins_manager::register_subdomain(
         &TestApp {},
         &suins_manager,
@@ -59,12 +59,11 @@ fun test_register_subdomain() {
 
 #[test]
 fun test_remove_subdomain() {
-    let mut scenario = subdomain_tests::test_init();
-    test_init(&mut scenario, ADMIN);
+    let mut scenario = test_init(ADMIN);
     authorize_app(&mut scenario, ADMIN, TestApp {});
 
     scenario.next_tx(USER1);
-    let subdomain_name = utf8(b"sub.test.sui");
+    let subdomain_name = get_test_subdomain_name(b"sub");
     let suins_manager = scenario.take_shared<SuiNSManager>();
     let mut suins = scenario.take_shared<SuiNS>();
     let clock = scenario.take_shared<Clock>();
@@ -111,13 +110,12 @@ fun test_remove_subdomain() {
 
 #[test, expected_failure(abort_code = suins::registry::ERecordNotExpired)]
 fun test_double_register_subdomain() {
-    let mut scenario = subdomain_tests::test_init();
-    test_init(&mut scenario, ADMIN);
+    let mut scenario = test_init(ADMIN);
     authorize_app(&mut scenario, ADMIN, TestApp {});
 
     scenario.next_tx(USER1);
 
-    let subdomain_name = utf8(b"sub.test.sui");
+    let subdomain_name = get_test_subdomain_name(b"sub");
     let suins_manager = scenario.take_shared<SuiNSManager>();
     let mut suins = scenario.take_shared<SuiNS>();
     let clock = scenario.take_shared<Clock>();
@@ -156,9 +154,11 @@ fun test_double_register_subdomain() {
     scenario.end();
 }
 
-public fun test_init(scenario: &mut ts::Scenario, admin_address: address) {
+public fun test_init(admin_address: address): Scenario {
+    let mut scenario_val = subdomain_tests::test_init();
+    let scenario = &mut scenario_val;
+    let domain_name = get_test_domain_name();
     // Create suins manager
-    let domain_name = utf8(b"test.sui");
     let suins_manager_id = suins_manager::create_and_share_suins_manager(ctx(scenario));
     let admin_cap_id = suins_manager::create_admin_cap_for_user(
         suins_manager_id,
@@ -184,6 +184,7 @@ public fun test_init(scenario: &mut ts::Scenario, admin_address: address) {
         assert!(optional.is_some());
         ts::return_shared(suins);
     };
+    scenario_val
 }
 
 public fun authorize_app<App: drop>(scenario: &mut ts::Scenario, admin_address: address, _: App) {
@@ -193,4 +194,15 @@ public fun authorize_app<App: drop>(scenario: &mut ts::Scenario, admin_address: 
     suins_manager::authorize_app<TestApp>(&mut suins_manager, &admin_cap);
     ts::return_shared(suins_manager);
     ts::return_to_address(admin_address, admin_cap);
+}
+
+public fun get_test_domain_name(): String {
+    utf8(TEST_DOMAIN_NAME)
+}
+
+public fun get_test_subdomain_name(subname_vec: vector<u8>): String {
+    let mut subname_vec: vector<u8> = subname_vec;
+    subname_vec.append(b".");
+    subname_vec.append(TEST_DOMAIN_NAME);
+    utf8(subname_vec)
 }
