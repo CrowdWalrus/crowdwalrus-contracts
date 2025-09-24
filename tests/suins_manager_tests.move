@@ -35,9 +35,8 @@ fun test_register_subdomain() {
     let mut suins = scenario.take_shared<SuiNS>();
     let clock = scenario.take_shared<Clock>();
     let subdomain_name = get_test_subdomain_name(b"sub");
-    suins_manager::register_subdomain(
+    suins_manager.register_subdomain(
         &TestApp {},
-        &suins_manager,
         &mut suins,
         &clock,
         subdomain_name,
@@ -70,9 +69,8 @@ fun test_remove_subdomain() {
 
     // Create subdomain
     {
-        suins_manager::register_subdomain(
+        suins_manager.register_subdomain(
             &TestApp {},
-            &suins_manager,
             &mut suins,
             &clock,
             subdomain_name,
@@ -122,9 +120,8 @@ fun test_double_register_subdomain() {
     // Create subdomain
     {
         scenario.next_tx(USER1);
-        suins_manager::register_subdomain(
+        suins_manager.register_subdomain(
             &TestApp {},
-            &suins_manager,
             &mut suins,
             &clock,
             subdomain_name,
@@ -138,9 +135,8 @@ fun test_double_register_subdomain() {
     // Double register same subdomain
     {
         scenario.next_tx(USER1);
-        suins_manager::register_subdomain(
+        suins_manager.register_subdomain(
             &TestApp {},
-            &suins_manager,
             &mut suins,
             &clock,
             subdomain_name,
@@ -169,9 +165,8 @@ fun test_register_invalid_subdomain() {
     // Create subdomain
     {
         scenario.next_tx(USER1);
-        suins_manager::register_subdomain(
+        suins_manager.register_subdomain(
             &TestApp {},
-            &suins_manager,
             &mut suins,
             &clock,
             subdomain_name,
@@ -206,7 +201,7 @@ public fun test_init(admin_address: address): Scenario {
         let admin_cap = scenario.take_from_sender_by_id<suins_manager::AdminCap>(admin_cap_id);
         let parent = subdomain_tests::create_sld_name(domain_name, scenario);
 
-        suins_manager::set_suins_nft(&admin_cap, &mut suins_manager, parent);
+        suins_manager.set_suins_nft(&admin_cap, parent);
         ts::return_shared(suins_manager);
         ts::return_to_address(admin_address, admin_cap);
     };

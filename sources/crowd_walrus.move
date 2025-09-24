@@ -136,9 +136,8 @@ entry fun create_campaign(
         metadata,
         ctx,
     );
-    register_subdomain(
+    suins_manager.register_subdomain(
         &app,
-        suins_manager,
         suins,
         clock,
         subdomain_name,
