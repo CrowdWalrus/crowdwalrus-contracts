@@ -120,6 +120,7 @@ entry fun create_campaign(
     name: String,
     description: String,
     subdomain_name: String,
+    metadata: String,
     ctx: &mut TxContext,
 ): ID {
     // register subname
@@ -133,6 +134,7 @@ entry fun create_campaign(
         name,
         description,
         subdomain_name,
+        metadata,
         ctx,
     );
     register_subdomain(

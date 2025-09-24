@@ -4,10 +4,10 @@ module crowd_walrus::suins_manager_tests;
 
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager};
 use std::string::{utf8, String};
+use std::unit_test::assert_eq;
 use subdomains::subdomain_tests as subdomain_tests;
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, ctx, Scenario};
-use sui::test_utils::assert_eq;
 use suins::domain;
 use suins::registry::Registry;
 use suins::suins::SuiNS;
@@ -48,7 +48,7 @@ fun test_register_subdomain() {
     let mut record = suins.registry<Registry>().lookup(domain::new(subdomain_name));
     assert!(record.is_some());
     let name_record = record.extract();
-    assert_eq(name_record.target_address(), option::some(TEST_ADDRESS));
+    assert_eq!(name_record.target_address(), option::some(TEST_ADDRESS));
 
     // clean up
     ts::return_shared(suins);

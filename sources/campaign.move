@@ -11,13 +11,28 @@ public struct Campaign has key, store {
     name: String,
     description: String,
     subdomain_name: String,
+    metadata: String,
     created_at: u64,
     validated: bool,
+    isActive: bool,
+    updates: vector<CampaignUpdate>,
+}
+
+public struct CampaignUpdate has copy, drop, store {
+    title: String,
+    description: String,
+    metadata: String,
 }
 
 public struct CampaignOwnerCap has key, store {
     id: UID,
     campaign_id: ID,
+}
+
+// === Events ===
+public struct CampaignUpdateAdded has copy, drop {
+    campaign_id: ID,
+    update: CampaignUpdate,
 }
 
 // === App Auth ===
@@ -58,6 +73,7 @@ public(package) fun new<App: drop>(
     name: String,
     description: String,
     subdomain_name: String,
+    metadata: String,
     ctx: &mut TxContext,
 ): (ID, CampaignOwnerCap) {
     let mut campaign = Campaign {
@@ -66,8 +82,11 @@ public(package) fun new<App: drop>(
         name,
         description,
         subdomain_name,
+        metadata,
         created_at: tx_context::epoch(ctx),
         validated: false,
+        isActive: true,
+        updates: vector::empty(),
     };
 
     let campaign_id = object::id(&campaign);
@@ -96,8 +115,39 @@ public fun set_validated<App: drop>(campaign: &mut Campaign, _: &App, validated:
     campaign.validated = validated
 }
 
+public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, isActive: bool) {
+    campaign.isActive = isActive
+}
+
+public fun add_update(
+    campaign: &mut Campaign,
+    _: &CampaignOwnerCap,
+    title: String,
+    description: String,
+    metadata: String,
+) {
+    let update = CampaignUpdate {
+        title,
+        description,
+        metadata,
+    };
+    vector::push_back(&mut campaign.updates, update);
+    sui::event::emit(CampaignUpdateAdded {
+        campaign_id: object::id(campaign),
+        update,
+    });
+}
+
 // === View Functions ===
 
 public fun is_validated(campaign: &Campaign): bool {
     campaign.validated
+}
+
+public fun is_active(campaign: &Campaign): bool {
+    campaign.isActive
+}
+
+public fun updates(campaign: &Campaign): vector<CampaignUpdate> {
+    campaign.updates
 }

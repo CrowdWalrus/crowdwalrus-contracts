@@ -11,9 +11,10 @@ use crowd_walrus::suins_manager::{
 };
 use crowd_walrus::suins_manager_tests::{Self as suins_manager_tests, get_test_subdomain_name};
 use std::string::{Self, String};
+use std::unit_test::assert_eq;
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, ctx, Scenario};
-use sui::test_utils::{Self as tu, assert_eq};
+use sui::test_utils as tu;
 use suins::domain;
 use suins::registry::Registry;
 use suins::suins::SuiNS;
@@ -41,7 +42,7 @@ public fun test_create_campaign() {
         let mut subname_option = suins.registry<Registry>().lookup(domain::new(subdomain_name));
         assert!(subname_option.is_some());
         let subname_record = subname_option.extract();
-        assert_eq(subname_record.target_address(), option::some(campaign_id.to_address()));
+        assert_eq!(subname_record.target_address(), option::some(campaign_id.to_address()));
 
         // Clean up
         ts::return_shared(suins);
@@ -52,7 +53,7 @@ public fun test_create_campaign() {
         let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
         let campaign = sc.take_shared_by_id<Campaign>(campaign_owner_cap.campaign_id());
 
-        assert_eq(campaign.subdomain_name(), subdomain_name);
+        assert_eq!(campaign.subdomain_name(), subdomain_name);
 
         // Clean up
         tu::destroy(campaign_owner_cap);
@@ -132,14 +133,14 @@ public fun test_validate_campaign() {
 
         // Before validate
         assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq(crowd_walrus.get_validated_campaigns_list().length(), 0);
+        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 0);
 
         // Validate
         crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         // After validate
         assert!(crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq(crowd_walrus.get_validated_campaigns_list().length(), 1);
+        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 1);
         assert!(
             vector::contains<ID>(
                 &crowd_walrus.get_validated_campaigns_list(),
@@ -163,7 +164,7 @@ public fun test_validate_campaign() {
         crowd_walrus.unvalidate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
 
         assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq(crowd_walrus.get_validated_campaigns_list().length(), 0);
+        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 0);
 
         assert!(!campaign.is_validated());
 
@@ -330,6 +331,7 @@ public fun create_test_campaign(
         title,
         description,
         subdomain_name,
+        string::utf8(b"Test metadata"),
         ctx(sc),
     );
     ts::return_shared(crowd_walrus);
