@@ -264,29 +264,6 @@ public fun get_validated_campaigns_list(crowd_walrus: &CrowdWalrus): vector<ID> 
     crowd_walrus.validated_campaigns_list
 }
 
-/// ==== Dynamic Field Functions ====
-
-/// Check if dynamic field exists
-public fun has_field<K: copy + drop + store>(crowd_walrus: &CrowdWalrus, key: K): bool {
-    df::exists_(&crowd_walrus.id, key)
-}
-
-/// Borrow dynamic field
-public fun borrow_field<K: copy + drop + store, V: store>(crowd_walrus: &CrowdWalrus, key: K): &V {
-    df::borrow(&crowd_walrus.id, key)
-}
-
-/// Borrow mutable dynamic field (requires admin cap)
-public fun borrow_field_mut<K: copy + drop + store, V: store>(
-    crowd_walrus: &mut CrowdWalrus,
-    cap: &AdminCap,
-    key: K,
-): &mut V {
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-
-    df::borrow_mut(&mut crowd_walrus.id, key)
-}
-
 #[test]
 public fun test_init_function() {
     use sui::test_scenario::{Self as ts, ctx};
