@@ -7,7 +7,6 @@ use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::event;
 use sui::table;
-use sui::test_scenario::{Self as ts, ctx};
 use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
@@ -290,6 +289,7 @@ public fun borrow_field_mut<K: copy + drop + store, V: store>(
 
 #[test]
 public fun test_init_function() {
+    use sui::test_scenario::{Self as ts, ctx};
     let publisher_address: address = @0xA;
     let mut scenario = ts::begin(publisher_address);
 
