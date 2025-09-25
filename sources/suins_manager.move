@@ -70,14 +70,15 @@ public fun assert_app_is_authorized<App: drop>(self: &SuiNSManager) {
 
 // === SuiNS Registry ===
 
-public fun set_suins_nft(self: &mut SuiNSManager, _: &AdminCap, suins_nft: SuinsRegistration) {
+entry fun set_suins_nft(self: &mut SuiNSManager, _: &AdminCap, suins_nft: SuinsRegistration) {
     assert!(!dof::exists_(&self.id, RegKey {}), E_SUINS_NFT_ALREADY_REGISTERED);
     dof::add(&mut self.id, RegKey {}, suins_nft);
 }
 
-public fun get_back_suins_nft(self: &mut SuiNSManager, _: &AdminCap): SuinsRegistration {
+entry fun remove_suins_nft(self: &mut SuiNSManager, _: &AdminCap, recipient: address) {
     assert!(dof::exists_(&self.id, RegKey {}), E_SUINS_NFT_NOT_FOUND);
-    dof::remove(&mut self.id, RegKey {})
+    let suins_nft: SuinsRegistration = dof::remove(&mut self.id, RegKey {});
+    transfer::public_transfer(suins_nft, recipient);
 }
 
 fun get_suins_nft(self: &SuiNSManager): &SuinsRegistration {
