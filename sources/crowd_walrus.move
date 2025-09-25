@@ -7,6 +7,7 @@ use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::event;
 use sui::table;
+use sui::vec_map;
 use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
@@ -119,13 +120,15 @@ entry fun create_campaign(
     name: String,
     short_description: String,
     subdomain_name: String,
-    metadata: String,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    start_date: u64,
+    end_date: u64,
     ctx: &mut TxContext,
 ): ID {
     // register subname
-    // TODO: register on suins manager
-
     let app = CrowdWalrusApp {};
+    let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
 
     let (campaign_id, campaign_owner_cap) = campaign::new(
         &app,
@@ -134,6 +137,8 @@ entry fun create_campaign(
         short_description,
         subdomain_name,
         metadata,
+        start_date,
+        end_date,
         ctx,
     );
     suins_manager.register_subdomain(

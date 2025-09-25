@@ -13,6 +13,8 @@ const USER2: address = @0xC;
 
 const TEST_DOMAIN_NAME: vector<u8> = b"test.sui";
 
+const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
+
 #[test]
 public fun test_set_is_active() {
     let campaign_owner = USER1;
@@ -24,6 +26,10 @@ public fun test_set_is_active() {
         utf8(b"Test Campaign"),
         utf8(b"A test campaign short description"),
         b"sub",
+        vector::empty(),
+        vector::empty(),
+        0,
+        U64_MAX,
     );
 
     {

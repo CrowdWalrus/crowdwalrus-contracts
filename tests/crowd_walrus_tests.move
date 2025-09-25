@@ -15,6 +15,7 @@ use std::unit_test::assert_eq;
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, ctx, Scenario};
 use sui::test_utils as tu;
+use sui::vec_map::VecMap;
 use suins::domain;
 use suins::registry::Registry;
 use suins::suins::SuiNS;
@@ -22,6 +23,8 @@ use suins::suins::SuiNS;
 const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
+
+const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
 
 #[test]
 public fun test_create_campaign() {
@@ -35,6 +38,10 @@ public fun test_create_campaign() {
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign short description"),
             b"sub",
+            vector[string::utf8(b"key1"), string::utf8(b"key2")],
+            vector[string::utf8(b"value1"), string::utf8(b"value2")],
+            0,
+            U64_MAX,
         );
 
         sc.next_tx(USER1);
@@ -54,7 +61,10 @@ public fun test_create_campaign() {
         let campaign = sc.take_shared_by_id<Campaign>(campaign_owner_cap.campaign_id());
 
         assert_eq!(campaign.subdomain_name(), subdomain_name);
-
+        let metadata: VecMap<String, String> = campaign.metadata();
+        assert_eq!(metadata.length(), 2);
+        assert_eq!(*metadata.get(&string::utf8(b"key1")), string::utf8(b"value1"));
+        assert_eq!(*metadata.get(&string::utf8(b"key2")), string::utf8(b"value2"));
         // Clean up
         tu::destroy(campaign_owner_cap);
         ts::return_shared(campaign);
@@ -76,6 +86,10 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             string::utf8(b"Test Campaign 1"),
             string::utf8(b"A test campaign short description 1"),
             b"sub",
+            vector::empty(),
+            vector::empty(),
+            0,
+            U64_MAX,
         );
     };
 
@@ -88,6 +102,10 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             string::utf8(b"Test Campaign 2"),
             string::utf8(b"A test campaign short description 2"),
             b"sub",
+            vector::empty(),
+            vector::empty(),
+            0,
+            U64_MAX,
         );
     };
 
@@ -121,6 +139,10 @@ public fun test_validate_campaign() {
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign short description"),
             b"sub",
+            vector::empty(),
+            vector::empty(),
+            0,
+            U64_MAX,
         );
     };
 
@@ -204,6 +226,10 @@ public fun test_validate_campaign_twice() {
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign short description"),
             b"sub",
+            vector::empty(),
+            vector::empty(),
+            0,
+            U64_MAX,
         );
     };
 
@@ -265,6 +291,10 @@ public fun test_unvalidate_invalid_campaign() {
             string::utf8(b"Test Campaign"),
             string::utf8(b"A test campaign short description"),
             b"sub",
+            vector::empty(),
+            vector::empty(),
+            0,
+            U64_MAX,
         );
     };
 
@@ -317,6 +347,10 @@ public fun create_test_campaign(
     title: String,
     short_description: String,
     subname: vector<u8>,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    start_date: u64,
+    end_date: u64,
 ): ID {
     let crowd_walrus = sc.take_shared<CrowdWalrus>();
     let suins_manager = sc.take_shared<SuiNSManager>();
@@ -331,7 +365,10 @@ public fun create_test_campaign(
         title,
         short_description,
         subdomain_name,
-        string::utf8(b"Test metadata"),
+        metadata_keys,
+        metadata_values,
+        start_date,
+        end_date,
         ctx(sc),
     );
     ts::return_shared(crowd_walrus);

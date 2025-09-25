@@ -2,6 +2,7 @@ module crowd_walrus::campaign;
 
 use std::string::String;
 use sui::dynamic_field as df;
+use sui::vec_map::{Self, VecMap};
 
 const E_APP_NOT_AUTHORIZED: u64 = 1;
 
@@ -11,7 +12,9 @@ public struct Campaign has key, store {
     name: String,
     short_description: String,
     subdomain_name: String,
-    metadata: String,
+    metadata: VecMap<String, String>,
+    start_date: u64,
+    end_date: u64,
     created_at: u64,
     validated: bool,
     isActive: bool,
@@ -21,7 +24,8 @@ public struct Campaign has key, store {
 public struct CampaignUpdate has copy, drop, store {
     title: String,
     short_description: String,
-    metadata: String,
+    metadata: VecMap<String, String>,
+    created_at: u64,
 }
 
 public struct CampaignOwnerCap has key, store {
@@ -73,7 +77,9 @@ public(package) fun new<App: drop>(
     name: String,
     short_description: String,
     subdomain_name: String,
-    metadata: String,
+    metadata: VecMap<String, String>,
+    start_date: u64,
+    end_date: u64,
     ctx: &mut TxContext,
 ): (ID, CampaignOwnerCap) {
     let mut campaign = Campaign {
@@ -83,6 +89,8 @@ public(package) fun new<App: drop>(
         short_description,
         subdomain_name,
         metadata,
+        start_date,
+        end_date,
         created_at: tx_context::epoch(ctx),
         validated: false,
         isActive: true,
@@ -106,6 +114,10 @@ public fun subdomain_name(campaign: &Campaign): String {
     campaign.subdomain_name
 }
 
+public fun metadata(campaign: &Campaign): VecMap<String, String> {
+    campaign.metadata
+}
+
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): ID {
     campaign_owner_cap.campaign_id
 }
@@ -119,17 +131,21 @@ public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, isActive
     campaign.isActive = isActive
 }
 
-public fun add_update(
+entry fun add_update(
     campaign: &mut Campaign,
     _: &CampaignOwnerCap,
     title: String,
     short_description: String,
-    metadata: String,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    ctx: &TxContext,
 ) {
+    let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
     let update = CampaignUpdate {
         title,
         short_description,
         metadata,
+        created_at: tx_context::epoch(ctx),
     };
     vector::push_back(&mut campaign.updates, update);
     sui::event::emit(CampaignUpdateAdded {
