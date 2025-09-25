@@ -22,7 +22,7 @@ public fun test_set_is_active() {
     let campaign_id = crowd_walrus_tests::create_test_campaign(
         &mut scenario,
         utf8(b"Test Campaign"),
-        utf8(b"A test campaign description"),
+        utf8(b"A test campaign short description"),
         b"sub",
     );
 

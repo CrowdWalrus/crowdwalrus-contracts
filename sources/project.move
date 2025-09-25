@@ -6,7 +6,7 @@ public struct Project has key, store {
     id: UID,
     admin_id: ID,
     name: String,
-    description: String,
+    short_description: String,
     subdomain_name: String,
     created_at: u64,
 }
@@ -19,7 +19,7 @@ public struct ProjectOwnerCap has key, store {
 public(package) fun new(
     admin_id: ID,
     name: String,
-    description: String,
+    short_description: String,
     subdomain_name: String,
     ctx: &mut TxContext,
 ): (ID, ProjectOwnerCap) {
@@ -27,7 +27,7 @@ public(package) fun new(
         id: object::new(ctx),
         admin_id,
         name,
-        description,
+        short_description,
         subdomain_name,
         created_at: tx_context::epoch(ctx),
     };

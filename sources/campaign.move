@@ -9,7 +9,7 @@ public struct Campaign has key, store {
     id: UID,
     admin_id: ID,
     name: String,
-    description: String,
+    short_description: String,
     subdomain_name: String,
     metadata: String,
     created_at: u64,
@@ -20,7 +20,7 @@ public struct Campaign has key, store {
 
 public struct CampaignUpdate has copy, drop, store {
     title: String,
-    description: String,
+    short_description: String,
     metadata: String,
 }
 
@@ -71,7 +71,7 @@ public(package) fun new<App: drop>(
     _: &App,
     admin_id: ID,
     name: String,
-    description: String,
+    short_description: String,
     subdomain_name: String,
     metadata: String,
     ctx: &mut TxContext,
@@ -80,7 +80,7 @@ public(package) fun new<App: drop>(
         id: object::new(ctx),
         admin_id,
         name,
-        description,
+        short_description,
         subdomain_name,
         metadata,
         created_at: tx_context::epoch(ctx),
@@ -123,12 +123,12 @@ public fun add_update(
     campaign: &mut Campaign,
     _: &CampaignOwnerCap,
     title: String,
-    description: String,
+    short_description: String,
     metadata: String,
 ) {
     let update = CampaignUpdate {
         title,
-        description,
+        short_description,
         metadata,
     };
     vector::push_back(&mut campaign.updates, update);

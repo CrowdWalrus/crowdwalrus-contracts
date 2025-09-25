@@ -33,7 +33,7 @@ public fun test_create_campaign() {
         let campaign_id = create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign"),
-            string::utf8(b"A test campaign description"),
+            string::utf8(b"A test campaign short description"),
             b"sub",
         );
 
@@ -74,7 +74,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
         create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign 1"),
-            string::utf8(b"A test campaign description 1"),
+            string::utf8(b"A test campaign short description 1"),
             b"sub",
         );
     };
@@ -86,7 +86,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
         create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign 2"),
-            string::utf8(b"A test campaign description 2"),
+            string::utf8(b"A test campaign short description 2"),
             b"sub",
         );
     };
@@ -119,7 +119,7 @@ public fun test_validate_campaign() {
         create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign"),
-            string::utf8(b"A test campaign description"),
+            string::utf8(b"A test campaign short description"),
             b"sub",
         );
     };
@@ -202,7 +202,7 @@ public fun test_validate_campaign_twice() {
         create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign"),
-            string::utf8(b"A test campaign description"),
+            string::utf8(b"A test campaign short description"),
             b"sub",
         );
     };
@@ -263,7 +263,7 @@ public fun test_unvalidate_invalid_campaign() {
         create_test_campaign(
             &mut sc,
             string::utf8(b"Test Campaign"),
-            string::utf8(b"A test campaign description"),
+            string::utf8(b"A test campaign short description"),
             b"sub",
         );
     };
@@ -315,7 +315,7 @@ public fun test_init(admin_address: address): Scenario {
 public fun create_test_campaign(
     sc: &mut Scenario,
     title: String,
-    description: String,
+    short_description: String,
     subname: vector<u8>,
 ): ID {
     let crowd_walrus = sc.take_shared<CrowdWalrus>();
@@ -329,7 +329,7 @@ public fun create_test_campaign(
         &mut suins,
         &clock,
         title,
-        description,
+        short_description,
         subdomain_name,
         string::utf8(b"Test metadata"),
         ctx(sc),
