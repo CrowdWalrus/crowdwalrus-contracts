@@ -20,6 +20,12 @@ const E_NOT_AUTHORIZED: u64 = 1;
 const E_ALREADY_VALIDATED: u64 = 2;
 const E_NOT_VALIDATED: u64 = 3;
 
+// === Events ===
+public struct CampaignCreated has copy, drop {
+    campaign_id: ID,
+    creator: address,
+}
+
 // === Structs ===
 
 /// The crowd walrus object
@@ -151,6 +157,10 @@ entry fun create_campaign(
     );
 
     transfer::public_transfer(campaign_owner_cap, tx_context::sender(ctx));
+    event::emit(CampaignCreated {
+        campaign_id,
+        creator: tx_context::sender(ctx),
+    });
     campaign_id
 }
 
