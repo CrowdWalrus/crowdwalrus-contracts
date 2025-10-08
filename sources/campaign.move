@@ -16,6 +16,9 @@ const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;
 const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;
 const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
 
+// === Error Code Accessors ===
+public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
+
 public struct Campaign has key, store {
     id: UID,
     admin_id: ID,
@@ -104,6 +107,14 @@ public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
     assert!(self.is_app_authorized<App>(), E_APP_NOT_AUTHORIZED);
 }
 
+/// Create a new campaign
+///
+/// Validation: Only enforces date range (start < end). No validation for:
+/// - String lengths (name, short_description) - frontend handles
+/// - Metadata size limits - frontend handles
+/// - Recipient address non-zero - frontend handles
+///
+/// This is intentional to maximize flexibility.
 public(package) fun new<App: drop>(
     _: &App,
     admin_id: ID,
@@ -116,6 +127,9 @@ public(package) fun new<App: drop>(
     end_date: u64,
     ctx: &mut TxContext,
 ): (ID, CampaignOwnerCap) {
+    // Validate date range
+    assert!(start_date < end_date, E_INVALID_DATE_RANGE);
+
     let mut campaign = Campaign {
         id: object::new(ctx),
         admin_id,
@@ -167,6 +181,7 @@ public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, isActive
 }
 
 /// Update campaign active status (activate or deactivate)
+/// Only emits event if status actually changes
 entry fun update_active_status(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
@@ -177,16 +192,17 @@ entry fun update_active_status(
     // Verify ownership
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
 
-    // Update status
-    campaign.isActive = new_status;
+    // Only update and emit event if status is actually changing
+    if (campaign.isActive != new_status) {
+        campaign.isActive = new_status;
 
-    // Emit event
-    event::emit(CampaignStatusChanged {
-        campaign_id: object::id(campaign),
-        editor: tx_context::sender(ctx),
-        timestamp_ms: clock::timestamp_ms(clock),
-        new_status,
-    });
+        event::emit(CampaignStatusChanged {
+            campaign_id: object::id(campaign),
+            editor: tx_context::sender(ctx),
+            timestamp_ms: clock::timestamp_ms(clock),
+            new_status,
+        });
+    };
 }
 
 entry fun add_update(
@@ -214,6 +230,10 @@ entry fun add_update(
 
 /// Update campaign name and/or short description
 /// Pass None to keep existing value, Some(new_value) to update
+///
+/// No string length validation - frontend handles input validation.
+/// This is intentional to maximize flexibility at the cost of potential
+/// storage overhead.
 entry fun update_campaign_basics(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
@@ -246,6 +266,10 @@ entry fun update_campaign_basics(
 
 /// Update campaign metadata (key-value pairs)
 /// Funding goal is immutable and cannot be changed
+///
+/// No limits on metadata size or number of keys - frontend handles validation.
+/// This is intentional to maximize flexibility. VecMap updates use get_mut()
+/// to preserve insertion order for existing keys.
 entry fun update_campaign_metadata(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
@@ -269,11 +293,15 @@ entry fun update_campaign_metadata(
 
         let value = *vector::borrow(&values, i);
 
-        // Remove old value if key exists, then insert new value
+        // Update existing key or insert new key
+        // Use get_mut to preserve insertion order for existing keys
         if (vec_map::contains(&campaign.metadata, &key)) {
-            vec_map::remove(&mut campaign.metadata, &key);
+            let value_ref = vec_map::get_mut(&mut campaign.metadata, &key);
+            *value_ref = value;
+        } else {
+            // New key - insert at end
+            vec_map::insert(&mut campaign.metadata, key, value);
         };
-        vec_map::insert(&mut campaign.metadata, key, value);
 
         i = i + 1;
     };

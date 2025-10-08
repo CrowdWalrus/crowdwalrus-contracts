@@ -133,6 +133,10 @@ entry fun create_campaign(
     end_date: u64,
     ctx: &mut TxContext,
 ): ID {
+    // Validate start_date is not in the past
+    let current_time_ms = sui::clock::timestamp_ms(clock);
+    assert!(start_date >= current_time_ms, campaign::e_start_date_in_past());
+
     // register subname
     let app = CrowdWalrusApp {};
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
