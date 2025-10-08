@@ -11,7 +11,6 @@ const E_APP_NOT_AUTHORIZED: u64 = 1;
 const E_KEY_VALUE_MISMATCH: u64 = 4;
 const E_INVALID_DATE_RANGE: u64 = 5;
 const E_START_DATE_IN_PAST: u64 = 6;
-const E_CANNOT_CHANGE_GOAL_WITH_DONATIONS: u64 = 7; // reserved for future
 const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;
 const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;
 const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
@@ -129,6 +128,7 @@ public(package) fun new<App: drop>(
 ): (ID, CampaignOwnerCap) {
     // Validate date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
+    assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -290,6 +290,7 @@ entry fun update_campaign_metadata(
 
         // Prevent funding_goal modification
         assert!(key != std::string::utf8(b"funding_goal"), E_FUNDING_GOAL_IMMUTABLE);
+        assert!(key != std::string::utf8(b"recipient_address"), E_RECIPIENT_ADDRESS_IMMUTABLE);
 
         let value = *vector::borrow(&values, i);
 

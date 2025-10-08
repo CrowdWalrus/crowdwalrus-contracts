@@ -30,6 +30,7 @@ When a campaign is created or edited, the front-end serializes the Lexical rich-
 - **Why:** Metadata holds Walrus blob identifiers, category, and social links. The edit page will call this function after finishing a Walrus upload or changing any metadata-backed field, so the contract must allow targeted updates without recreating the whole object.
 - **Additional Requirements:**
   - Reject attempts to mutate `funding_goal`; that key is immutable after creation to block bait-and-switch behaviour.
+  - Reject attempts to mutate `recipient_address`; the donation destination is now stored on the struct and must stay immutable post-creation.
   - Metadata deletions are **out of scope** for MVP. Empty strings (`""`) are the intended mechanism for blanking metadata values. Frontend should only send empty strings when users explicitly clear fields. Contract treats `""` as a valid value and stores it normally in the `VecMap`.
   - Preserve existing insertion order (`VecMap` maintains first-write order). New keys append to the end; overwrites leave the original position unchanged.
   - Emit a `CampaignMetadataUpdated` event listing changed keys, timestamp, and editor address.
@@ -76,10 +77,9 @@ Reserve the following abort codes for the edit feature (existing codes 0–3 rem
 const E_KEY_VALUE_MISMATCH: u64 = 4;                    // Used: metadata keys/values length mismatch
 const E_INVALID_DATE_RANGE: u64 = 5;                    // Used: start_date >= end_date
 const E_START_DATE_IN_PAST: u64 = 6;                    // Used: start_date < current time
-const E_CANNOT_CHANGE_GOAL_WITH_DONATIONS: u64 = 7;     // Reserved for future
 const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;                // Used: attempt to change funding_goal
-const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;             // Reserved for future
-const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;          // Reserved for future
+const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;             // Used: recipient_address == @0x0
+const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;          // Used: attempt to mutate recipient_address metadata
 ```
 
 ### Constants
