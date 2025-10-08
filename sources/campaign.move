@@ -1,7 +1,7 @@
 module crowd_walrus::campaign;
 
 use std::string::String;
-use sui::clock::Clock;
+use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field as df;
 use sui::vec_map::{Self, VecMap};
 use sui::event;
@@ -166,6 +166,29 @@ public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, isActive
     campaign.isActive = isActive
 }
 
+/// Update campaign active status (activate or deactivate)
+entry fun update_active_status(
+    campaign: &mut Campaign,
+    cap: &CampaignOwnerCap,
+    new_status: bool,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // Verify ownership
+    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+
+    // Update status
+    campaign.isActive = new_status;
+
+    // Emit event
+    event::emit(CampaignStatusChanged {
+        campaign_id: object::id(campaign),
+        editor: tx_context::sender(ctx),
+        timestamp_ms: clock::timestamp_ms(clock),
+        new_status,
+    });
+}
+
 entry fun add_update(
     campaign: &mut Campaign,
     _: &CampaignOwnerCap,
@@ -202,16 +225,16 @@ entry fun update_campaign_basics(
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
     let mut name_updated = false;
     let mut description_updated = false;
-    if(option::is_some(new_name)) {
+    if(option::is_some(&new_name)) {
         let new_name = option::destroy_some(new_name);
         campaign.name = new_name;
         name_updated = true;
-    }
-    if(option::is_some(new_description)) {
+    };
+    if(option::is_some(&new_description)) {
         let new_description = option::destroy_some(new_description);
         campaign.short_description = new_description;
         description_updated = true;
-    }
+    };
     event::emit(CampaignBasicsUpdated {
         campaign_id: object::id(campaign),
         editor: tx_context::sender(ctx),
@@ -237,19 +260,30 @@ entry fun update_campaign_metadata(
     // Verify keys and values have same length
     assert!(vector::length(&keys) == vector::length(&values), E_KEY_VALUE_MISMATCH);
 
-    // TODO(human): Implement metadata update logic
-    // 1. Loop through keys vector (use vector::length() and a while loop with index)
-    // 2. For each key, check if it's "funding_goal" - if so, abort with E_FUNDING_GOAL_IMMUTABLE
-    // 3. For each key-value pair, insert/update in campaign.metadata
-    //    Use: vec_map::insert(&mut campaign.metadata, key, value)
-    //    Note: vec_map::insert handles both new keys and overwriting existing ones
-    // 4. After loop, copy keys vector and emit CampaignMetadataUpdated event
+    let mut i = 0;
+    while(i < vector::length(&keys)) {
+        let key = *vector::borrow(&keys, i);
 
-    // Hints:
-    // - Loop pattern: let mut i = 0; while (i < vector::length(&keys)) { ... i = i + 1; }
-    // - Get element: let key = *vector::borrow(&keys, i);  (use * to copy the String)
-    // - String comparison: &key == &std::string::utf8(b"funding_goal")
-    // - Copy vector for event: let keys_for_event = keys; (moves ownership since we don't need keys after)
+        // Prevent funding_goal modification
+        assert!(key != std::string::utf8(b"funding_goal"), E_FUNDING_GOAL_IMMUTABLE);
+
+        let value = *vector::borrow(&values, i);
+
+        // Remove old value if key exists, then insert new value
+        if (vec_map::contains(&campaign.metadata, &key)) {
+            vec_map::remove(&mut campaign.metadata, &key);
+        };
+        vec_map::insert(&mut campaign.metadata, key, value);
+
+        i = i + 1;
+    };
+
+    event::emit(CampaignMetadataUpdated {
+        campaign_id: object::id(campaign),
+        editor: tx_context::sender(ctx),
+        timestamp_ms: clock::timestamp_ms(clock),
+        keys_updated: keys,
+    });
 }
 
 // === View Functions ===
