@@ -2,10 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "0E92C652521BA641138A3DAF5A9B526D42E94FB627F43B1E4B5D099C641ED8BD"
-deps_digest = "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3"
+manifest_digest = "4537EAAE4D035BA0CABAEE224BBC4087AF19761F74FCD9D345A31F480B57EE16"
+deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
 dependencies = [
   { id = "Sui", name = "Sui" },
+  { id = "denylist", name = "denylist" },
   { id = "subdomains", name = "subdomains" },
   { id = "suins", name = "suins" },
 ]
@@ -24,7 +25,7 @@ dependencies = [
 
 [[move.package]]
 id = "denylist"
-source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/denylist" }
+source = { git = "https://github.com/aminlatifi/suins-contracts.git", rev = "crowdwalrus-testnet-core-v2", subdir = "packages/denylist" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -33,7 +34,7 @@ dependencies = [
 
 [[move.package]]
 id = "subdomains"
-source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/subdomains" }
+source = { git = "https://github.com/aminlatifi/suins-contracts.git", rev = "crowdwalrus-testnet-core-v2", subdir = "packages/subdomains" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -43,13 +44,13 @@ dependencies = [
 
 [[move.package]]
 id = "suins"
-source = { git = "https://github.com/mystenlabs/suins-contracts/", rev = "releases/testnet/core/v2", subdir = "packages/suins" }
+source = { git = "https://github.com/aminlatifi/suins-contracts.git", rev = "crowdwalrus-testnet-core-v2", subdir = "packages/suins" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
 [move.toolchain-version]
-compiler-version = "1.56.2"
+compiler-version = "1.57.0"
 edition = "2024.beta"
 flavor = "sui"

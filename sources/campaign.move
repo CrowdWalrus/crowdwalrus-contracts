@@ -29,8 +29,8 @@ public struct Campaign has key, store {
     start_date: u64,
     end_date: u64,
     created_at: u64,
-    validated: bool,
-    isActive: bool,
+    is_verified: bool,
+    is_active: bool,
     updates: vector<CampaignUpdate>,
 }
 
@@ -126,7 +126,7 @@ public(package) fun new<App: drop>(
     end_date: u64,
     ctx: &mut TxContext,
 ): (ID, CampaignOwnerCap) {
-    // Validate date range
+    // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
     assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
 
@@ -141,8 +141,8 @@ public(package) fun new<App: drop>(
         start_date,
         end_date,
         created_at: tx_context::epoch(ctx),
-        validated: false,
-        isActive: true,
+        is_verified: false,
+        is_active: true,
         updates: vector::empty(),
     };
 
@@ -171,13 +171,13 @@ public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): ID {
     campaign_owner_cap.campaign_id
 }
 
-public fun set_validated<App: drop>(campaign: &mut Campaign, _: &App, validated: bool) {
+public fun set_verified<App: drop>(campaign: &mut Campaign, _: &App, verified: bool) {
     campaign.assert_app_is_authorized<App>();
-    campaign.validated = validated
+    campaign.is_verified = verified
 }
 
-public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, isActive: bool) {
-    campaign.isActive = isActive
+public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, is_active: bool) {
+    campaign.is_active = is_active
 }
 
 /// Update campaign active status (activate or deactivate)
@@ -193,8 +193,8 @@ entry fun update_active_status(
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
 
     // Only update and emit event if status is actually changing
-    if (campaign.isActive != new_status) {
-        campaign.isActive = new_status;
+    if (campaign.is_active != new_status) {
+        campaign.is_active = new_status;
 
         event::emit(CampaignStatusChanged {
             campaign_id: object::id(campaign),
@@ -317,12 +317,12 @@ entry fun update_campaign_metadata(
 
 // === View Functions ===
 
-public fun is_validated(campaign: &Campaign): bool {
-    campaign.validated
+public fun is_verified(campaign: &Campaign): bool {
+    campaign.is_verified
 }
 
 public fun is_active(campaign: &Campaign): bool {
-    campaign.isActive
+    campaign.is_active
 }
 
 public fun updates(campaign: &Campaign): vector<CampaignUpdate> {
