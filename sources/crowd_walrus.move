@@ -17,8 +17,8 @@ public struct CrowdWalrusApp has drop {}
 // === Errors ===
 
 const E_NOT_AUTHORIZED: u64 = 1;
-const E_ALREADY_VALIDATED: u64 = 2;
-const E_NOT_VALIDATED: u64 = 3;
+const E_ALREADY_VERIFIED: u64 = 2;
+const E_NOT_VERIFIED: u64 = 3;
 
 // === Events ===
 public struct CampaignCreated has copy, drop {
@@ -32,8 +32,8 @@ public struct CampaignCreated has copy, drop {
 public struct CrowdWalrus has key, store {
     id: UID,
     created_at: u64,
-    validated_maps: table::Table<ID, bool>,
-    validated_campaigns_list: vector<ID>,
+    verified_maps: table::Table<ID, bool>,
+    verified_campaigns_list: vector<ID>,
 }
 
 /// Capability for admin operations
@@ -42,8 +42,8 @@ public struct AdminCap has key, store {
     crowd_walrus_id: ID,
 }
 
-/// Capability for validating admin operations
-public struct ValidateCap has key, store {
+/// Capability for verifying admin operations
+public struct VerifyCap has key, store {
     id: UID,
     crowd_walrus_id: ID,
 }
@@ -56,24 +56,24 @@ public struct AdminCreated has copy, drop {
     creator: address,
 }
 
-public struct CampaignValidated has copy, drop {
+public struct CampaignVerified has copy, drop {
     campaign_id: ID,
-    validator: address,
+    verifier: address,
 }
 
-// public struct ProjectValidated has copy, drop {
+// public struct ProjectVerified has copy, drop {
 //     campaign_id: ID,
-//     validator: address,
+//     verifier: address,
 // }
 
-public struct CampaignUnvalidated has copy, drop {
+public struct CampaignUnverified has copy, drop {
     campaign_id: ID,
-    unvalidator: address,
+    unverifier: address,
 }
 
-// public struct ProjectUnvalidated has copy, drop {
+// public struct ProjectUnverified has copy, drop {
 //     campaign_id: ID,
-//     unvalidator: address,
+//     unverifier: address,
 // }
 
 // === Init Function ===
@@ -83,8 +83,8 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        validated_maps: table::new(ctx),
-        validated_campaigns_list: vector::empty(),
+        verified_maps: table::new(ctx),
+        verified_campaigns_list: vector::empty(),
     };
 
     let crowd_walrus_id = object::id(&crowd_walrus);
@@ -128,10 +128,15 @@ entry fun create_campaign(
     subdomain_name: String,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    recipient_address: address,
     start_date: u64,
     end_date: u64,
     ctx: &mut TxContext,
 ): ID {
+    // Ensure start_date is not in the past
+    let current_time_ms = sui::clock::timestamp_ms(clock);
+    assert!(start_date >= current_time_ms, campaign::e_start_date_in_past());
+
     // register subname
     let app = CrowdWalrusApp {};
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
@@ -143,6 +148,7 @@ entry fun create_campaign(
         short_description,
         subdomain_name,
         metadata,
+        recipient_address,
         start_date,
         end_date,
         ctx,
@@ -164,59 +170,59 @@ entry fun create_campaign(
     campaign_id
 }
 
-/// Validate a campaign
-entry fun validate_campaign(
+/// Verify a campaign
+entry fun verify_campaign(
     crowd_walrus: &mut CrowdWalrus,
-    cap: &ValidateCap,
+    cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
     ctx: &TxContext,
 ) {
     let campaign_id = object::id(campaign);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(!table::contains(&crowd_walrus.validated_maps, campaign_id), E_ALREADY_VALIDATED);
+    assert!(!table::contains(&crowd_walrus.verified_maps, campaign_id), E_ALREADY_VERIFIED);
 
-    table::add(&mut crowd_walrus.validated_maps, campaign_id, true);
-    vector::push_back(&mut crowd_walrus.validated_campaigns_list, campaign_id);
+    table::add(&mut crowd_walrus.verified_maps, campaign_id, true);
+    vector::push_back(&mut crowd_walrus.verified_campaigns_list, campaign_id);
 
-    campaign::set_validated(campaign, &CrowdWalrusApp {}, true);
+    campaign::set_verified(campaign, &CrowdWalrusApp {}, true);
 
     // event
-    event::emit(CampaignValidated {
+    event::emit(CampaignVerified {
         campaign_id,
-        validator: tx_context::sender(ctx),
+        verifier: tx_context::sender(ctx),
     });
 }
 
-entry fun unvalidate_campaign(
+entry fun unverify_campaign(
     crowd_walrus: &mut CrowdWalrus,
-    cap: &ValidateCap,
+    cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
     ctx: &TxContext,
 ) {
     let campaign_id = object::id(campaign);
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(table::contains(&crowd_walrus.validated_maps, campaign_id), E_NOT_VALIDATED);
+    assert!(table::contains(&crowd_walrus.verified_maps, campaign_id), E_NOT_VERIFIED);
 
-    campaign::set_validated(campaign, &CrowdWalrusApp {}, false);
+    campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
 
-    table::remove(&mut crowd_walrus.validated_maps, campaign_id);
+    table::remove(&mut crowd_walrus.verified_maps, campaign_id);
 
     let mut i: u64 = 0;
-    let length = crowd_walrus.validated_campaigns_list.length();
+    let length = crowd_walrus.verified_campaigns_list.length();
 
     while (i < length) {
-        if (crowd_walrus.validated_campaigns_list[i] == campaign_id) {
-            vector::remove(&mut crowd_walrus.validated_campaigns_list, i);
+        if (crowd_walrus.verified_campaigns_list[i] == campaign_id) {
+            vector::remove(&mut crowd_walrus.verified_campaigns_list, i);
             break
         } else {
             i = i + 1;
         }
     };
-    event::emit(CampaignUnvalidated {
+    event::emit(CampaignUnverified {
         campaign_id,
-        unvalidator: tx_context::sender(ctx),
+        unverifier: tx_context::sender(ctx),
     });
 }
 
@@ -244,21 +250,21 @@ public fun remove_field<K: copy + drop + store, V: store>(
     df::remove(&mut crowd_walrus.id, key)
 }
 
-/// Create a validation capability for a new validator
-entry fun create_validate_cap(
+/// Create a verification capability for a new verifier
+entry fun create_verify_cap(
     crowd_walrus: &CrowdWalrus,
     cap: &AdminCap,
-    new_validator: address,
+    new_verifier: address,
     ctx: &mut TxContext,
 ) {
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     transfer::transfer(
-        ValidateCap {
+        VerifyCap {
             id: object::new(ctx),
             crowd_walrus_id: object::id(crowd_walrus),
         },
-        new_validator,
+        new_verifier,
     )
 }
 
@@ -268,14 +274,14 @@ public fun crowd_walrus_id(cap: &AdminCap): ID {
     cap.crowd_walrus_id
 }
 
-/// Check if a campaign is validated
-public fun is_campaign_validated(crowd_walrus: &CrowdWalrus, campaign_id: ID): bool {
-    table::contains(&crowd_walrus.validated_maps, campaign_id)
+/// Check if a campaign is verified
+public fun is_campaign_verified(crowd_walrus: &CrowdWalrus, campaign_id: ID): bool {
+    table::contains(&crowd_walrus.verified_maps, campaign_id)
 }
 
-/// Get the validated campaigns list
-public fun get_validated_campaigns_list(crowd_walrus: &CrowdWalrus): vector<ID> {
-    crowd_walrus.validated_campaigns_list
+/// Get the verified campaigns list
+public fun get_verified_campaigns_list(crowd_walrus: &CrowdWalrus): vector<ID> {
+    crowd_walrus.verified_campaigns_list
 }
 
 #[test]
@@ -316,8 +322,8 @@ public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
         created_at: tx_context::epoch(ctx),
-        validated_maps: table::new(ctx),
-        validated_campaigns_list: vector::empty(),
+        verified_maps: table::new(ctx),
+        verified_campaigns_list: vector::empty(),
     };
     let crowd_walrus_id = object::id(&crowd_walrus);
     transfer::share_object(crowd_walrus);
@@ -336,16 +342,16 @@ public fun create_admin_cap_for_user(crowd_walrus_id: ID, user: address, ctx: &m
 }
 
 #[test_only]
-public fun create_validate_cap_for_user(
+public fun create_verify_cap_for_user(
     crowd_walrus_id: ID,
     user: address,
     ctx: &mut TxContext,
 ): ID {
-    let validate_cap = ValidateCap {
+    let verify_cap = VerifyCap {
         id: object::new(ctx),
         crowd_walrus_id: crowd_walrus_id,
     };
-    let validate_cap_id = object::id(&validate_cap);
-    transfer::transfer(validate_cap, user);
-    validate_cap_id
+    let verify_cap_id = object::id(&verify_cap);
+    transfer::transfer(verify_cap, user);
+    verify_cap_id
 }

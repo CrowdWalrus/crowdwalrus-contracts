@@ -3,7 +3,7 @@
 module crowd_walrus::crowd_walrus_tests;
 
 use crowd_walrus::campaign::{Campaign, CampaignOwnerCap};
-use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, ValidateCap};
+use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, VerifyCap};
 use crowd_walrus::suins_manager::{
     AdminCap as SuiNSManagerAdminCap,
     SuiNSManager,
@@ -40,6 +40,7 @@ public fun test_create_campaign() {
             b"sub",
             vector[string::utf8(b"key1"), string::utf8(b"key2")],
             vector[string::utf8(b"value1"), string::utf8(b"value2")],
+            USER1, // recipient_address
             0,
             U64_MAX,
         );
@@ -88,6 +89,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            USER1, // recipient_address
             0,
             U64_MAX,
         );
@@ -104,6 +106,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            USER2, // recipient_address
             0,
             U64_MAX,
         );
@@ -113,19 +116,19 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
 }
 
 #[test]
-public fun test_validate_campaign() {
-    let validator = USER1;
+public fun test_verify_campaign() {
+    let verifier = USER1;
     let campaign_owner = USER2;
 
     let mut sc = test_init(ADMIN);
 
-    // Test create validate cap
+    // Test create verify cap
     {
         sc.next_tx(ADMIN);
         let admin_cap = sc.take_from_sender<AdminCap>();
         let crowd_walrus = sc.take_shared<CrowdWalrus>();
 
-        crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
+        crowd_walrus.create_verify_cap(&admin_cap, verifier, ctx(&mut sc));
 
         sc.return_to_sender(admin_cap);
         ts::return_shared(crowd_walrus);
@@ -141,78 +144,79 @@ public fun test_validate_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
     };
 
-    // Test validate campaign
+    // Test verify campaign
     {
-        sc.next_tx(validator);
+        sc.next_tx(verifier);
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         let mut campaign = sc.take_shared<Campaign>();
-        let validate_cap = sc.take_from_sender<ValidateCap>();
+        let verify_cap = sc.take_from_sender<VerifyCap>();
 
-        // Before validate
-        assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 0);
+        // Before verify
+        assert!(!crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
 
-        // Validate
-        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
+        // Verify
+        crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
-        // After validate
-        assert!(crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 1);
+        // After verify
+        assert!(crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 1);
         assert!(
             vector::contains<ID>(
-                &crowd_walrus.get_validated_campaigns_list(),
+                &crowd_walrus.get_verified_campaigns_list(),
                 &object::id(&campaign),
             ),
         );
-        assert!(campaign.is_validated());
+        assert!(campaign.is_verified());
 
         // Clean up
         ts::return_shared(campaign);
-        sc.return_to_sender(validate_cap);
+        sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
     };
 
-    // Test unvalidate campaign
+    // Test unverify campaign
     {
-        sc.next_tx(validator);
+        sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
-        let validate_cap = sc.take_from_sender<ValidateCap>();
+        let verify_cap = sc.take_from_sender<VerifyCap>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        crowd_walrus.unvalidate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
+        crowd_walrus.unverify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
-        assert!(!crowd_walrus.is_campaign_validated(object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_validated_campaigns_list().length(), 0);
+        assert!(!crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
 
-        assert!(!campaign.is_validated());
+        assert!(!campaign.is_verified());
 
         // Clean up
         ts::return_shared(campaign);
-        sc.return_to_sender(validate_cap);
+        sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
     };
 
     sc.end();
 }
 
-#[test, expected_failure(abort_code = crowd_walrus::E_ALREADY_VALIDATED)]
-public fun test_validate_campaign_twice() {
-    let validator = USER1;
+#[test, expected_failure(abort_code = crowd_walrus::E_ALREADY_VERIFIED)]
+public fun test_verify_campaign_twice() {
+    let verifier = USER1;
     let campaign_owner = USER2;
 
     let mut sc = test_init(ADMIN);
 
-    // Test create validate cap
+    // Test create verify cap
     {
         sc.next_tx(ADMIN);
         let admin_cap = sc.take_from_sender<AdminCap>();
         let crowd_walrus = sc.take_shared<CrowdWalrus>();
 
-        crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
+        crowd_walrus.create_verify_cap(&admin_cap, verifier, ctx(&mut sc));
 
         sc.return_to_sender(admin_cap);
         ts::return_shared(crowd_walrus);
@@ -228,56 +232,57 @@ public fun test_validate_campaign_twice() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
     };
 
-    // Validate campaign
+    // Verify campaign
     {
-        sc.next_tx(validator);
+        sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        let validate_cap = sc.take_from_sender<ValidateCap>();
-        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
         // Clean up
         ts::return_shared(campaign);
-        sc.return_to_sender(validate_cap);
+        sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
     };
 
-    // Validate campaign again
+    // Verify campaign again
     {
-        sc.next_tx(validator);
+        sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        let validate_cap = sc.take_from_sender<ValidateCap>();
-        crowd_walrus.validate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
         // Clean up
         ts::return_shared(campaign);
-        sc.return_to_sender(validate_cap);
+        sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
     };
 
     sc.end();
 }
 
-#[test, expected_failure(abort_code = crowd_walrus::E_NOT_VALIDATED)]
-public fun test_unvalidate_invalid_campaign() {
-    let validator = USER1;
+#[test, expected_failure(abort_code = crowd_walrus::E_NOT_VERIFIED)]
+public fun test_unverify_invalid_campaign() {
+    let verifier = USER1;
     let campaign_owner = USER2;
 
     let mut sc = test_init(ADMIN);
 
-    // Test create validate cap
+    // Test create verify cap
     {
         sc.next_tx(ADMIN);
         let admin_cap = sc.take_from_sender<AdminCap>();
         let crowd_walrus = sc.take_shared<CrowdWalrus>();
 
-        crowd_walrus.create_validate_cap(&admin_cap, validator, ctx(&mut sc));
+        crowd_walrus.create_verify_cap(&admin_cap, verifier, ctx(&mut sc));
 
         sc.return_to_sender(admin_cap);
         ts::return_shared(crowd_walrus);
@@ -293,19 +298,20 @@ public fun test_unvalidate_invalid_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
     };
 
-    // Test unvalidate campaign
+    // Test unverify campaign
     {
-        sc.next_tx(validator);
-        let validate_cap = sc.take_from_sender<ValidateCap>();
+        sc.next_tx(verifier);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
         let mut campaign = sc.take_shared<Campaign>();
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
-        crowd_walrus.unvalidate_campaign(&validate_cap, &mut campaign, ctx(&mut sc));
-        sc.return_to_sender(validate_cap);
+        crowd_walrus.unverify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
+        sc.return_to_sender(verify_cap);
         ts::return_shared(campaign);
         ts::return_shared(crowd_walrus);
     };
@@ -349,6 +355,7 @@ public fun create_test_campaign(
     subname: vector<u8>,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    recipient_address: address,
     start_date: u64,
     end_date: u64,
 ): ID {
@@ -367,6 +374,7 @@ public fun create_test_campaign(
         subdomain_name,
         metadata_keys,
         metadata_values,
+        recipient_address,
         start_date,
         end_date,
         ctx(sc),
