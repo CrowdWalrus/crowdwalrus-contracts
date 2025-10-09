@@ -1007,3 +1007,68 @@ public fun test_update_try_get_missing_returns_none() {
     ts::return_shared(campaign_obj);
     scenario.end();
 }
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist, location = sui::dynamic_field)]
+public fun test_get_update_id_missing_sequence_aborts() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"No Updates Campaign"),
+        utf8(b"Missing sequence abort"),
+        b"noupdates",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+    // This call should abort because no updates exist for sequence 0.
+    crowd_walrus::campaign::get_update_id(&campaign, 0);
+    abort 0
+}
+
+#[test]
+public fun test_add_update_emits_event() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Event Campaign"),
+        utf8(b"Ensures event emission"),
+        b"event",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector[utf8(b"walrus_quilt_id")],
+        vector[utf8(b"0xdeadbeef")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    let effects = ts::end(scenario);
+    assert_eq!(ts::num_user_events(&effects), 1);
+}
