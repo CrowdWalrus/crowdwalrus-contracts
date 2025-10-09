@@ -27,9 +27,9 @@ public struct Campaign has key, store {
     subdomain_name: String,
     metadata: VecMap<String, String>,
     recipient_address: address, // Immutable - where donations are sent
-    start_date: u64,
-    end_date: u64,
-    created_at: u64,
+    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
+    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
+    created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
     // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
@@ -43,7 +43,7 @@ public struct CampaignUpdate has key, store {
     sequence: u64,
     author: address,
     metadata: VecMap<String, String>,
-    created_at_ms: u64,
+    created_at_ms: u64,  // Unix timestamp in milliseconds (UTC) when the update was created
 }
 
 public struct UpdateKey has copy, drop, store {
@@ -137,11 +137,14 @@ public(package) fun new<App: drop>(
     recipient_address: address,
     start_date: u64,
     end_date: u64,
+    clock: &Clock,
     ctx: &mut tx_context::TxContext,
 ): (object::ID, CampaignOwnerCap) {
+    let creation_time_ms = clock::timestamp_ms(clock);
     // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
     assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
+    assert!(start_date >= creation_time_ms, E_START_DATE_IN_PAST);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -153,7 +156,7 @@ public(package) fun new<App: drop>(
         recipient_address,
         start_date,
         end_date,
-        created_at: tx_context::epoch(ctx),
+        created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
         next_update_seq: 0,
@@ -208,11 +211,12 @@ entry fun update_active_status(
     // Only update and emit event if status is actually changing
     if (campaign.is_active != new_status) {
         campaign.is_active = new_status;
+        let timestamp_ms = clock::timestamp_ms(clock);
 
         event::emit(CampaignStatusChanged {
             campaign_id: object::id(campaign),
             editor: tx_context::sender(ctx),
-            timestamp_ms: clock::timestamp_ms(clock),
+            timestamp_ms,
             new_status,
         });
     };
@@ -306,10 +310,11 @@ entry fun update_campaign_basics(
         campaign.short_description = new_description;
         description_updated = true;
     };
+    let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignBasicsUpdated {
         campaign_id: object::id(campaign),
         editor: tx_context::sender(ctx),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms,
         name_updated,
         description_updated,
     });
@@ -358,10 +363,11 @@ entry fun update_campaign_metadata(
         i = i + 1;
     };
 
+    let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignMetadataUpdated {
         campaign_id: object::id(campaign),
         editor: tx_context::sender(ctx),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms,
         keys_updated: keys,
     });
 }
@@ -378,6 +384,10 @@ public fun is_active(campaign: &Campaign): bool {
 
 public fun update_count(campaign: &Campaign): u64 {
     campaign.next_update_seq
+}
+
+public fun created_at_ms(campaign: &Campaign): u64 {
+    campaign.created_at_ms
 }
 
 public fun get_update_id(campaign: &Campaign, sequence: u64): object::ID {
