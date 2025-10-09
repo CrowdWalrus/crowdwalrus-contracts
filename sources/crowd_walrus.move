@@ -31,7 +31,6 @@ public struct CampaignCreated has copy, drop {
 /// The crowd walrus object
 public struct CrowdWalrus has key, store {
     id: UID,
-    created_at: u64,
     verified_maps: table::Table<ID, bool>,
     verified_campaigns_list: vector<ID>,
 }
@@ -82,7 +81,6 @@ public struct CampaignUnverified has copy, drop {
 fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
-        created_at: tx_context::epoch(ctx),
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
     };
@@ -151,6 +149,7 @@ entry fun create_campaign(
         recipient_address,
         start_date,
         end_date,
+        clock,
         ctx,
     );
     suins_manager.register_subdomain(
@@ -321,7 +320,6 @@ public fun get_app(): CrowdWalrusApp {
 public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
     let crowd_walrus = CrowdWalrus {
         id: object::new(ctx),
-        created_at: tx_context::epoch(ctx),
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
     };

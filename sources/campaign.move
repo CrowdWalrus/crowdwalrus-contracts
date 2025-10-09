@@ -1,10 +1,11 @@
 module crowd_walrus::campaign;
 
 use std::string::String;
+
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field as df;
-use sui::vec_map::{Self, VecMap};
 use sui::event;
+use sui::vec_map::{Self, VecMap};
 // === Error Codes ===
 const E_APP_NOT_AUTHORIZED: u64 = 1;
 // Error codes 2-3 reserved for future use
@@ -19,41 +20,53 @@ const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
 
 public struct Campaign has key, store {
-    id: UID,
-    admin_id: ID,
+    id: object::UID,
+    admin_id: object::ID,
     name: String,
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
     recipient_address: address, // Immutable - where donations are sent
-    start_date: u64,
-    end_date: u64,
-    created_at: u64,
+    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
+    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
+    created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
-    updates: vector<CampaignUpdate>,
+    // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
+    // Updates now stored as frozen objects referenced via dynamic fields.
+    next_update_seq: u64,
 }
 
-public struct CampaignUpdate has copy, drop, store {
-    title: String,
-    short_description: String,
+public struct CampaignUpdate has key, store {
+    id: object::UID,
+    parent_id: object::ID,
+    sequence: u64,
+    author: address,
     metadata: VecMap<String, String>,
-    created_at: u64,
+    created_at_ms: u64,  // Unix timestamp in milliseconds (UTC) when the update was created
+}
+
+public struct UpdateKey has copy, drop, store {
+    sequence: u64,
 }
 
 public struct CampaignOwnerCap has key, store {
-    id: UID,
-    campaign_id: ID,
+    id: object::UID,
+    campaign_id: object::ID,
 }
 
 // === Events ===
 public struct CampaignUpdateAdded has copy, drop {
-    campaign_id: ID,
-    update: CampaignUpdate,
+    campaign_id: object::ID,
+    update_id: object::ID,
+    sequence: u64,
+    author: address,
+    metadata: VecMap<String, String>,
+    created_at_ms: u64,
 }
 
 public struct CampaignBasicsUpdated has copy, drop {
-    campaign_id: ID,
+    campaign_id: object::ID,
     editor: address,
     timestamp_ms: u64,
     name_updated: bool,
@@ -61,14 +74,14 @@ public struct CampaignBasicsUpdated has copy, drop {
 }
 
 public struct CampaignMetadataUpdated has copy, drop {
-    campaign_id: ID,
+    campaign_id: object::ID,
     editor: address,
     timestamp_ms: u64,
     keys_updated: vector<String>,
 }
 
 public struct CampaignStatusChanged has copy, drop {
-    campaign_id: ID,
+    campaign_id: object::ID,
     editor: address,
     timestamp_ms: u64,
     new_status: bool,
@@ -116,7 +129,7 @@ public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
 /// This is intentional to maximize flexibility.
 public(package) fun new<App: drop>(
     _: &App,
-    admin_id: ID,
+    admin_id: object::ID,
     name: String,
     short_description: String,
     subdomain_name: String,
@@ -124,11 +137,14 @@ public(package) fun new<App: drop>(
     recipient_address: address,
     start_date: u64,
     end_date: u64,
-    ctx: &mut TxContext,
-): (ID, CampaignOwnerCap) {
+    clock: &Clock,
+    ctx: &mut tx_context::TxContext,
+): (object::ID, CampaignOwnerCap) {
+    let creation_time_ms = clock::timestamp_ms(clock);
     // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
     assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
+    assert!(start_date >= creation_time_ms, E_START_DATE_IN_PAST);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -140,10 +156,10 @@ public(package) fun new<App: drop>(
         recipient_address,
         start_date,
         end_date,
-        created_at: tx_context::epoch(ctx),
+        created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
-        updates: vector::empty(),
+        next_update_seq: 0,
     };
 
     let campaign_id = object::id(&campaign);
@@ -167,7 +183,7 @@ public fun metadata(campaign: &Campaign): VecMap<String, String> {
     campaign.metadata
 }
 
-public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): ID {
+public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
     campaign_owner_cap.campaign_id
 }
 
@@ -187,7 +203,7 @@ entry fun update_active_status(
     cap: &CampaignOwnerCap,
     new_status: bool,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &tx_context::TxContext,
 ) {
     // Verify ownership
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
@@ -195,11 +211,12 @@ entry fun update_active_status(
     // Only update and emit event if status is actually changing
     if (campaign.is_active != new_status) {
         campaign.is_active = new_status;
+        let timestamp_ms = clock::timestamp_ms(clock);
 
         event::emit(CampaignStatusChanged {
             campaign_id: object::id(campaign),
             editor: tx_context::sender(ctx),
-            timestamp_ms: clock::timestamp_ms(clock),
+            timestamp_ms,
             new_status,
         });
     };
@@ -207,25 +224,63 @@ entry fun update_active_status(
 
 entry fun add_update(
     campaign: &mut Campaign,
-    _: &CampaignOwnerCap,
-    title: String,
-    short_description: String,
+    cap: &CampaignOwnerCap,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
-    ctx: &TxContext,
+    clock: &Clock,
+    ctx: &mut tx_context::TxContext,
 ) {
+    // Verify ownership
+    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+
+    // Ensure key/value vectors align
+    assert!(vector::length(&metadata_keys) == vector::length(&metadata_values), E_KEY_VALUE_MISMATCH);
+
+    let sequence = campaign.next_update_seq;
+    let timestamp_ms = clock::timestamp_ms(clock);
+    let sender = tx_context::sender(ctx);
+
+    // Build metadata once from provided vectors
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
-    let update = CampaignUpdate {
-        title,
-        short_description,
-        metadata,
-        created_at: tx_context::epoch(ctx),
+
+    // Clone metadata for event emission
+    let mut event_keys = vector::empty<String>();
+    let mut event_values = vector::empty<String>();
+    let mut i = 0;
+    let len = vec_map::length(&metadata);
+    while (i < len) {
+        let (key, value) = vec_map::get_entry_by_idx(&metadata, i);
+        vector::push_back(&mut event_keys, *key);
+        vector::push_back(&mut event_values, *value);
+        i = i + 1;
     };
-    vector::push_back(&mut campaign.updates, update);
-    sui::event::emit(CampaignUpdateAdded {
+    let metadata_for_event = vec_map::from_keys_values(event_keys, event_values);
+
+    let update = CampaignUpdate {
+        id: object::new(ctx),
+        parent_id: object::id(campaign),
+        sequence,
+        author: sender,
+        metadata,
+        created_at_ms: timestamp_ms,
+    };
+
+    let update_id = object::id(&update);
+
+    df::add(&mut campaign.id, UpdateKey { sequence }, update_id);
+
+    campaign.next_update_seq = sequence + 1;
+
+    event::emit(CampaignUpdateAdded {
         campaign_id: object::id(campaign),
-        update,
+        update_id,
+        sequence,
+        author: sender,
+        metadata: metadata_for_event,
+        created_at_ms: timestamp_ms,
     });
+
+    transfer::freeze_object(update);
 }
 
 /// Update campaign name and/or short description
@@ -240,25 +295,26 @@ entry fun update_campaign_basics(
     new_name: Option<String>,
     new_description: Option<String>,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &tx_context::TxContext,
 ) {
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
     let mut name_updated = false;
     let mut description_updated = false;
-    if(option::is_some(&new_name)) {
-        let new_name = option::destroy_some(new_name);
+    if(std::option::is_some(&new_name)) {
+        let new_name = std::option::destroy_some(new_name);
         campaign.name = new_name;
         name_updated = true;
     };
-    if(option::is_some(&new_description)) {
-        let new_description = option::destroy_some(new_description);
+    if(std::option::is_some(&new_description)) {
+        let new_description = std::option::destroy_some(new_description);
         campaign.short_description = new_description;
         description_updated = true;
     };
+    let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignBasicsUpdated {
         campaign_id: object::id(campaign),
         editor: tx_context::sender(ctx),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms,
         name_updated,
         description_updated,
     });
@@ -276,7 +332,7 @@ entry fun update_campaign_metadata(
     keys: vector<String>,
     values: vector<String>,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &tx_context::TxContext,
 ) {
     // Verify ownership
     assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
@@ -307,10 +363,11 @@ entry fun update_campaign_metadata(
         i = i + 1;
     };
 
+    let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignMetadataUpdated {
         campaign_id: object::id(campaign),
         editor: tx_context::sender(ctx),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms,
         keys_updated: keys,
     });
 }
@@ -325,6 +382,49 @@ public fun is_active(campaign: &Campaign): bool {
     campaign.is_active
 }
 
-public fun updates(campaign: &Campaign): vector<CampaignUpdate> {
-    campaign.updates
+public fun update_count(campaign: &Campaign): u64 {
+    campaign.next_update_seq
+}
+
+public fun created_at_ms(campaign: &Campaign): u64 {
+    campaign.created_at_ms
+}
+
+public fun get_update_id(campaign: &Campaign, sequence: u64): object::ID {
+    *df::borrow(&campaign.id, UpdateKey { sequence })
+}
+
+public fun has_update(campaign: &Campaign, sequence: u64): bool {
+    df::exists_(&campaign.id, UpdateKey { sequence })
+}
+
+public fun try_get_update_id(
+    campaign: &Campaign,
+    sequence: u64,
+): Option<object::ID> {
+    if (has_update(campaign, sequence)) {
+        std::option::some(*df::borrow(&campaign.id, UpdateKey { sequence }))
+    } else {
+        std::option::none()
+    }
+}
+
+public fun update_parent_id(update: &CampaignUpdate): object::ID {
+    update.parent_id
+}
+
+public fun update_sequence(update: &CampaignUpdate): u64 {
+    update.sequence
+}
+
+public fun update_author(update: &CampaignUpdate): address {
+    update.author
+}
+
+public fun update_created_at_ms(update: &CampaignUpdate): u64 {
+    update.created_at_ms
+}
+
+public fun update_metadata(update: &CampaignUpdate): &VecMap<String, String> {
+    &update.metadata
 }

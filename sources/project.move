@@ -1,19 +1,20 @@
 module crowd_walrus::project;
 
 use std::string::String;
+use sui::clock::{Self as clock, Clock};
 
 public struct Project has key, store {
-    id: UID,
-    admin_id: ID,
+    id: object::UID,
+    admin_id: object::ID,
     name: String,
     short_description: String,
     subdomain_name: String,
-    created_at: u64,
+    created_at_ms: u64, // Unix timestamp in milliseconds (UTC) recorded at creation
 }
 
 public struct ProjectOwnerCap has key, store {
-    id: UID,
-    project_id: ID,
+    id: sui::object::UID,
+    project_id: sui::object::ID,
 }
 
 public(package) fun new(
@@ -21,15 +22,16 @@ public(package) fun new(
     name: String,
     short_description: String,
     subdomain_name: String,
-    ctx: &mut TxContext,
-): (ID, ProjectOwnerCap) {
+    clock: &Clock,
+    ctx: &mut tx_context::TxContext,
+): (object::ID, ProjectOwnerCap) {
     let project = Project {
         id: object::new(ctx),
         admin_id,
         name,
         short_description,
         subdomain_name,
-        created_at: tx_context::epoch(ctx),
+        created_at_ms: clock::timestamp_ms(clock),
     };
 
     let project_id = object::id(&project);
@@ -46,6 +48,6 @@ public fun subdomain_name(project: &Project): String {
     project.subdomain_name
 }
 
-public fun project_id(project_owner_cap: &ProjectOwnerCap): ID {
+public fun project_id(project_owner_cap: &ProjectOwnerCap): object::ID {
     project_owner_cap.project_id
 }
