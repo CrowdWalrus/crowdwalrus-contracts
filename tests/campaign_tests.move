@@ -2,10 +2,13 @@
 #[allow(unused_const)]
 module crowd_walrus::campaign_tests;
 
-use crowd_walrus::campaign::{Campaign, CampaignOwnerCap};
+use crowd_walrus::campaign::{Campaign, CampaignOwnerCap, CampaignUpdate};
 use crowd_walrus::crowd_walrus_tests as crowd_walrus_tests;
-use std::string::utf8;
+use std::string::{String, utf8};
+use std::unit_test::assert_eq;
+use sui::clock::Clock;
 use sui::test_scenario as ts;
+use sui::vec_map as vec_map;
 
 const ADMIN: address = @0xA;
 const USER1: address = @0xB;
@@ -535,5 +538,472 @@ public fun test_create_campaign_invalid_recipient_address() {
         U64_MAX,
     );
 
+    scenario.end();
+}
+
+// === Campaign Updates Tests ===
+
+#[test]
+public fun test_add_update_happy_path() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Update Campaign"),
+        utf8(b"Testing updates"),
+        b"update",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector[utf8(b"walrus_quilt_id"), utf8(b"headline")],
+        vector[utf8(b"0xabc"), utf8(b"Reached 50% funding")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(
+        crowd_walrus::campaign::update_count(&campaign_obj),
+        1
+    );
+    assert!(crowd_walrus::campaign::has_update(&campaign_obj, 0));
+    assert!(!crowd_walrus::campaign::has_update(&campaign_obj, 1));
+
+    let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
+
+    let update_id_option =
+        crowd_walrus::campaign::try_get_update_id(&campaign_obj, 0);
+    assert!(option::is_some(&update_id_option));
+    let extracted_update_id = option::destroy_some(update_id_option);
+    assert_eq!(extracted_update_id, update_id);
+
+    let missing_update_id =
+        crowd_walrus::campaign::try_get_update_id(&campaign_obj, 1);
+    assert!(!option::is_some(&missing_update_id));
+
+    let expected_timestamp = sui::clock::timestamp_ms(&clock);
+
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    scenario.next_tx(campaign_owner);
+    let update_object = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id);
+    assert_eq!(object::id(&update_object), update_id);
+    assert_eq!(
+        crowd_walrus::campaign::update_parent_id(&update_object),
+        campaign_id
+    );
+    assert_eq!(
+        crowd_walrus::campaign::update_sequence(&update_object),
+        0
+    );
+    assert_eq!(
+        crowd_walrus::campaign::update_author(&update_object),
+        campaign_owner
+    );
+    assert_eq!(
+        crowd_walrus::campaign::update_created_at_ms(&update_object),
+        expected_timestamp
+    );
+    let update_metadata =
+        crowd_walrus::campaign::update_metadata(&update_object);
+    assert_eq!(vec_map::length(update_metadata), 2);
+    assert_eq!(
+        *vec_map::get(update_metadata, &utf8(b"walrus_quilt_id")),
+        utf8(b"0xabc"),
+    );
+    assert_eq!(
+        *vec_map::get(update_metadata, &utf8(b"headline")),
+        utf8(b"Reached 50% funding"),
+    );
+
+    ts::return_immutable(update_object);
+    scenario.end();
+}
+
+#[test]
+public fun test_add_multiple_updates_sequences() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Multi Update Campaign"),
+        utf8(b"Testing multiple updates"),
+        b"multi",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    // First update
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector[utf8(b"walrus_quilt_id")],
+        vector[utf8(b"0x001")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    // Second update
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector[utf8(b"walrus_quilt_id")],
+        vector[utf8(b"0x002")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    // Third update (validate state)
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector[utf8(b"walrus_quilt_id")],
+        vector[utf8(b"0x003")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(
+        crowd_walrus::campaign::update_count(&campaign_obj),
+        3
+    );
+
+    let id0 = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
+    let id1 = crowd_walrus::campaign::get_update_id(&campaign_obj, 1);
+    let id2 = crowd_walrus::campaign::get_update_id(&campaign_obj, 2);
+
+    assert!(id0 != id1);
+    assert!(id1 != id2);
+    assert!(id0 != id2);
+
+    assert!(crowd_walrus::campaign::has_update(&campaign_obj, 0));
+    assert!(crowd_walrus::campaign::has_update(&campaign_obj, 1));
+    assert!(crowd_walrus::campaign::has_update(&campaign_obj, 2));
+    assert!(!crowd_walrus::campaign::has_update(&campaign_obj, 3));
+
+    let update_ids = vector[id0, id1, id2];
+
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    scenario.next_tx(campaign_owner);
+    let mut i = 0;
+    while (i < 3) {
+        let update_id_ref = *vector::borrow(&update_ids, i);
+        let update = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id_ref);
+        assert_eq!(crowd_walrus::campaign::update_sequence(&update), i);
+        ts::return_immutable(update);
+        i = i + 1;
+    };
+
+    scenario.end();
+}
+
+#[test]
+public fun test_add_update_empty_metadata_allowed() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Empty Metadata Campaign"),
+        utf8(b"Testing empty metadata"),
+        b"empty",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &campaign_owner_cap,
+        vector::empty<String>(),
+        vector::empty<String>(),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(
+        crowd_walrus::campaign::update_count(&campaign_obj),
+        1
+    );
+    let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
+
+    scenario.next_tx(campaign_owner);
+    let update = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id);
+    assert_eq!(object::id(&update), update_id);
+    assert_eq!(
+        vec_map::length(crowd_walrus::campaign::update_metadata(&update)),
+        0
+    );
+    ts::return_immutable(update);
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = crowd_walrus::campaign::E_APP_NOT_AUTHORIZED)]
+public fun test_add_update_wrong_cap_fails() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(USER1);
+    let campaign_a = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Campaign A"),
+        utf8(b"First"),
+        b"companya",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(USER2);
+    let _campaign_b = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Campaign B"),
+        utf8(b"Second"),
+        b"companyb",
+        vector::empty(),
+        vector::empty(),
+        USER2,
+        0,
+        U64_MAX,
+    );
+
+    {
+        scenario.next_tx(USER2);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_a);
+        let wrong_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<Clock>();
+
+        crowd_walrus::campaign::add_update(
+            &mut campaign,
+            &wrong_cap,
+            vector::empty(),
+            vector::empty(),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(wrong_cap);
+        ts::return_shared(clock);
+    };
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = crowd_walrus::campaign::E_KEY_VALUE_MISMATCH)]
+public fun test_add_update_key_value_mismatch() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Mismatch Campaign"),
+        utf8(b"Testing mismatch"),
+        b"mismatch",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    {
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<Clock>();
+
+        crowd_walrus::campaign::add_update(
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[utf8(b"a"), utf8(b"b")],
+            vector[utf8(b"only_one")],
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = sui::vec_map::EKeyAlreadyExists)]
+public fun test_add_update_duplicate_metadata_keys() {
+    let campaign_owner = USER1;
+
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Duplicate Key Campaign"),
+        utf8(b"Testing duplicate keys"),
+        b"dup",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    {
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<Clock>();
+
+        crowd_walrus::campaign::add_update(
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[utf8(b"key"), utf8(b"key")],
+            vector[utf8(b"value1"), utf8(b"value2")],
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    scenario.end();
+}
+
+#[test]
+public fun test_update_author_after_cap_transfer() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(USER1);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Transfer Campaign"),
+        utf8(b"Testing cap transfer"),
+        b"transfer",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    // Transfer CampaignOwnerCap from USER1 to USER2
+    scenario.next_tx(USER1);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    sui::transfer::public_transfer(campaign_owner_cap, USER2);
+
+    // USER2 posts update
+    scenario.next_tx(USER2);
+    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let transferred_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<Clock>();
+
+    crowd_walrus::campaign::add_update(
+        &mut campaign_obj,
+        &transferred_cap,
+        vector[utf8(b"note")],
+        vector[utf8(b"posted by user2")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
+
+    ts::return_shared(campaign_obj);
+    scenario.return_to_sender(transferred_cap);
+    ts::return_shared(clock);
+
+    scenario.next_tx(USER2);
+    let update = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id);
+    assert_eq!(
+        crowd_walrus::campaign::update_author(&update),
+        USER2
+    );
+    ts::return_immutable(update);
+    scenario.end();
+}
+
+#[test]
+public fun test_update_try_get_missing_returns_none() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"No Update Campaign"),
+        utf8(b"Testing missing update"),
+        b"none",
+        vector::empty(),
+        vector::empty(),
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let missing: option::Option<object::ID> =
+        crowd_walrus::campaign::try_get_update_id(&campaign_obj, 0);
+    assert!(!option::is_some(&missing));
+
+    ts::return_shared(campaign_obj);
     scenario.end();
 }
