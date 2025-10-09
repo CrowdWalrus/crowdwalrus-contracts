@@ -40,6 +40,7 @@ public fun test_create_campaign() {
             b"sub",
             vector[string::utf8(b"key1"), string::utf8(b"key2")],
             vector[string::utf8(b"value1"), string::utf8(b"value2")],
+            USER1, // recipient_address
             0,
             U64_MAX,
         );
@@ -88,6 +89,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            USER1, // recipient_address
             0,
             U64_MAX,
         );
@@ -104,6 +106,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            USER2, // recipient_address
             0,
             U64_MAX,
         );
@@ -141,6 +144,7 @@ public fun test_validate_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
@@ -228,6 +232,7 @@ public fun test_validate_campaign_twice() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
@@ -293,6 +298,7 @@ public fun test_unvalidate_invalid_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            campaign_owner, // recipient_address
             0,
             U64_MAX,
         );
@@ -349,6 +355,7 @@ public fun create_test_campaign(
     subname: vector<u8>,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    recipient_address: address,
     start_date: u64,
     end_date: u64,
 ): ID {
@@ -367,6 +374,7 @@ public fun create_test_campaign(
         subdomain_name,
         metadata_keys,
         metadata_values,
+        recipient_address,
         start_date,
         end_date,
         ctx(sc),
