@@ -70,6 +70,12 @@ public struct CampaignUnverified has copy, drop {
     unverifier: address,
 }
 
+public struct CampaignDeleted has copy, drop {
+    campaign_id: ID,
+    editor: address,
+    timestamp_ms: u64,
+}
+
 // public struct ProjectUnverified has copy, drop {
 //     campaign_id: ID,
 //     unverifier: address,
@@ -180,6 +186,7 @@ entry fun verify_campaign(
 
     assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(!table::contains(&crowd_walrus.verified_maps, campaign_id), E_ALREADY_VERIFIED);
+    campaign::assert_not_deleted(campaign);
 
     table::add(&mut crowd_walrus.verified_maps, campaign_id, true);
     vector::push_back(&mut crowd_walrus.verified_campaigns_list, campaign_id);
@@ -206,6 +213,21 @@ entry fun unverify_campaign(
 
     campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
 
+    remove_verified_campaign(crowd_walrus, campaign_id);
+    event::emit(CampaignUnverified {
+        campaign_id,
+        unverifier: tx_context::sender(ctx),
+    });
+}
+
+fun remove_verified_campaign(
+    crowd_walrus: &mut CrowdWalrus,
+    campaign_id: ID,
+) {
+    if (!table::contains(&crowd_walrus.verified_maps, campaign_id)) {
+        return
+    };
+
     table::remove(&mut crowd_walrus.verified_maps, campaign_id);
 
     let mut i: u64 = 0;
@@ -219,10 +241,48 @@ entry fun unverify_campaign(
             i = i + 1;
         }
     };
-    event::emit(CampaignUnverified {
+}
+
+entry fun delete_campaign(
+    crowd_walrus: &mut CrowdWalrus,
+    suins_manager: &SuiNSManager,
+    suins: &mut SuiNS,
+    campaign: &mut campaign::Campaign,
+    cap: campaign::CampaignOwnerCap,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    let campaign_id = object::id(campaign);
+
+    assert!(campaign::admin_id(campaign) == object::id(crowd_walrus), E_NOT_AUTHORIZED);
+    campaign::assert_owner(campaign, &cap);
+    campaign::assert_not_deleted(campaign);
+
+    let deleted_at_ms = sui::clock::timestamp_ms(clock);
+    let subdomain_name = campaign::subdomain_name(campaign);
+
+    if (table::contains(&crowd_walrus.verified_maps, campaign_id)) {
+        campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
+        remove_verified_campaign(crowd_walrus, campaign_id);
+    };
+
+    suins_manager::remove_subdomain_for_app<CrowdWalrusApp>(
+        suins_manager,
+        &CrowdWalrusApp {},
+        suins,
+        clock,
+        subdomain_name,
+    );
+
+    campaign::mark_deleted(campaign, &cap, deleted_at_ms);
+
+    event::emit(CampaignDeleted {
         campaign_id,
-        unverifier: tx_context::sender(ctx),
+        editor: tx_context::sender(ctx),
+        timestamp_ms: deleted_at_ms,
     });
+
+    campaign::delete_owner_cap(cap);
 }
 
 // === Admin Functions ===
