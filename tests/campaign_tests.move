@@ -2,7 +2,7 @@
 #[allow(unused_const)]
 module crowd_walrus::campaign_tests;
 
-use crowd_walrus::campaign::{Campaign, CampaignOwnerCap, CampaignUpdate};
+use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap, CampaignUpdate};
 use crowd_walrus::crowd_walrus_tests as crowd_walrus_tests;
 use std::string::{String, utf8};
 use std::unit_test::assert_eq;
@@ -17,6 +17,7 @@ const USER2: address = @0xC;
 const TEST_DOMAIN_NAME: vector<u8> = b"test.sui";
 
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
+const E_CAMPAIGN_DELETED: u64 = 11;
 
 #[test]
 public fun test_set_is_active() {
@@ -462,6 +463,81 @@ public fun test_update_active_status_no_op() {
         ts::return_shared(clock);
     };
 
+    scenario.end();
+}
+
+#[test]
+public fun test_mark_deleted_sets_flags() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Mark Deleted"),
+        utf8(b"Checking deleted flags"),
+        b"markdeleted",
+        vector::empty(),
+        vector::empty(),
+        campaign_owner,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+
+    campaign::mark_deleted(&mut campaign, &campaign_owner_cap, 42);
+
+    assert!(campaign.is_deleted());
+    assert!(!campaign.is_active());
+    assert!(!campaign.is_verified());
+    let deleted_at = campaign.deleted_at_ms();
+    assert!(option::is_some(&deleted_at));
+    assert_eq!(option::destroy_some(deleted_at), 42);
+
+    ts::return_shared(campaign);
+    scenario.return_to_sender(campaign_owner_cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x0::campaign)]
+public fun test_add_update_rejects_deleted_campaign() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Cannot Update"),
+        utf8(b"Deleted campaigns reject updates"),
+        b"noupdates",
+        vector::empty(),
+        vector::empty(),
+        campaign_owner,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let clock = scenario.take_shared<sui::clock::Clock>();
+
+    campaign::mark_deleted(&mut campaign, &campaign_owner_cap, 99);
+
+    crowd_walrus::campaign::add_update(
+        &mut campaign,
+        &campaign_owner_cap,
+        vector[utf8(b"status")],
+        vector[utf8(b"should fail")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_shared(campaign);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
     scenario.end();
 }
 
