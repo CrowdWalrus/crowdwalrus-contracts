@@ -6,6 +6,8 @@ use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::dynamic_object_field as dof;
 use sui::event;
+use suins::domain;
+use suins::registry::Registry;
 use suins::suins::SuiNS;
 use suins::suins_registration::SuinsRegistration;
 
@@ -147,6 +149,25 @@ public fun remove_subdomain(
     subdomain_name: String,
     clock: &Clock,
 ) {
+    remove_leaf(suins, get_suins_nft(self), clock, subdomain_name);
+}
+
+public fun remove_subdomain_for_app<App: drop>(
+    self: &SuiNSManager,
+    _: &App,
+    suins: &mut SuiNS,
+    clock: &Clock,
+    subdomain_name: String,
+) {
+    self.assert_app_is_authorized<App>();
+    let registry = suins.registry<Registry>();
+    let subdomain_for_lookup = subdomain_name;
+    let domain = domain::new(subdomain_for_lookup);
+
+    if (!std::option::is_some(&registry.lookup(domain))) {
+        return
+    };
+
     remove_leaf(suins, get_suins_nft(self), clock, subdomain_name);
 }
 
