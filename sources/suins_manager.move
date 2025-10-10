@@ -161,8 +161,7 @@ public fun remove_subdomain_for_app<App: drop>(
 ) {
     self.assert_app_is_authorized<App>();
     let registry = suins.registry<Registry>();
-    let subdomain_for_lookup = subdomain_name;
-    let domain = domain::new(subdomain_for_lookup);
+    let domain = domain::new(copy subdomain_name);
 
     if (!std::option::is_some(&registry.lookup(domain))) {
         return
