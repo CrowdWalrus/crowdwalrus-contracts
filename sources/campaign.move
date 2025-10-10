@@ -15,9 +15,11 @@ const E_START_DATE_IN_PAST: u64 = 6;
 const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;
 const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;
 const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
+const E_CAMPAIGN_DELETED: u64 = 11;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
+public fun e_campaign_deleted(): u64 { E_CAMPAIGN_DELETED }
 
 public struct Campaign has key, store {
     id: object::UID,
@@ -32,6 +34,8 @@ public struct Campaign has key, store {
     created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
+    is_deleted: bool,
+    deleted_at_ms: std::option::Option<u64>,
     // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
     // Updates now stored as frozen objects referenced via dynamic fields.
     next_update_seq: u64,
@@ -98,12 +102,16 @@ public struct AppKey<phantom App: drop> has copy, drop, store {}
 // === Authorization Functions ===
 
 /// Authorize an application to access protected features of the Campaign.
-public fun authorize_app<App: drop>(self: &mut Campaign, _: &CampaignOwnerCap) {
+public fun authorize_app<App: drop>(self: &mut Campaign, cap: &CampaignOwnerCap) {
+    assert_owner(self, cap);
+    assert_not_deleted(self);
     df::add(&mut self.id, AppKey<App> {}, true);
 }
 
 /// Deauthorize an application by removing its authorization key.
-public fun deauthorize_app<App: drop>(self: &mut Campaign, _: &CampaignOwnerCap): bool {
+public fun deauthorize_app<App: drop>(self: &mut Campaign, cap: &CampaignOwnerCap): bool {
+    assert_owner(self, cap);
+    assert_not_deleted(self);
     df::remove(&mut self.id, AppKey<App> {})
 }
 
@@ -159,6 +167,8 @@ public(package) fun new<App: drop>(
         created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
+        is_deleted: false,
+        deleted_at_ms: std::option::none(),
         next_update_seq: 0,
     };
 
@@ -187,13 +197,42 @@ public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
     campaign_owner_cap.campaign_id
 }
 
+public fun delete_owner_cap(cap: CampaignOwnerCap) {
+    let CampaignOwnerCap { id, campaign_id: _ } = cap;
+    object::delete(id);
+}
+
 public fun set_verified<App: drop>(campaign: &mut Campaign, _: &App, verified: bool) {
     campaign.assert_app_is_authorized<App>();
+    assert_not_deleted(campaign);
     campaign.is_verified = verified
 }
 
-public fun set_is_active(campaign: &mut Campaign, _: &CampaignOwnerCap, is_active: bool) {
+public fun set_is_active(campaign: &mut Campaign, cap: &CampaignOwnerCap, is_active: bool) {
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
     campaign.is_active = is_active
+}
+
+public fun assert_not_deleted(campaign: &Campaign) {
+    assert!(!campaign.is_deleted, E_CAMPAIGN_DELETED);
+}
+
+public fun assert_owner(campaign: &Campaign, cap: &CampaignOwnerCap) {
+    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+}
+
+public(package) fun mark_deleted(
+    campaign: &mut Campaign,
+    cap: &CampaignOwnerCap,
+    timestamp_ms: u64,
+) {
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
+    campaign.is_active = false;
+    campaign.is_verified = false;
+    campaign.is_deleted = true;
+    campaign.deleted_at_ms = std::option::some(timestamp_ms);
 }
 
 /// Update campaign active status (activate or deactivate)
@@ -206,7 +245,8 @@ entry fun update_active_status(
     ctx: &tx_context::TxContext,
 ) {
     // Verify ownership
-    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
 
     // Only update and emit event if status is actually changing
     if (campaign.is_active != new_status) {
@@ -231,7 +271,8 @@ entry fun add_update(
     ctx: &mut tx_context::TxContext,
 ) {
     // Verify ownership
-    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
 
     // Ensure key/value vectors align
     assert!(vector::length(&metadata_keys) == vector::length(&metadata_values), E_KEY_VALUE_MISMATCH);
@@ -297,7 +338,8 @@ entry fun update_campaign_basics(
     clock: &Clock,
     ctx: &tx_context::TxContext,
 ) {
-    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
     let mut name_updated = false;
     let mut description_updated = false;
     if(std::option::is_some(&new_name)) {
@@ -335,7 +377,8 @@ entry fun update_campaign_metadata(
     ctx: &tx_context::TxContext,
 ) {
     // Verify ownership
-    assert!(cap.campaign_id == object::id(campaign), E_APP_NOT_AUTHORIZED);
+    assert_owner(campaign, cap);
+    assert_not_deleted(campaign);
 
     // Verify keys and values have same length
     assert!(vector::length(&keys) == vector::length(&values), E_KEY_VALUE_MISMATCH);
@@ -380,6 +423,18 @@ public fun is_verified(campaign: &Campaign): bool {
 
 public fun is_active(campaign: &Campaign): bool {
     campaign.is_active
+}
+
+public fun is_deleted(campaign: &Campaign): bool {
+    campaign.is_deleted
+}
+
+public fun deleted_at_ms(campaign: &Campaign): std::option::Option<u64> {
+    campaign.deleted_at_ms
+}
+
+public fun admin_id(campaign: &Campaign): object::ID {
+    campaign.admin_id
 }
 
 public fun update_count(campaign: &Campaign): u64 {
