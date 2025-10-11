@@ -4,11 +4,10 @@ A Sui Move smart contract system for managing crowdfunding campaigns with SuiNS 
 
 ## Overview
 
-CrowdWalrus is a decentralized crowdfunding platform built on Sui blockchain that integrates with SuiNS (Sui Name Service) to provide subdomain management for campaigns. The system consists of four main modules:
+CrowdWalrus is a decentralized crowdfunding platform built on Sui blockchain that integrates with SuiNS (Sui Name Service) to provide subdomain management for campaigns. The system consists of three main modules:
 
 - **crowd_walrus**: Main contract managing the platform and validation system
 - **campaign**: Handles crowdfunding campaign logic and lifecycle
-- **project**: Manages project-related functionality
 - **suins_manager**: Integrates with SuiNS for subdomain registration and management
 
 ## Prerequisites
@@ -102,10 +101,10 @@ sui client publish
 
 ### 3.1. Set SuiNS NFT on SuiNSManager
 
-In order to register subdomains in create project, you need to set the SuiNS NFT on SuiNSManager. To do that, you need to call the `set_suins_nft` function on SuiNSManager.
+In order to register subdomains when creating campaigns, you need to set the SuiNS NFT on SuiNSManager. To do that, you need to call the `set_suins_nft` function on SuiNSManager.
 In test environment, we did create crowdwalrus-test.sui domain and set its NFT (`0x98dd15073e0b781ca524f7ef102edac6cd4393119a1f2f2b20f24f9056adb6d9`) object on SuiNSManager.
 
-**NOTE**: The setted SuiNS NFT will be used for all projects and campaigns created in the future. And it defines what will be the main domain projects and campaigns will be registered on. For example, if you set the SuiNS NFT to `crowdwalrus-test.sui`, all projects and campaigns will be registered on `crowdwalrus-test.sui` domain, e.g. project1.crowdwalrus-test.sui, campaign1.crowdwalrus-test.sui, etc.
+**NOTE**: The set SuiNS NFT will be used for all campaigns created in the future. It defines the base domain newly created campaigns will be registered on. For example, if you set the SuiNS NFT to `crowdwalrus-test.sui`, all campaigns will be registered on `crowdwalrus-test.sui` domain, e.g. campaign1.crowdwalrus-test.sui, campaign2.crowdwalrus-test.sui, etc.
 
 **NOTE**: If you want to change the SuiNS NFT, you need to call the `remove_suins_nft` function on SuiNSManager to remove the old SuiNS NFT and then call the `set_suins_nft` function to set the new SuiNS NFT. The `remove_suins_nft` last parameter will define who will receive the old SuiNS NFT, which normally must be an account address.
 
@@ -138,7 +137,7 @@ After deployment, you'll need to initialize the CrowdWalrus system by calling th
 
 ### Dependencies
 
-The project uses the following dependencies:
+The package uses the following dependencies:
 
 - **Sui Framework**: Latest mainnet framework from MystenLabs
 - **SuiNS Core**: Testnet core v2 for name service integration
@@ -165,14 +164,13 @@ sui client call --package PACKAGE_ID --module MODULE_NAME --function FUNCTION_NA
 sui client object OBJECT_ID
 ```
 
-## Project Structure
+## Repository Structure
 
 ```
 crowdwalrus-contracts/
 ├── sources/           # Move source files
 │   ├── crowd_walrus.move
 │   ├── campaign.move
-│   ├── project.move
 │   └── suins_manager.move
 ├── tests/            # Test files
 ├── build/            # Compiled artifacts
