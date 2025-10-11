@@ -2,7 +2,7 @@
 
 ## Problem Summary
 
-When integrating SuiNS contracts as dependencies in a Sui Move project, you may encounter the error:
+When integrating SuiNS contracts as dependencies in a Sui Move package, you may encounter the error:
 
 ```
 Conflicting assignments for address 'suins': '0x...' and '0x0'
