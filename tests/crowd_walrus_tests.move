@@ -2,9 +2,10 @@
 #[allow(unused_const)]
 module crowd_walrus::crowd_walrus_tests;
 
-use crowd_walrus::campaign::{Campaign, CampaignOwnerCap};
+use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, VerifyCap};
 use crowd_walrus::suins_manager::{
+    Self as suins_manager,
     AdminCap as SuiNSManagerAdminCap,
     SuiNSManager,
     authorize_app as suins_manager_authorize_app
@@ -25,6 +26,8 @@ const USER1: address = @0xB;
 const USER2: address = @0xC;
 
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
+const E_CAMPAIGN_DELETED: u64 = 11;
+const E_APP_NOT_AUTHORIZED: u64 = 1;
 
 #[test]
 public fun test_create_campaign() {
@@ -203,6 +206,229 @@ public fun test_verify_campaign() {
     sc.end();
 }
 
+#[test]
+public fun test_delete_campaign_happy_path() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Deletable Campaign"),
+        string::utf8(b"This campaign will be deleted"),
+        b"delete",
+        vector::empty(),
+        vector::empty(),
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    {
+        sc.next_tx(owner);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let suins_manager = sc.take_shared<SuiNSManager>();
+        let mut suins = sc.take_shared<SuiNS>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+
+        let delete_time = sui::clock::timestamp_ms(&clock);
+        crowd_walrus::delete_campaign(
+            &mut crowd,
+            &suins_manager,
+            &mut suins,
+            &mut campaign,
+            campaign_owner_cap,
+            &clock,
+            ctx(&mut sc),
+        );
+
+        assert!(campaign.is_deleted());
+        assert!(!campaign.is_active());
+        assert!(!campaign.is_verified());
+        let deleted_at = campaign.deleted_at_ms();
+        assert!(option::is_some(&deleted_at));
+        let deleted_at_ms = option::destroy_some(deleted_at);
+        assert_eq!(deleted_at_ms, delete_time);
+        assert!(!crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 0);
+
+        let subdomain_option = suins
+            .registry<Registry>()
+            .lookup(domain::new(get_test_subdomain_name(b"delete")));
+        assert!(!option::is_some(&subdomain_option));
+
+        ts::return_shared(suins_manager);
+        ts::return_shared(suins);
+        ts::return_shared(campaign);
+        ts::return_shared(clock);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x0::campaign)]
+public fun test_verify_campaign_rejects_deleted_campaign() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Deleted Campaign"),
+        string::utf8(b"Should fail verification"),
+        b"deletefail",
+        vector::empty(),
+        vector::empty(),
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    {
+        sc.next_tx(owner);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let suins_manager = sc.take_shared<SuiNSManager>();
+        let mut suins = sc.take_shared<SuiNS>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+
+        crowd_walrus::delete_campaign(
+            &mut crowd,
+            &suins_manager,
+            &mut suins,
+            &mut campaign,
+            campaign_owner_cap,
+            &clock,
+            ctx(&mut sc),
+        );
+
+        ts::return_shared(suins_manager);
+        ts::return_shared(suins);
+        ts::return_shared(campaign);
+        ts::return_shared(clock);
+        ts::return_shared(crowd);
+    };
+
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = E_APP_NOT_AUTHORIZED, location = 0x0::campaign)]
+public fun test_delete_campaign_requires_matching_cap() {
+    let owner = USER1;
+    let mut sc = test_init(ADMIN);
+
+    sc.next_tx(owner);
+    let campaign_a_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Campaign A"),
+        string::utf8(b"First"),
+        b"deletea",
+        vector::empty(),
+        vector::empty(),
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    sc.next_tx(owner);
+    let cap_a = sc.take_from_sender<CampaignOwnerCap>();
+    let campaign_a_cap_id = campaign::campaign_id(&cap_a);
+    sc.return_to_sender(cap_a);
+
+    sc.next_tx(owner);
+    let _campaign_b_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Campaign B"),
+        string::utf8(b"Second"),
+        b"deleteb",
+        vector::empty(),
+        vector::empty(),
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    sc.next_tx(owner);
+    let mut crowd = sc.take_shared<CrowdWalrus>();
+    let suins_manager = sc.take_shared<SuiNSManager>();
+    let mut suins = sc.take_shared<SuiNS>();
+    let mut campaign_a = sc.take_shared_by_id<Campaign>(campaign_a_id);
+    let cap1 = sc.take_from_sender<CampaignOwnerCap>();
+    let cap2 = sc.take_from_sender<CampaignOwnerCap>();
+    let wrong_cap;
+    if (campaign::campaign_id(&cap1) == campaign_a_cap_id) {
+        sc.return_to_sender(cap1);
+        wrong_cap = cap2;
+    } else {
+        sc.return_to_sender(cap2);
+        wrong_cap = cap1;
+    };
+    let clock = sc.take_shared<Clock>();
+
+    crowd_walrus::delete_campaign(
+        &mut crowd,
+        &suins_manager,
+        &mut suins,
+        &mut campaign_a,
+        wrong_cap,
+        &clock,
+        ctx(&mut sc),
+    );
+
+    ts::return_shared(suins_manager);
+    ts::return_shared(suins);
+    ts::return_shared(crowd);
+    ts::return_shared(campaign_a);
+    ts::return_shared(clock);
+    sc.end();
+}
+
 #[test, expected_failure(abort_code = crowd_walrus::E_ALREADY_VERIFIED)]
 public fun test_verify_campaign_twice() {
     let verifier = USER1;
@@ -264,6 +490,79 @@ public fun test_verify_campaign_twice() {
         ts::return_shared(campaign);
         sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
+    };
+
+    sc.end();
+}
+
+#[test]
+public fun test_delete_campaign_tolerates_missing_subdomain() {
+    let owner = USER1;
+    let mut sc = test_init(ADMIN);
+
+    let subdomain = get_test_subdomain_name(b"deletemissing");
+
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Missing Subdomain Campaign"),
+        string::utf8(b"Manual removal of subdomain"),
+        b"deletemissing",
+        vector::empty(),
+        vector::empty(),
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    {
+        sc.next_tx(ADMIN);
+        let suins_manager = sc.take_shared<SuiNSManager>();
+        let mut suins = sc.take_shared<SuiNS>();
+        let clock = sc.take_shared<Clock>();
+        let admin_cap = sc.take_from_address<SuiNSManagerAdminCap>(ADMIN);
+
+        suins_manager::remove_subdomain(
+            &suins_manager,
+            &admin_cap,
+            &mut suins,
+            subdomain,
+            &clock,
+        );
+
+        ts::return_to_address(ADMIN, admin_cap);
+        ts::return_shared(suins_manager);
+        ts::return_shared(suins);
+        ts::return_shared(clock);
+    };
+
+    {
+        sc.next_tx(owner);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let suins_manager = sc.take_shared<SuiNSManager>();
+        let mut suins = sc.take_shared<SuiNS>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+
+        crowd_walrus::delete_campaign(
+            &mut crowd,
+            &suins_manager,
+            &mut suins,
+            &mut campaign,
+            campaign_owner_cap,
+            &clock,
+            ctx(&mut sc),
+        );
+
+        assert!(campaign.is_deleted());
+        assert!(!crowd.is_campaign_verified(campaign_id));
+
+        ts::return_shared(suins_manager);
+        ts::return_shared(suins);
+        ts::return_shared(campaign);
+        ts::return_shared(clock);
+        ts::return_shared(crowd);
     };
 
     sc.end();
