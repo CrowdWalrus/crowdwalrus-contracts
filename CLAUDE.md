@@ -2,13 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Platform Overview
 
-CrowdWalrus is a decentralized crowdfunding platform on Sui blockchain with SuiNS subdomain integration. The system consists of four core modules:
+CrowdWalrus is a decentralized crowdfunding platform on Sui blockchain with SuiNS subdomain integration. The system consists of three core modules:
 
 - **crowd_walrus**: Main platform module managing verification system and authorization
 - **campaign**: Crowdfunding campaign lifecycle and updates management
-- **project**: Project entity management (currently minimal implementation)
 - **suins_manager**: SuiNS integration for subdomain registration per campaign
 
 ## Key Commands
