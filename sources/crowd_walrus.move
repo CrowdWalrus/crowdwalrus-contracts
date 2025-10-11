@@ -60,11 +60,6 @@ public struct CampaignVerified has copy, drop {
     verifier: address,
 }
 
-// public struct ProjectVerified has copy, drop {
-//     campaign_id: ID,
-//     verifier: address,
-// }
-
 public struct CampaignUnverified has copy, drop {
     campaign_id: ID,
     unverifier: address,
@@ -75,11 +70,6 @@ public struct CampaignDeleted has copy, drop {
     editor: address,
     timestamp_ms: u64,
 }
-
-// public struct ProjectUnverified has copy, drop {
-//     campaign_id: ID,
-//     unverifier: address,
-// }
 
 // === Init Function ===
 
