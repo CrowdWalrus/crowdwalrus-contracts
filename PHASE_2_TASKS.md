@@ -22,7 +22,7 @@ Implement:
 
 Add a dependency for Pyth’s Sui contracts (git + subdir = target_chains/sui/contracts).
 
-Pin to a specific commit or tag compatible with the Sui testnet toolchain (avoid floating "main").
+Pin to a specific commit hash (preferred) or a tag compatible with the Sui testnet toolchain; avoid floating "main".
 
 Move.lock must resolve successfully.
 
@@ -32,11 +32,11 @@ Postconditions: Project builds with Pyth imported.
 
 Move patterns: External package pinning; reproducible builds.
 
-Security/Edges: Pin to a stable commit; document the exact rev in repo docs.
+Security/Edges: Pin to a stable commit; record the exact revision in Documentation/last_deploy.md.
 
 Tests: sui move build succeeds; Pyth modules resolvable by other tasks.
 
-Acceptance: Build green; Move.lock updated; docs note the pinned rev.
+Acceptance: Build green; Move.lock updated; Documentation/last_deploy.md lists the pinned revision.
 
 Deps: None.
 
@@ -208,7 +208,7 @@ Postconditions: Readable by donations/oracle.
 
 Patterns: Shared + DOF; cap‑gated.
 
-Security/Edges: Duplicate add abort; decimals bounds.
+Security/Edges: Duplicate add abort; decimals must be 0..=38.
 
 Tests: Add/enable/disable/update; views; errors.
 
@@ -379,7 +379,7 @@ Acceptance: Pass.
 
 Deps: E2.
 
-Err codes: E_PROFILE_EXISTS, E_NOT_OWNER.
+Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
 E2. Profile object + bitset + metadata
 
@@ -679,7 +679,7 @@ Acceptance: Pass.
 
 Deps: B1, B2, C1.
 
-Err codes: E_COIN_NOT_FOUND (if missing).
+Err codes: E_COIN_NOT_FOUND (if missing), E_TOKEN_DISABLED.
 
 G4. DonationReceived event (canonical + symbol)
 
@@ -975,6 +975,8 @@ First donation (G6a): profile created internally; lock toggled; stats updated; b
 
 Repeat donation (G6b): profile passed by &mut; cumulative totals; next badge; events emitted.
 
+DonationReceived assertions: verify coin_type_canonical and coin_symbol fields are present and match the expected registry metadata for each donation.
+
 Different token: per‑coin stats independent.
 
 Slippage floor: success when met; abort when not.
@@ -990,7 +992,7 @@ Product intent: Engineers can assemble PTBs and admin workflows without reading 
 
 Implement:
 
-PTB patterns for: campaign creation (auto-creates profile if missing), first‑time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher.
+PTB patterns for: campaign creation (auto-creates profile if missing), first‑time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
 
 Document profile auto-creation in both create_campaign (A5) and donate_and_award_first_time (G6a): check ProfilesRegistry → create if missing → transfer to sender → emit ProfileCreated.
 
@@ -1014,6 +1016,6 @@ Notes on the three external feedback points
 
 F6 ambiguity → Resolved by splitting into G6a (creates Profile internally) and G6b (requires &mut Profile). Frontend chooses based on existence. This removes ambiguity and keeps PTBs clean.
 
-Pyth dependency → Added B0 with best practice: pin to a known commit/tag (avoid floating main). Acceptance requires build success and lockfile update.
+Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in Documentation/last_deploy.md. Acceptance requires build success and lockfile update.
 
 Publisher setup → Clarified in E2b and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
