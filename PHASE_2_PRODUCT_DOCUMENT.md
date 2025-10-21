@@ -1,9 +1,18 @@
 Crowd Walrus — Phase 2 Product Requirements Document (PRD)
 
-Version: 1.0
-Date: October 21, 2025
+Version: 1.1 (Updated)
+Date: October 21, 2025 (Updated)
 Owner: Crowd Walrus (Contracts & Platform)
 Scope: Donations, Token Support, USD Valuation (PriceOracle), User Profiles, Badge Rewards, Campaign Aggregates, Split Policy Templates, Events & Indexing.
+
+**Changelog v1.1:**
+- Updated Section 4 (UX Scenarios): Clarified first-time vs repeat donor PTB flows; added profile auto-creation in campaign creation flow
+- Updated Section 5.1 (Campaign Enhancements): Added auto-profile creation for campaign owners
+- Updated Section 5.4 (Donations): Split into donate_and_award_first_time vs donate_and_award entry points
+- Updated Section 5.5 (Profiles): Clarified profile creation patterns (dual-entry approach)
+- Updated Section 13 (Acceptance Criteria): Emphasized profile auto-creation in both flows
+- Updated Section 14 (Open Questions): Marked minimums as resolved (no enforcement in Phase 2)
+- Updated Section 17 (Mapping): Added key implementation notes on dual entries and ownership model
 
 1) Executive Summary
 
@@ -52,29 +61,41 @@ Indexer / Analytics: Needs canonical, stable event data to power feeds and leade
 
 Create Campaign (Owner)
 
-Choose a split preset (e.g., Non‑profit 0% platform, Commercial 5% platform) or pass explicit policy.
+Owner calls create_campaign with:
 
-Set funding_goal_usd_micro, start/end dates, recipient address.
+Split preset (e.g., Non‑profit 0% platform, Commercial 5% platform) or explicit PayoutPolicy.
 
-System creates CampaignStats and links its stats_id.
+funding_goal_usd_micro, start/end dates, recipient address.
+
+System automatically:
+
+Checks ProfilesRegistry; if owner has no profile, creates Profile internally and transfers to owner.
+
+Creates CampaignStats and links its stats_id.
+
+Emits ProfileCreated (if new), CampaignStatsCreated events.
 
 First‑Time Donor
 
 Donor signs a PTB that:
 
-Creates Profile if missing, registers it in ProfilesRegistry.
-
 Includes a fresh Pyth update.
 
-Calls donate_and_award<T>: prechecks, USD valuation, split & send, stats update, lock campaign params (if first donation), badge awards.
+Calls donate_and_award_first_time<T>: creates Profile internally, registers in ProfilesRegistry, performs donation (prechecks, USD valuation, split & send, stats update, lock campaign params if first donation to campaign), awards badges, transfers Profile to donor.
 
-Emits DonationReceived and BadgeMinted events.
+Emits ProfileCreated, DonationReceived, and BadgeMinted (if threshold crossed) events.
 
 Repeat Donor
 
-Frontend references existing profile_id.
+Frontend queries existing profile_id from indexer/registry.
 
-Same PTB minus profile creation; donation and potential additional badges.
+Donor signs a PTB that:
+
+Includes owned Profile object reference and fresh Pyth update.
+
+Calls donate_and_award<T> with &mut Profile: performs donation, updates profile totals, awards additional badges if thresholds crossed.
+
+Emits DonationReceived and BadgeMinted (if new level) events.
 
 Admin
 
@@ -93,6 +114,8 @@ PayoutPolicy (per campaign): {platform_bps, platform_sink, recipient_sink}; vali
 
 Parameter Locking: On first donation, set parameters_locked = true. After this, cannot change: start/end times, funding goal, payout policy; can change: name/description (emit events). Recipient address stays immutable.
 
+Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
+
 Acceptance Criteria
 
 Creating a campaign with invalid bps (>10_000) or zero sinks fails.
@@ -100,6 +123,8 @@ Creating a campaign with invalid bps (>10_000) or zero sinks fails.
 After first donation, attempts to change locked fields abort with explicit error.
 
 stats_id is stored in campaign at creation; CampaignStatsCreated emitted.
+
+Profile is auto-created for campaign owner if they don't have one; ProfileCreated event emitted.
 
 5.2 Token Support & Oracle Valuation
 
@@ -145,7 +170,13 @@ split_and_send: basis‑points split; recipient gets remainder; immediate transf
 
 donate<T>: precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms.
 
-donate_and_award<T>: auto‑profile creation (if missing) → donate → profile totals update → maybe_award_badges → return minted levels.
+**Two donation + award entry points:**
+
+donate_and_award_first_time<T>: For first-time donors. Creates Profile internally and transfers it to sender. Does NOT take profile parameter. Aborts with E_USE_REGULAR_DONATE if profile already exists (user should call donate_and_award instead). Flow: check registry → create profile → donate → update profile totals → award badges → transfer profile to sender → return {usd_micro, minted_levels}.
+
+donate_and_award<T>: For repeat donors. Requires &mut Profile parameter (user's owned Profile object). Verifies sender owns the profile. Flow: verify ownership → store old_total → donate → update profile totals → award badges → return {usd_micro, minted_levels}. Profile persists automatically (passed by reference).
+
+**Frontend logic:** Check ProfilesRegistry (via indexer or on-chain query) for existing profile_id. If none exists, call donate_and_award_first_time. If profile_id exists, call donate_and_award with profile object reference.
 
 Event Requirements
 
@@ -157,21 +188,29 @@ All steps are atomic; any failure aborts entire tx.
 
 Events emit exactly once per donation and contain all fields.
 
+First-time donation creates and transfers profile; repeat donation uses existing profile by reference.
+
 5.5 Profiles (Owned Objects)
 
-ProfilesRegistry (shared): address → profile_id mapping; emits ProfileCreated.
+ProfilesRegistry (shared): address → profile_id mapping; enforces 1:1 uniqueness; emits ProfileCreated.
 
 Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), metadata (VecMap).
 
-create_or_get_profile_for_sender: returns existing or creates new; to be used in PTB composition.
+**Profile Creation Patterns:**
+
+- First-time donation: donate_and_award_first_time<T> creates profile internally, registers in ProfilesRegistry, and transfers to sender
+- Direct creation: Optional create_profile() entry function for users who want a profile before donating
+- Internal helper: create_or_get_profile_for_sender used by first_time entry to enforce uniqueness via registry check
 
 Acceptance Criteria
 
-Profile is auto‑created on first donation if missing.
+Profile is auto‑created on first donation via donate_and_award_first_time entry.
 
-Only owner can update profile metadata.
+Only owner can update profile metadata (enforced via ownership checks).
 
 Totals increment and persist across donations.
+
+ProfilesRegistry prevents duplicate profiles per address.
 
 5.6 Badge Rewards (Soulbound)
 
@@ -286,31 +325,31 @@ Milestone B: PriceOracle + staleness/slippage; CampaignStats.
 
 Milestone C: Profiles + Registry; BadgeConfig + DonorBadge + Display.
 
-Milestone D: Donations (donate, donate_and_award) + Events.
+Milestone D: Donations (donate, donate_and_award_first_time, donate_and_award) + Events.
 
 Milestone E: Integration tests; Docs refresh; QA sign‑off.
 
 13) Acceptance Criteria (Release‑Blocking)
 
-Campaign creation with typed goal & policy works; stats_id linked; parameters lock on first donation.
+Campaign creation with typed goal & policy works; stats_id linked; profile auto-created for owner if missing; parameters lock on first donation.
 
 Donations succeed for enabled tokens with fresh oracle updates; slippage guard respected; correct fee split and rounding.
 
 Aggregates update accurately; per‑coin stats correct.
 
-Profile auto‑creation functions; badges mint exactly once per level; badges render in a wallet using Display.
+Profile auto‑creation functions in both campaign creation and first donation flows; badges mint exactly once per level; badges render in a wallet using Display.
 
 All required events emitted with canonical type and symbol.
 
 All unit & integration tests pass; documentation updated.
 
-14) Open Questions
+14) Open Questions & Decisions Made
 
-Minimums: Do we enforce a global minimum in micro‑USD or per‑token raw amounts (or both)? Default values?
+✅ **Minimums (Resolved - Phase 2)**: No minimum donation enforcement in Phase 2. Accept all non-zero donations. May add optional minimums (global or per-campaign, in raw units or micro-USD) in future phase if spam becomes an issue. See optional task L2 in implementation backlog.
 
-Additional Badge Levels: If marketing expands beyond 5 levels, do we switch bitset width (u16 → u64) or handle via new module versioning?
+❓ **Additional Badge Levels**: If marketing expands beyond 5 levels, switch bitset width from u16 to u64 (supports up to 64 levels with same pattern) or handle via new module versioning? Current implementation uses u16 (16 levels max).
 
-Per‑campaign token allowlist: Default allow all registry tokens; do we want an opt‑in allowlist at campaign level for stricter curation?
+❓ **Per‑campaign token allowlist**: Default allow all TokenRegistry-enabled tokens. Add opt-in allowlist at campaign level for stricter curation (e.g., stablecoin-only campaigns)? See optional task L1 in implementation backlog.
 
 15) Object Model (Summary)
 
@@ -358,7 +397,14 @@ symbol, name, decimals, feed_id, max_age_ms, enabled, timestamp_ms
 
 17) Mapping to Engineering Tasks (Phase‑2 Backlog)
 
-This PRD aligns 1:1 with the final task list we produced (A–K). Each task is small (15–30 min), testable, and follows Sui Move best practices.
+This PRD aligns with the final task list: B0 (dependencies), A1-A5 (campaign schema), B1-B2 (token registry), C1 (price oracle), D1-D3 (campaign stats), E1-E3 (profiles), F1-F3 (badge rewards), G1-G6b (donations), H1-H2 (platform policy), I1-I2 (admin surfaces), J1 (events), K1-K2 (tests), L1-L2 (docs).
+
+**Key implementation notes:**
+- G6a (donate_and_award_first_time) and G6b (donate_and_award) are separate entry points for clarity and simplicity
+- Profile ownership model: owned objects passed by &mut reference for repeat donors; created and transferred for first-timers
+- CampaignStats is a separate shared object (not DOF) to reduce contention between donations and admin operations
+
+Each task is small (15–30 min), testable, and follows Sui Move best practices.
 
 Appendix A — Design Tenets
 

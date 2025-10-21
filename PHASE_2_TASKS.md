@@ -9,6 +9,7 @@ Global conventions (apply to all tasks)
 • Safety: checked arithmetic; abort on overflow; clear error codes.
 • Badges: owned & non‑transferable (no transfer API); do not freeze.
 • DOF for per‑coin stats and registry mappings.
+• Profile auto‑creation: Both create_campaign (A5) and donate_and_award_first_time (G6a) check ProfilesRegistry and create Profile internally if sender has none; transfer to sender; emit ProfileCreated.
 
 B) Build & Dependencies (new upfront)
 B0. Add Pyth dependency in Move.toml
@@ -154,31 +155,35 @@ Deps: G5/G6a/G6b.
 
 Err codes: E_PARAMETERS_LOCKED.
 
-A5. create_campaign wiring (fields + stats)
+A5. create_campaign wiring (fields + stats + profile)
 
 File/Module: sources/crowd_walrus.move / crowd_walrus::crowd_walrus
 
-Product intent: Campaigns start fully configured with aggregates linked.
+Product intent: Campaigns start fully configured with aggregates linked; campaign owners get profiles automatically.
 
 Implement:
 
 Extend to accept funding_goal_usd_micro and PayoutPolicy or preset (H2).
 
-After campaign::new, call campaign_stats::create_for_campaign and set stats_id.
+Check ProfilesRegistry: if sender has no profile, call profiles::create_for(sender, registry, ctx), register in ProfilesRegistry, and transfer Profile to sender. Emit ProfileCreated.
 
-Preconditions: Valid time & policy.
+After campaign::new, call campaign_stats::create_for_campaign and set stats_id. Emit CampaignStatsCreated.
 
-Postconditions: stats_id stored; CampaignStatsCreated emitted.
+Preconditions: Valid time & policy; ProfilesRegistry available.
 
-Patterns: Constructor composition.
+Postconditions: stats_id stored; profile created if missing; both events emitted conditionally.
 
-Security/Edges: Validation aborts propagate.
+Patterns: Constructor composition; conditional profile creation (same pattern as G6a).
 
-Tests: Happy path; invalid policy/time aborts.
+Security/Edges: Profile uniqueness enforced by registry; validation aborts propagate.
 
-Acceptance: Correct linking; event present.
+Tests: Happy path with existing profile (no ProfileCreated event); happy path without profile (ProfileCreated emitted); invalid policy/time aborts.
 
-Deps: C1, H2.
+Acceptance: Correct linking; profile auto-creation works; events present.
+
+Deps: C1 (CampaignStats), E1-E3 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
+
+Err codes: Forward E_PROFILE_EXISTS (if duplicate attempted), E_INVALID_BPS, E_ZERO_SINK, time validation errors.
 
 B) Token & oracle infrastructure
 B1. TokenRegistry (per‑token metadata & staleness)
@@ -432,29 +437,29 @@ Acceptance: Docs + callable entry present.
 
 Deps: F2.
 
-E3. Helper: create_or_get_profile_for_sender (optional convenience)
+E3. Helper: create_or_get_profile_for_sender (internal helper)
 
 File/Module: sources/profiles.move
 
-Product intent: Simplify app logic outside donations (e.g., campaign creation UX).
+Product intent: Reusable internal helper for profile auto-creation in both create_campaign (A5) and donate_and_award_first_time (G6a).
 
 Implement:
 
-If exists, return id; else create and return new id.
+Check ProfilesRegistry; if exists, return existing id; else create Profile via create_for, register in ProfilesRegistry, transfer to sender, emit ProfileCreated, return new id.
 
-Preconditions: —
+Preconditions: Valid sender address.
 
-Postconditions: ID available to PTB.
+Postconditions: Profile exists for sender (either pre-existing or newly created); ID returned.
 
-Patterns: Registry lookup + create.
+Patterns: Registry lookup + conditional create; used internally by A5 and G6a.
 
-Security/Edges: Idempotent.
+Security/Edges: Idempotent; no duplicate profiles.
 
-Tests: Both branches.
+Tests: Both branches (existing profile returns same id, new profile creates and returns new id).
 
-Acceptance: Pass.
+Acceptance: Pass; works as helper for both flows.
 
-Deps: E1/E2.
+Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
 F1. BadgeConfig (thresholds + URIs)
@@ -690,7 +695,7 @@ Tests: First donation path mints profile + possibly badge; event checks.
 
 Acceptance: Pass.
 
-Deps: E1–E2, F1–F3, G5.
+Deps: E1–E3 (ProfilesRegistry + Profile + helper for auto-creation), F1–F3 (badge rewards), G5 (core donate).
 
 Err codes: Surface E_PROFILE_EXISTS if already mapped.
 
@@ -761,11 +766,11 @@ Implement:
 
 Branch: if template_name provided, resolve from platform_policy and copy into PayoutPolicy; else accept explicit PayoutPolicy.
 
-Continue with A5 (stats creation/link).
+This extends A5's create_campaign implementation (resolved policy is passed to campaign::new along with stats creation and profile creation).
 
 Preconditions: Enabled preset exists if referenced.
 
-Postconditions: Campaign stores snapshot; later preset changes don’t affect it.
+Postconditions: Campaign stores snapshot; later preset changes don't affect it.
 
 Patterns: Resolve‑and‑copy; not a pointer.
 
@@ -775,7 +780,7 @@ Tests: Preset and explicit paths; disabled preset abort.
 
 Acceptance: Pass.
 
-Deps: H1, A5.
+Deps: H1 (platform_policy registry); Extends: A5 (this is part of A5 implementation).
 
 I) Admin surfaces
 I1. Cap‑gate TokenRegistry & PlatformPolicy
@@ -896,9 +901,11 @@ Product intent: Demonstrate end‑to‑end UX paths.
 
 Implement scenarios:
 
-Create via preset: stats created; stats_id linked.
+Create campaign via preset without existing profile: profile auto-created and transferred to owner; stats created; stats_id linked; ProfileCreated and CampaignStatsCreated events emitted.
 
-First donation (G6a): profile created internally; lock toggled; stats updated; badge L1 minted.
+Create campaign with existing profile: no ProfileCreated event; only CampaignStatsCreated emitted; stats linked correctly.
+
+First donation (G6a): profile created internally; lock toggled; stats updated; badge L1 minted; ProfileCreated, DonationReceived, CampaignParametersLocked events emitted.
 
 Repeat donation (G6b): profile passed by &mut; cumulative totals; next badge; events emitted.
 
@@ -917,11 +924,13 @@ Product intent: Engineers can assemble PTBs and admin workflows without reading 
 
 Implement:
 
-PTB patterns for: first‑time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher.
+PTB patterns for: campaign creation (auto-creates profile if missing), first‑time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher.
+
+Document profile auto-creation in both create_campaign (A5) and donate_and_award_first_time (G6a): check ProfilesRegistry → create if missing → transfer to sender → emit ProfileCreated.
 
 List entry function inputs (object refs required), rounding, slippage, staleness, locking, event schemas.
 
-Acceptance: Clear, stepwise, unambiguous.
+Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for both flows.
 
 L2. Update README.md (product overview)
 
