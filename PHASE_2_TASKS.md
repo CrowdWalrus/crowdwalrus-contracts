@@ -11,7 +11,7 @@ Global conventions (apply to all tasks)
 • DOF for per‑coin stats and registry mappings.
 • Profile auto‑creation: Both create_campaign (A5) and donate_and_award_first_time (G6a) check ProfilesRegistry and create Profile internally if sender has none; transfer to sender; emit ProfileCreated.
 
-B) Build & Dependencies (new upfront)
+B0) Build & Dependencies (new upfront)
 B0. Add Pyth dependency in Move.toml
 
 File/Module: Move.toml (package manifest)
@@ -41,6 +41,36 @@ Acceptance: Build green; Move.lock updated; Documentation/last_deploy.md lists t
 Deps: None.
 
 Err codes: N/A.
+
+B0a. Publish-time shared object bootstrap
+
+File/Module: sources/crowd_walrus.move (init) + respective module inits
+
+Product intent: Ensure TokenRegistry, ProfilesRegistry, PlatformPolicy registry, and BadgeConfig exist immediately after publish with the correct AdminCap wiring.
+
+Implement:
+
+Extend crowd_walrus::init to create and share each shared object (TokenRegistry, ProfilesRegistry, PlatformPolicy, BadgeConfig) and mint/transfer the AdminCap so subsequent admin-gated entries function.
+
+If a module needs its own init helper (e.g., token_registry::init), add it and invoke from crowd_walrus::init.
+
+Record object IDs inside CrowdWalrus or emit events so clients can discover them.
+
+Preconditions: Dependent modules compiled.
+
+Postconditions: All shared state deployed once; AdminCap holder has access.
+
+Patterns: Package init wiring; single-source-of-truth objects.
+
+Security/Edges: Prevent duplicate creation on re-publish; assert objects absent before instantiating.
+
+Tests: sui move test covering init scenario; ensure objects exist and AdminCap transferred.
+
+Acceptance: After package publish, all registries/configs available; init tests pass.
+
+Deps: B0, E1, F1, H1, I1, I2.
+
+Err codes: Reuse module-specific duplicate errors if init rerun.
 
 A) Campaign schema & lifecycle (existing files)
 A1. Typed funding goal on Campaign
@@ -196,11 +226,13 @@ Implement:
 
 Shared TokenRegistry with DOF keyed by CoinKey<T> storing: symbol, name, decimals, pyth_feed_id (32 bytes), enabled, max_age_ms.
 
-AdminCap‑gated: add_coin<T>, update_metadata<T>, set_enabled<T>, set_max_age_ms<T>.
+AdminCap-gated: add_coin<T>, update_metadata<T>, set_enabled<T>, set_max_age_ms<T>.
 
 Views for all fields.
 
 Events: TokenAdded, TokenUpdated, TokenEnabled, TokenDisabled.
+
+Coordinate with B0a so crowd_walrus::init (or a module init helper) instantiates and shares the registry once at publish.
 
 Preconditions: Unique per T; feed id len 32.
 
@@ -365,6 +397,8 @@ Shared map (DOF) address -> profile_id.
 
 exists, id_of, create_for(owner, ctx); emit ProfileCreated { owner, profile_id, timestamp_ms }.
 
+Align with B0a so publish-time init creates and shares the registry alongside the AdminCap.
+
 Preconditions: Not already mapped.
 
 Postconditions: Mapping persisted.
@@ -481,6 +515,8 @@ Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
 
 Update metadata VecMap with new key-value pair (insert_or_update).
 
+Guard against empty strings and overlong keys/values (define max lengths; abort when exceeded).
+
 Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
 
 Preconditions: Caller owns the profile.
@@ -489,9 +525,9 @@ Postconditions: Metadata updated; event emitted.
 
 Patterns: Owned object by &mut reference; owner-only mutation.
 
-Security/Edges: Only owner can update; key/value validation (non-empty).
+Security/Edges: Only owner can update; key/value validation (non-empty, max length enforced).
 
-Tests: Owner updates successfully; non-owner aborts; event emitted.
+Tests: Owner updates successfully; non-owner aborts; empty or oversized key/value abort with expected errors; event emitted.
 
 Acceptance: Metadata updates work; tests pass.
 
@@ -535,6 +571,8 @@ Implement:
 Shared BadgeConfig { thresholds_micro (len=5, ascending), image_uris (len=5) }.
 
 Admin setters with validation; emit BadgeConfigUpdated.
+
+Ensure B0a provisions and shares the BadgeConfig during init so badge award flows can borrow it immediately after publish.
 
 Preconditions: AdminCap only.
 
@@ -798,9 +836,11 @@ Product intent: Business can add/adjust defaults (e.g., 5%→10%) for new campai
 
 Implement:
 
-Shared registry name -> { platform_bps, platform_sink, enabled } with AdminCap‑gated add/update/enable/disable.
+Shared registry name -> { platform_bps, platform_sink, enabled } with AdminCap-gated add/update/enable/disable.
 
 Events: PolicyAdded, PolicyUpdated, PolicyDisabled.
+
+Hook into B0a bootstrap so the registry is created and shared exactly once during package init.
 
 Preconditions: Valid bps & sink; unique name.
 
@@ -977,7 +1017,9 @@ Repeat donation (G6b): profile passed by &mut; cumulative totals; next badge; ev
 
 DonationReceived assertions: verify coin_type_canonical and coin_symbol fields are present and match the expected registry metadata for each donation.
 
-Different token: per‑coin stats independent.
+Different token: per-coin stats independent.
+
+Concurrent donations: simulate two donors contributing in the same test_scenario to confirm no contention or double-lock issues on CampaignStats.
 
 Slippage floor: success when met; abort when not.
 
@@ -992,7 +1034,9 @@ Product intent: Engineers can assemble PTBs and admin workflows without reading 
 
 Implement:
 
-PTB patterns for: campaign creation (auto-creates profile if missing), first‑time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
+PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
+
+Explain how integrators fetch Pyth price updates off-chain (e.g., via Pyth SDK) and attach them to the same PTB, clarifying staleness semantics and donor overrides.
 
 Document profile auto-creation in both create_campaign (A5) and donate_and_award_first_time (G6a): check ProfilesRegistry → create if missing → transfer to sender → emit ProfileCreated.
 
