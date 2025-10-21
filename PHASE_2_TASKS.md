@@ -181,7 +181,7 @@ Tests: Happy path with existing profile (no ProfileCreated event); happy path wi
 
 Acceptance: Correct linking; profile auto-creation works; events present.
 
-Deps: C1 (CampaignStats), E1-E3 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
+Deps: C1 (CampaignStats), E1-E2 and E5 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
 
 Err codes: Forward E_PROFILE_EXISTS (if duplicate attempted), E_INVALID_BPS, E_ZERO_SINK, time validation errors.
 
@@ -411,7 +411,7 @@ Err codes: E_NOT_PROFILE_OWNER, E_KEY_VALUE_MISMATCH, E_OVERFLOW.
 
 E2b. Publisher handling for Display setup (clarification)
 
-File/Module: Documentation/UPDATE_IMPLEMENTATION.md + sources/badge_rewards.move
+File/Module: UPDATE_IMPLEMENTATION.md + sources/badge_rewards.move
 
 Product intent: Ensure we can call Display registration with the correct Publisher.
 
@@ -437,7 +437,69 @@ Acceptance: Docs + callable entry present.
 
 Deps: F2.
 
-E3. Helper: create_or_get_profile_for_sender (internal helper)
+E3. Standalone create_profile entry function
+
+File/Module: sources/profiles.move
+
+Product intent: Users can create profiles before any other action (optional, improves UX).
+
+Implement:
+
+Public entry fun create_profile(registry: &mut ProfilesRegistry, ctx: &mut TxContext).
+
+Check ProfilesRegistry; if sender already has profile, abort with E_PROFILE_EXISTS.
+
+Create Profile via profiles::create_for, register in ProfilesRegistry, transfer to sender, emit ProfileCreated.
+
+Preconditions: Sender has no existing profile.
+
+Postconditions: Profile created and transferred to sender; registered in ProfilesRegistry.
+
+Patterns: Simple entry point; can be called standalone or skipped (auto-created in A5/G6a).
+
+Security/Edges: Duplicate creation aborts; only sender can create their own profile.
+
+Tests: Happy path creates profile; duplicate call aborts; ProfileCreated event emitted.
+
+Acceptance: Standalone profile creation works; tests pass.
+
+Deps: E1, E2.
+
+Err codes: E_PROFILE_EXISTS.
+
+E4. update_profile_metadata entry function
+
+File/Module: sources/profiles.move
+
+Product intent: Users can update their profile information (name, bio, avatar URI, etc).
+
+Implement:
+
+Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, ctx: &mut TxContext).
+
+Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
+
+Update metadata VecMap with new key-value pair (insert_or_update).
+
+Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
+
+Preconditions: Caller owns the profile.
+
+Postconditions: Metadata updated; event emitted.
+
+Patterns: Owned object by &mut reference; owner-only mutation.
+
+Security/Edges: Only owner can update; key/value validation (non-empty).
+
+Tests: Owner updates successfully; non-owner aborts; event emitted.
+
+Acceptance: Metadata updates work; tests pass.
+
+Deps: E2.
+
+Err codes: E_NOT_PROFILE_OWNER, E_EMPTY_KEY.
+
+E5. Helper: create_or_get_profile_for_sender (internal helper)
 
 File/Module: sources/profiles.move
 
@@ -651,7 +713,7 @@ Product intent: Core donation API for integrators.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, pyth_update, expected_min_usd_micro, opt_max_age_ms, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: G1 → G3 → assert slippage floor → G2 → D2 add_donation → if first donation then A4 lock → G4 event → return micro‑USD.
 
@@ -679,7 +741,7 @@ Product intent: Truly one‑tap first donation—no separate profile step.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, pyth_update, expected_min_usd_micro, opt_max_age_ms, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T>; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
 
@@ -695,7 +757,7 @@ Tests: First donation path mints profile + possibly badge; event checks.
 
 Acceptance: Pass.
 
-Deps: E1–E3 (ProfilesRegistry + Profile + helper for auto-creation), F1–F3 (badge rewards), G5 (core donate).
+Deps: E1-E2 and E5 (ProfilesRegistry + Profile + helper for auto-creation), F1–F3 (badge rewards), G5 (core donate).
 
 Err codes: Surface E_PROFILE_EXISTS if already mapped.
 
@@ -707,7 +769,7 @@ Product intent: Efficient repeat donations with existing Profile.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, pyth_update, expected_min_usd_micro, opt_max_age_ms, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: call G5 donate<T>; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
 
@@ -764,7 +826,7 @@ Product intent: Simple creation (choose preset) with preserved immutability post
 
 Implement:
 
-Branch: if template_name provided, resolve from platform_policy and copy into PayoutPolicy; else accept explicit PayoutPolicy.
+Branch: if policy_name provided, resolve from platform_policy and copy into PayoutPolicy; else accept explicit PayoutPolicy.
 
 This extends A5's create_campaign implementation (resolved policy is passed to campaign::new along with stats creation and profile creation).
 
@@ -836,13 +898,13 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; Documentation/UPDATE_IMPLEMENTATION.md
+File/Module: All relevant modules; UPDATE_IMPLEMENTATION.md
 
 Product intent: Indexer has a single, authoritative reference.
 
 Implement:
 
-Verify all event field sets match: DonationReceived, CampaignStatsCreated, CampaignParametersLocked, ProfileCreated, BadgeConfigUpdated, BadgeMinted, PolicyAdded/Updated/Disabled, Token*.
+Verify all event field sets match: DonationReceived, CampaignStatsCreated, CampaignParametersLocked, ProfileCreated, ProfileMetadataUpdated, BadgeConfigUpdated, BadgeMinted, PolicyAdded/Updated/Disabled, Token*.
 
 Document names, fields, types, and when emitted.
 
@@ -901,6 +963,10 @@ Product intent: Demonstrate end‑to‑end UX paths.
 
 Implement scenarios:
 
+Standalone profile creation (E3): user creates profile explicitly; ProfileCreated event emitted; duplicate creation aborts.
+
+Profile metadata update (E4): owner updates metadata successfully; non-owner aborts; ProfileMetadataUpdated event emitted.
+
 Create campaign via preset without existing profile: profile auto-created and transferred to owner; stats created; stats_id linked; ProfileCreated and CampaignStatsCreated events emitted.
 
 Create campaign with existing profile: no ProfileCreated event; only CampaignStatsCreated emitted; stats linked correctly.
@@ -918,7 +984,7 @@ Acceptance: All scenarios pass with correct events and state.
 L) Documentation & DevEx
 L1. Update UPDATE_IMPLEMENTATION.md (developer‑facing)
 
-File: Documentation/UPDATE_IMPLEMENTATION.md
+File: UPDATE_IMPLEMENTATION.md
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
@@ -934,7 +1000,7 @@ Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for b
 
 L2. Update README.md (product overview)
 
-File: Documentation/README.md
+File: README.md
 
 Product intent: Stakeholder‑friendly summary.
 

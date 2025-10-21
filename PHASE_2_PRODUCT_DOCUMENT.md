@@ -1,18 +1,17 @@
 Crowd Walrus — Phase 2 Product Requirements Document (PRD)
 
-Version: 1.1 (Updated)
+Version: 1.2 (Updated)
 Date: October 21, 2025 (Updated)
 Owner: Crowd Walrus (Contracts & Platform)
 Scope: Donations, Token Support, USD Valuation (PriceOracle), User Profiles, Badge Rewards, Campaign Aggregates, Split Policy Templates, Events & Indexing.
 
-**Changelog v1.1:**
-- Updated Section 4 (UX Scenarios): Clarified first-time vs repeat donor PTB flows; added profile auto-creation in campaign creation flow
-- Updated Section 5.1 (Campaign Enhancements): Added auto-profile creation for campaign owners
-- Updated Section 5.4 (Donations): Split into donate_and_award_first_time vs donate_and_award entry points
-- Updated Section 5.5 (Profiles): Clarified profile creation patterns (dual-entry approach)
-- Updated Section 13 (Acceptance Criteria): Emphasized profile auto-creation in both flows
-- Updated Section 14 (Open Questions): Marked minimums as resolved (no enforcement in Phase 2)
-- Updated Section 17 (Mapping): Added key implementation notes on dual entries and ownership model
+**Changelog v1.2:**
+- Removed all minimum donation threshold language (Section 5.2, 8, 10, 14) - not enforced in Phase 2
+- Added standalone create_profile() and update_profile_metadata() entry functions (Section 5.5, 14)
+- Fixed policy event schema: policy_id → policy_name (Section 6, 16) for consistency with task list
+- Specified opt_max_age_ms type as Option<u64> (Section 8, 14)
+- Added ProfileMetadataUpdated event (Section 6, 16)
+- Previous v1.1 changes: profile auto-creation in both flows, dual donation entries, parameter locking
 
 1) Executive Summary
 
@@ -136,7 +135,7 @@ Per‑Token Staleness: Use min(registry.max_age_ms, donor.max_age_ms?).
 
 Slippage Floor: expected_min_usd_micro param in donation entry. Abort if actual USD < expected.
 
-Zero Amount & Minimums: Abort on zero donation; optional minimum thresholds (raw or micro‑USD).
+Zero Amount: Abort on zero donation amount.
 
 Acceptance Criteria
 
@@ -198,13 +197,18 @@ Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), meta
 
 **Profile Creation Patterns:**
 
-- First-time donation: donate_and_award_first_time<T> creates profile internally, registers in ProfilesRegistry, and transfers to sender
-- Direct creation: Optional create_profile() entry function for users who want a profile before donating
-- Internal helper: create_or_get_profile_for_sender used by first_time entry to enforce uniqueness via registry check
+- Standalone creation: create_profile() entry function for users who want a profile before any other action
+- Campaign creation: create_campaign auto-creates profile for owner if missing
+- First-time donation: donate_and_award_first_time<T> creates profile internally if missing
+- Internal helper: create_or_get_profile_for_sender used by create_campaign and first_time donation to enforce uniqueness via registry check
 
 Acceptance Criteria
 
-Profile is auto‑created on first donation via donate_and_award_first_time entry.
+Standalone create_profile() entry function works; creates profile and transfers to sender.
+
+Profile is auto‑created on first donation via donate_and_award_first_time entry if not already created.
+
+Profile is auto-created on campaign creation if owner doesn't have one.
 
 Only owner can update profile metadata (enforced via ownership checks).
 
@@ -230,9 +234,9 @@ BadgeConfig validation (lengths equal, ascending).
 
 5.7 Split Policy Presets (Admin, Future Campaigns)
 
-SplitPolicyRegistry (shared): Named presets (id → {platform_bps, platform_sink}) managed by AdminCap.
+SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_sink}) managed by AdminCap.
 
-Create Campaign: Accept either policy_id to snapshot a preset OR explicit PayoutPolicy.
+Create Campaign: Accept either policy_name to snapshot a preset OR explicit PayoutPolicy.
 
 Snapshots are copied into campaign and locked on first donation; later changes in presets affect only future campaigns.
 
@@ -248,9 +252,10 @@ CampaignStatsCreated	On stats creation	campaign_id, stats_id, timestamp_ms
 CampaignParametersLocked	First donation	campaign_id, timestamp_ms
 DonationReceived	Each donation	campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms
 ProfileCreated	Profile first creation	owner, profile_id, timestamp_ms
+ProfileMetadataUpdated	User updates profile	profile_id, owner, key, value, timestamp_ms
 BadgeConfigUpdated	Admin change	thresholds_micro, image_uris, timestamp_ms
 BadgeMinted	On award	owner, level, profile_id, timestamp_ms
-PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_id, bps, sink, timestamp_ms
+PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_name, platform_bps, platform_sink, timestamp_ms
 TokenAdded/TokenUpdated/TokenEnabled/TokenDisabled	Registry changes	symbol, decimals, feed_id, max_age_ms, enabled, timestamp_ms
 
 Indexer Guidance
@@ -279,9 +284,9 @@ Rounding: Recipient gets remainder (floor platform fee).
 
 USD Valuation: Use floor to micro‑USD (never over‑credit).
 
-Zero & Minimums: Abort on zero donation; optional min thresholds (global or per‑token).
+Zero Amounts: Abort on zero donation amount.
 
-Staleness: Enforce effective_max_age = min(registry.max_age_ms, donor.max_age_ms?).
+Staleness: Enforce effective_max_age = min(registry.max_age_ms, donor.max_age_ms) where donor.max_age_ms is Option<u64> (None means use registry default only).
 
 Policy Changes: Locked on first donation. Preset updates affect future campaigns only.
 
@@ -301,9 +306,8 @@ Indexer available to consume events and provide feeds/search/leaderboards.
 Risk	Mitigation
 Oracle staleness or missing update	Enforce staleness; require expected_min_usd_micro; abort if invalid.
 Admin misconfiguration (bad bps/sinks)	Strict validation; capability‑gated; event logs; presets only affect new campaigns.
-Rounding disputes	Document rule (“recipient gets remainder”) and include bps + amounts in events.
-Shared object contention on popular campaigns	Separate CampaignStats object; admin edits don’t lock donation path.
-Spam micro‑donations	Zero abort + optional minimum thresholds.
+Rounding disputes	Document rule ("recipient gets remainder") and include bps + amounts in events.
+Shared object contention on popular campaigns	Separate CampaignStats object; admin edits don't lock donation path.
 Symbol drift vs canonical type	Emit both canonical and human symbol in events.
 11) KPIs / Success Metrics
 
@@ -345,11 +349,15 @@ All unit & integration tests pass; documentation updated.
 
 14) Open Questions & Decisions Made
 
-✅ **Minimums (Resolved - Phase 2)**: No minimum donation enforcement in Phase 2. Accept all non-zero donations. May add optional minimums (global or per-campaign, in raw units or micro-USD) in future phase if spam becomes an issue. See optional task L2 in implementation backlog.
+✅ **Minimums (Resolved - Phase 2)**: No minimum donation enforcement in Phase 2. Accept all non-zero donations.
+
+✅ **Standalone Profile Creation (Phase 2)**: create_profile() and update_profile_metadata() entry functions provided. Profiles can also be auto-created in create_campaign (A5) and donate_and_award_first_time (G6a) if user doesn't have one yet.
+
+✅ **Optional Donor Staleness Override (Resolved - Type)**: Donation entries accept opt_max_age_ms: Option<u64>. If Some(value), use min(registry, value). If None, use registry default only.
 
 ❓ **Additional Badge Levels**: If marketing expands beyond 5 levels, switch bitset width from u16 to u64 (supports up to 64 levels with same pattern) or handle via new module versioning? Current implementation uses u16 (16 levels max).
 
-❓ **Per‑campaign token allowlist**: Default allow all TokenRegistry-enabled tokens. Add opt-in allowlist at campaign level for stricter curation (e.g., stablecoin-only campaigns)? See optional task L1 in implementation backlog.
+❓ **Per‑campaign token allowlist**: Default allow all TokenRegistry-enabled tokens. Add opt-in allowlist at campaign level for stricter curation (e.g., stablecoin-only campaigns)? Deferred to post-Phase 2.
 
 15) Object Model (Summary)
 
@@ -386,11 +394,14 @@ campaign_id, stats_id, timestamp_ms
 ProfileCreated
 owner, profile_id, timestamp_ms
 
+ProfileMetadataUpdated
+profile_id, owner, key, value, timestamp_ms
+
 BadgeConfigUpdated
 thresholds_micro, image_uris, timestamp_ms
 
 PolicyAdded / PolicyUpdated / PolicyDisabled
-policy_id, platform_bps, platform_sink, timestamp_ms
+policy_name, platform_bps, platform_sink, enabled, timestamp_ms
 
 TokenAdded / TokenUpdated / TokenEnabled / TokenDisabled
 symbol, name, decimals, feed_id, max_age_ms, enabled, timestamp_ms
