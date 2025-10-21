@@ -165,7 +165,7 @@ Implement:
 
 Extend to accept funding_goal_usd_micro and PayoutPolicy or preset (H2).
 
-Check ProfilesRegistry: if sender has no profile, call profiles::create_for(sender, registry, ctx), register in ProfilesRegistry, and transfer Profile to sender. Emit ProfileCreated.
+Call profiles::create_or_get_profile_for_sender (E5) to handle registry lookup and conditional creation; this avoids duplicating logic.
 
 After campaign::new, call campaign_stats::create_for_campaign and set stats_id. Emit CampaignStatsCreated.
 
@@ -417,7 +417,7 @@ Product intent: Ensure we can call Display registration with the correct Publish
 
 Implement:
 
-Document how deployer obtains the sui::package::Publisher at publish time and passes &Publisher to the admin entry (setup_badge_display).
+Document how deployer obtains the sui::package::Publisher at publish time and passes &Publisher to the admin entry (setup_badge_display) and call display::update_version after registering templates (required for wallets to pick up changes).
 
 Add an admin entry in badge_rewards that accepts &Publisher and registers templates.
 
@@ -611,7 +611,7 @@ Product intent: Early, clear failures.
 
 Implement:
 
-Validate: is_active, not deleted, within window (inclusive), token T enabled.
+Validate: is_active, not deleted, within window (inclusive), generic type T is enabled in TokenRegistry (no value parameter).
 
 Preconditions: Inputs available.
 
@@ -679,7 +679,7 @@ Acceptance: Pass.
 
 Deps: B1, B2, C1.
 
-Err codes: E_TOKEN_NOT_REGISTERED (if missing).
+Err codes: E_COIN_NOT_FOUND (if missing).
 
 G4. DonationReceived event (canonical + symbol)
 
