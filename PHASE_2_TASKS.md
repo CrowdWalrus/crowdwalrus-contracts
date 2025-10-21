@@ -183,7 +183,7 @@ Acceptance: Correct linking; profile auto-creation works; events present.
 
 Deps: C1 (CampaignStats), E1-E2 and E5 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
 
-Err codes: Forward E_PROFILE_EXISTS (if duplicate attempted), E_INVALID_BPS, E_ZERO_SINK, time validation errors.
+Err codes: E_INVALID_BPS, E_ZERO_SINK, time validation errors.
 
 B) Token & oracle infrastructure
 B1. TokenRegistry (per‑token metadata & staleness)
@@ -611,7 +611,7 @@ Product intent: Early, clear failures.
 
 Implement:
 
-Validate: is_active, not deleted, within window (inclusive), generic type T is enabled in TokenRegistry (no value parameter).
+Validate: is_active, not deleted, within window (inclusive), generic type parameter T is enabled in TokenRegistry (no coin value argument is passed).
 
 Preconditions: Inputs available.
 
@@ -625,7 +625,7 @@ Tests: Each path.
 
 Acceptance: Pass.
 
-Deps: B1, A‑state.
+Deps: B1, A1–A4.
 
 Err codes: E_CAMPAIGN_INACTIVE, E_CAMPAIGN_CLOSED, E_TOKEN_DISABLED.
 
@@ -898,7 +898,7 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; UPDATE_IMPLEMENTATION.md
+File/Module: All relevant modules; Documentation/UPDATE_IMPLEMENTATION.md
 
 Product intent: Indexer has a single, authoritative reference.
 
@@ -986,7 +986,7 @@ Acceptance: All scenarios pass with correct events and state.
 L) Documentation & DevEx
 L1. Update UPDATE_IMPLEMENTATION.md (developer‑facing)
 
-File: UPDATE_IMPLEMENTATION.md
+File: Documentation/UPDATE_IMPLEMENTATION.md
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
@@ -1002,7 +1002,7 @@ Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for b
 
 L2. Update README.md (product overview)
 
-File: README.md
+File: Documentation/README.md
 
 Product intent: Stakeholder‑friendly summary.
 
