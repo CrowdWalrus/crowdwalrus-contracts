@@ -1,183 +1,189 @@
-TL;DR — Critical‑path order (serial checkpoints)
+Crowd Walrus — Phase 2
 
-B0 — Pyth dependency in Move.toml
-Unblocks C1 and any code that imports the oracle modules.
+Optimal, Non‑Blocking Task Ordering (Updated)
 
-A1 → A2 → A3 — Core Campaign schema (goal, payout policy type/validation, stats_id + parameters_locked)
-Gives a stable Campaign type for everything else to plug into.
+What changed vs. previous plan
 
-D1 — CampaignStats (shared) + event
-So campaigns can link stats_id immediately.
+Fix: Swap E2 → E1 → E5 (Profile before ProfilesRegistry before helper).
 
-E1 → E2 → E5 — ProfilesRegistry, Profile object, helper
-Needed for profile auto‑creation in campaign creation and first‑time donations.
+Tidy: Fold A4 locking into G5 (donate core) instead of a separate step.
 
-H1 — Platform policy presets registry (cap‑gated)
-So campaigns can choose a preset; required for preset path of campaign creation.
+Tracks: Split Profiles and Badges into Track 2A and Track 2B.
 
-A5 + H2 — create_campaign wiring (accept preset or explicit policy, link stats, auto‑create profile, emit events)
-At this point, campaigns can be created end‑to‑end (minus donations).
+Slight move: B2 (staleness helper) moved earlier (after C1).
 
-B1 — TokenRegistry (cap‑gated) (+ events)
-Required before valuation and donation prechecks.
+Bootstrap timing: Keep B0a late (publish‑time init) so earlier PRs stay simple.
 
-C1 — PriceOracle quote_usd<T> (with Pyth)
-Enables USD valuation.
+Serial Critical Path (with checkpoints)
 
-D2 → D3 — Per‑coin stats DOF + views
-So donations can update totals and per‑coin counts.
+B0 — Add Pyth dependency in Move.toml (pin commit; lockfile)
 
-F1 — BadgeConfig (cap‑gated)
-Foundation for awards; needed before minting.
+A1 — Campaign: funding_goal_usd_micro (typed, immutable)
 
-F2 (+E2b) — DonorBadge (soulbound) + Display setup entry
-Prepares the collectible; awards depend on this type existing.
+A2 — Campaign: PayoutPolicy type + validation
 
-B2 — Effective staleness helper
-Small, but it finalizes the donation valuation inputs.
+A3 — Campaign: stats_id (write‑once) + parameters_locked flag
 
-G1 → G2 → G3 → G4 — Donation building blocks
+D1 — CampaignStats (shared) + CampaignStatsCreated event
 
-Precheck (campaign status + token enabled)
+E2 — Profile object (owned: totals, bitset, metadata) ← SWAPPED UP
 
-Split & send (floor; recipient remainder)
+E1 — ProfilesRegistry (address → profile_id; emits ProfileCreated) ← SWAPPED DOWN
 
-Valuation helper (registry + oracle + override)
+E5 — Helper: create_or_get_profile_for_sender (uses E2/E1)
 
-DonationReceived event
+H1 — Platform split presets registry (cap‑gated; events)
 
-A4 — Locking enforcement (toggle on first donation; updaters require unlocked)
-Hook the lock flip into the donation path, and guard mutators.
+A5 + H2 — create_campaign wiring (preset or explicit policy), link stats_id, auto‑create Profile via E5, emit events
 
-G5 — donate<T> core (slippage guard, split, stats update, lock, event, return USD)
-Now core donations work, minus badges and first‑time profile flow.
+★ Checkpoint α — Campaign creation works end‑to‑end (with presets and auto‑profiles).
 
-F3 — maybe_award_badges
-Enables awards for donation flows.
+B1 — TokenRegistry (cap‑gated; DOF; events)
 
-G6a — donate_and_award_first_time<T> (creates + transfers Profile internally; awards)
-One‑tap first‑donation path complete.
+C1 — PriceOracle quote_usd<T> (Pyth, floor to micro‑USD)
 
-G6b — donate_and_award<T> (requires &mut Profile)
-Repeat‑donor path complete.
+B2 — Effective staleness helper (min of registry vs. donor override) ← MOVED UP
 
-E3 → E4 — Standalone create_profile & update_profile_metadata (+ event)
-These are independent APIs; shipping them here avoids blocking donation work but still hits Phase‑2 acceptance.
+D2 — Per‑coin stats DOF on CampaignStats (+ increments)
 
-B0a — Publish‑time bootstrap init (create/share TokenRegistry, ProfilesRegistry, PlatformPolicy, BadgeConfig; mint AdminCap)
-Run after those modules exist so init can actually construct them; required for realistic integration and admin flows.
+D3 — Stats views (total + per‑coin getters)
 
-J1 — Event schema pass + doc sync
-Verify all fields and names match PRD; update the reference doc.
+F1 — BadgeConfig (cap‑gated thresholds & URIs; event)
 
-K1 — Unit tests per module (run continuously but ensure completion now)
+F2 + E2b — DonorBadge (soulbound) + Display setup entry (Publisher)
 
-K2 — Integration scenarios (end‑to‑end: campaign creation, first‑time donation, repeat donor, multi‑token, slippage/lock, concurrency)
+G1–G4 — Donations building blocks
 
-L1 → L2 — Developer docs + README refresh
-Lock in PTB recipes (oracle updates in PTB, Display registration, auto‑creation rules).
+G1 precheck (campaign active; token enabled)
 
-Why this order works
+G2 split & send (recipient gets remainder)
 
-Shortest critical path to “usable campaigns + donations”:
-Campaign type → CampaignStats → Profiles helper → Presets → create_campaign → TokenRegistry → Oracle → Stats DOF → Donation blocks → donate<T> → award helpers → first‑time + repeat entries.
+G3 valuation helper (registry + oracle + override)
 
-No circular waits:
-create_campaign needs Profiles helper (E5) and presets (H1), so both precede A5. Donation core (G5) requires TokenRegistry (B1), Oracle (C1), Stats (D2), and lock logic (A4), so those precede G5.
+G4 DonationReceived event shape
 
-Bootstrap init (B0a) is deliberately late:
-It depends on all registries/config types existing (B1, E1, H1, F1) and cap‑gating (I1/I2). Putting it right before integration keeps earlier PRs smaller and avoids re‑writing init as types evolve.
+★ Checkpoint β — Stats & badges ready; donation building blocks in place.
 
-Badges after donation core scaffolding, before donation “award” entries:
-You can test donate<T> without badges; then layer F3 + G6a/G6b to complete the UX.
+G5 — donate<T> core (includes A4 locking logic here)
 
-Parallelization plan (no blocking)
+slippage guard, split, stats update, toggle parameters_locked on first donation, emit event, return USD
 
-Assign 3–4 engineers across tracks; merge at the numbered checkpoints.
+★ Checkpoint γ — Core donations work (non‑custodial, USD valuation, stats, lock).
+
+F3 — maybe_award_badges (bitset, mint, BadgeMinted)
+
+G6a — donate_and_award_first_time<T> (create & transfer Profile internally; awards)
+
+G6b — donate_and_award<T> (repeat donors with &mut Profile)
+
+★ Checkpoint δ — Full donor UX (first‑time + repeat with badges).
+
+E3–E4 — Standalone create_profile and update_profile_metadata (+ event)
+
+B0a — Publish‑time bootstrap init: create/share TokenRegistry, ProfilesRegistry, PlatformPolicy, BadgeConfig; mint/transfer AdminCap
+
+★ Checkpoint ε — Publish‑ready (shared objects exist at deploy).
+
+J1 — Finalize event schemas & docs (names, fields, types, when emitted)
+
+K1 — Unit tests per module (assert events, aborts, boundaries)
+
+K2 — Integration scenarios (end‑to‑end PTBs, concurrency, slippage)
+
+L1–L2 — Developer docs & README refresh (PTB recipes, Publisher/Display, oracle update bundling, auto‑creation rules)
+
+★ Checkpoint ζ — Ship‑ready (green tests + docs).
+
+Parallelization Plan (tracks)
+
+Run these in parallel; merge at the numbered checkpoints.
 
 Track 1 — Campaign & Stats
 
-A1–A3 → D1 → A5 (+H2) → D2–D3 → A4
-Merge points: #3, #6, #9, #14
+A1 → A2 → A3 → D1 → A5+H2 → D2 → D3
 
-Track 2 — Profiles & Badges
+Merge at #5, #10, #15.
 
-E1–E2–E5 → (later) E3–E4
+Track 2A — Profiles
+
+E2 → E1 → E5 → E3 → E4
+
+Needed by #10 (create_campaign auto‑profile) and #21 (G6a).
+
+Merge at #8, #23.
+
+Track 2B — Badges
 
 F1 → F2(+E2b) → F3
-Merge points: #4, #10–#11, #16, #19
+
+Needed by #21–#22 (award flows).
+
+Merge at #17, #20.
 
 Track 3 — Tokens & Oracle
 
-B0 → B1(+I1) → C1 → B2
-Merge points: #1, #7, #8, #12
+B0 → B1 → C1 → B2
 
-Track 4 — Donations Orchestration
+Unblocks G3 and G5.
 
-G1–G4 → G5 → G6a → G6b
-Waits for #7–#9 (registry/oracle/stats) and #14 (lock enforcement) and #10–#11–#16 (badges) as noted.
-Merge points: #13, #15, #17, #18
+Merge at #13.
 
-Track 5 — Admin & Bootstrap, Tests & Docs
+Track 4 — Donations
 
-H1(+I1) done early (Track 1 dependency)
+G1–G4 → G5 (with locking) → G6a → G6b
 
-B0a after #7, #4, #10, #5 (all registries/config present) → #20
+Depends on #10, #13–#15, #17–#20 as noted.
 
-J1 after all event producers done → #21
+Merge at #18, #19, #21–#22.
 
-K1 incrementally per module; K2 after #20 → #23
+Track 5 — Admin/Bootstrap/Tests/Docs
 
-L1–L2 last → #24
+H1 early for presets (used by #10).
 
-“What unlocks what” (quick dependency map)
+B0a at #24 (after registries/configs exist).
+
+J1 after all event emitters (#25).
+
+K1/K2 then L1–L2 (#26–#28).
+
+Dependency Map (updated)
 
 B0 → C1
 
 A1–A3 → D1 → A5
 
-E1–E2 → E5 → A5 & G6a
+E2 → E1 → E5 → A5 & G6a ← fixed
 
 H1 → A5 (preset path)
 
-B1 → G1/G3/C1/B2/G5
+B1 → G1 / G3 / C1 / B2 / G5
 
 C1 + B2 → G3 → G5
 
-D2 → G5 (per‑coin stats)
+D2 → G5
 
 F1 + F2 → F3 → G6a/G6b
 
-G1–G4 + A4 → G5 → G6a/G6b
+G1–G4 → G5 → G6a/G6b
 
-B1 + E1 + H1 + F1 (+ I1/I2) → B0a
+B1 + E1 + H1 + F1 → B0a
 
-All event emitters → J1
+All event producers → J1
 
 Everything → K2 → L1/L2
 
-Practical checkpoints (ship small, test as you go)
+Practical notes
 
-Checkpoint α (after #6): Campaign creation works with presets & auto‑profiles; CampaignStatsCreated emitted.
+Cap‑gating (I1/I2): Implement inside B1/H1/F1 as you write them; don’t defer.
 
-Checkpoint β (after #9): Per‑coin stats in place; read‑only views OK.
+Error codes: Lock early in each module to stabilize tests.
 
-Checkpoint γ (after #15): Core donate<T> works end‑to‑end with USD valuation, slippage guard, splits, aggregates, lock toggle, event.
+Locking (A4): Implement solely inside G5 (toggle + mutator guards) to avoid duplication.
 
-Checkpoint δ (after #18): Full donor UX: first‑time + repeat with badges.
+Option<u64> override: Plumb opt_max_age_ms across B2 → G3 → G5 once.
 
-Checkpoint ε (after #20): Realistic environment: shared registries/configs auto‑created at publish; AdminCap minted.
+Display: After setup_badge_display(pub, ctx), call display::update_version; document Publisher flow in L1.
 
-Checkpoint ζ (after #23): All unit + integration tests green; docs can be finalized.
+Checkpoint discipline
 
-Notes & tiny optimizations
-
-Implement cap‑gating (I1/I2) inside B1, H1, F1 when you write them (don’t wait for a separate step).
-
-Define shared error codes early in each module to avoid churn when tests start asserting on them.
-
-For A4 locking, wire the toggling into G5 once, then block the campaign updaters with a simple assert_unlocked helper—keeps the surface clean.
-
-Add the opt_max_age_ms: Option<u64> plumbing when you build B2/G3/G5 (avoid a second pass).
-
-For Display, remember display::update_version in the admin path after setup_badge_display; document the Publisher flow in L1 (as your E2b note specifies).
+At each checkpoint (α…ζ) run sui move test and deploy to localnet to catch cross‑module breaks early.
