@@ -137,6 +137,8 @@ Err codes: E_INVALID_BPS, E_ZERO_ADDRESS.
 
 A3. stats_id + parameters_locked
 
+✅ COMPLETED (Oct 23, 2025) — Added write-once stats link + lock flag with unit tests.
+
 File/Module: sources/campaign.move
 
 Product intent: Fast aggregate lookups; protect donors post‑first donation.
