@@ -76,6 +76,7 @@ Err codes: Reuse module-specific duplicate errors if init rerun.
 
 A) Campaign schema & lifecycle (existing files)
 A1. Typed funding goal on Campaign
+✅ COMPLETED (Oct 23, 2025) — Field + getter wired; tests updated; Sui dependency pinned to mainnet-v1.57.3 for toolchain parity.
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
