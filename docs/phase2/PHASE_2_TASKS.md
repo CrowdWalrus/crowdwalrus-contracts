@@ -104,6 +104,7 @@ Acceptance: Field set/read; no mutation path.
 
 Deps: A5.
 
+✅ COMPLETED (Oct 23, 2025)
 A2. Typed PayoutPolicy on Campaign
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
@@ -119,6 +120,8 @@ Field payout_policy + getters; creation validation (bps ≤ 10_000, addresses �
 Preconditions: Valid bps/addresses.
 
 Postconditions: Policy stored; later locked (A4).
+
+Notes: Recipient payout address now lives only inside PayoutPolicy for canonical storage.
 
 Patterns: Basis‑points; strong typing.
 
