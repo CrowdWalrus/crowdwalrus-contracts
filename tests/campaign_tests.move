@@ -322,6 +322,68 @@ public fun test_campaign_funding_goal_getter() {
     scenario.end();
 }
 
+#[test]
+public fun test_campaign_stats_id_defaults_and_setter() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Stats Link"),
+        utf8(b"Verify stats linkage defaults"),
+        b"statslink",
+        vector::empty(),
+        vector::empty(),
+        1_000,
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+
+    assert!(!campaign::parameters_locked(&campaign));
+    assert_eq!(object::id_to_address(&campaign::stats_id(&campaign)), @0x0);
+
+    let expected_stats_id = object::id_from_address(@0x123);
+    campaign::set_stats_id(&mut campaign, expected_stats_id);
+    assert_eq!(campaign::stats_id(&campaign), expected_stats_id);
+
+    ts::return_shared(campaign);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = campaign::E_STATS_ALREADY_SET, location = 0x0::campaign)]
+public fun test_campaign_stats_id_double_set_fails() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Stats Write Once"),
+        utf8(b"Ensure stats id cannot reset"),
+        b"stats-write-once",
+        vector::empty(),
+        vector::empty(),
+        1_000,
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+
+    campaign::set_stats_id(&mut campaign, object::id_from_address(@0x111));
+    campaign::set_stats_id(&mut campaign, object::id_from_address(@0x222));
+
+    ts::return_shared(campaign);
+    scenario.end();
+}
+
 // TODO(human): Add test for funding_goal immutability
 // Test name: test_update_campaign_metadata_funding_goal_immutable
 // This test should verify that attempting to update the "funding_goal"
