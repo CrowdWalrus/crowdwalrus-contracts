@@ -28,6 +28,7 @@ public struct Campaign has key, store {
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
+    funding_goal_usd_micro: u64,
     recipient_address: address, // Immutable - where donations are sent
     start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
     end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
@@ -142,6 +143,7 @@ public(package) fun new<App: drop>(
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
+    funding_goal_usd_micro: u64,
     recipient_address: address,
     start_date: u64,
     end_date: u64,
@@ -161,6 +163,7 @@ public(package) fun new<App: drop>(
         short_description,
         subdomain_name,
         metadata,
+        funding_goal_usd_micro,
         recipient_address,
         start_date,
         end_date,
@@ -187,6 +190,10 @@ public(package) fun new<App: drop>(
 
 public fun subdomain_name(campaign: &Campaign): String {
     campaign.subdomain_name
+}
+
+public fun funding_goal_usd_micro(campaign: &Campaign): u64 {
+    campaign.funding_goal_usd_micro
 }
 
 public fun metadata(campaign: &Campaign): VecMap<String, String> {
