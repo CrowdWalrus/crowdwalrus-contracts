@@ -14,6 +14,8 @@ Global conventions (apply to all tasks)
 B0) Build & Dependencies (new upfront)
 B0. Add Pyth dependency in Move.toml
 
+✅ COMPLETED (Oct 23, 2025) — Wormhole auto-resolved as transitive dependency. See docs/phase2/DEPENDENCIES.md.
+
 File/Module: Move.toml (package manifest)
 
 Product intent: Enable on‑chain price reads from Pyth for USD valuation.
@@ -32,11 +34,11 @@ Postconditions: Project builds with Pyth imported.
 
 Move patterns: External package pinning; reproducible builds.
 
-Security/Edges: Pin to a stable commit; record the exact revision in Documentation/last_deploy.md.
+Security/Edges: Pin to a stable commit; record the exact revision in docs/phase2/DEPENDENCIES.md.
 
 Tests: sui move build succeeds; Pyth modules resolvable by other tasks.
 
-Acceptance: Build green; Move.lock updated; Documentation/last_deploy.md lists the pinned revision.
+Acceptance: Build green; Move.lock updated; docs/phase2/DEPENDENCIES.md lists the pinned revision.
 
 Deps: None.
 
