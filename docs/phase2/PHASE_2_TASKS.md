@@ -112,11 +112,11 @@ Product intent: Trustworthy on‑chain split commitment.
 
 Implement:
 
-PayoutPolicy { platform_bps: u16, platform_sink: address, recipient_sink: address }.
+PayoutPolicy { platform_bps: u16, platform_address: address, recipient_address: address }.
 
-Field payout_policy + getters; creation validation (bps ≤ 10_000, sinks ≠ zero).
+Field payout_policy + getters; creation validation (bps ≤ 10_000, addresses ≠ zero).
 
-Preconditions: Valid bps/sinks.
+Preconditions: Valid bps/addresses.
 
 Postconditions: Policy stored; later locked (A4).
 
@@ -130,7 +130,7 @@ Acceptance: Validated; getters return expected.
 
 Deps: A5, G2.
 
-Err codes: E_INVALID_BPS, E_ZERO_SINK.
+Err codes: E_INVALID_BPS, E_ZERO_ADDRESS.
 
 A3. stats_id + parameters_locked
 
@@ -216,7 +216,7 @@ Acceptance: Correct linking; profile auto-creation works; events present.
 
 Deps: C1 (CampaignStats), E1-E2 and E5 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
 
-Err codes: E_INVALID_BPS, E_ZERO_SINK, time validation errors.
+Err codes: E_INVALID_BPS, E_ZERO_ADDRESS, time validation errors.
 
 B) Token & oracle infrastructure
 B1. TokenRegistry (per‑token metadata & staleness)
@@ -680,7 +680,7 @@ Implement:
 
 Compute platform and recipient per basis points; transfer; return sent amounts.
 
-Preconditions: Nonzero amount; sinks valid.
+Preconditions: Nonzero amount; addresses valid.
 
 Postconditions: Funds routed; no custody.
 
@@ -730,7 +730,7 @@ Product intent: Indexer uses a single event to power donation feeds.
 
 Implement:
 
-Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms.
+Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
 
 Preconditions: Values computed.
 
@@ -839,13 +839,13 @@ Product intent: Business can add/adjust defaults (e.g., 5%→10%) for new campai
 
 Implement:
 
-Shared registry name -> { platform_bps, platform_sink, enabled } with AdminCap-gated add/update/enable/disable.
+Shared registry name -> { platform_bps, platform_address, enabled } with AdminCap-gated add/update/enable/disable.
 
 Events: PolicyAdded, PolicyUpdated, PolicyDisabled.
 
 Hook into B0a bootstrap so the registry is created and shared exactly once during package init.
 
-Preconditions: Valid bps & sink; unique name.
+Preconditions: Valid bps & address; unique name.
 
 Postconditions: Presets set for future campaigns.
 
@@ -859,7 +859,7 @@ Acceptance: Pass.
 
 Deps: I1.
 
-Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_SINK.
+Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_ADDRESS.
 
 H2. create_campaign supports preset or explicit policy
 
