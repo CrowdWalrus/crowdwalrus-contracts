@@ -32,6 +32,7 @@ public fun test_set_is_active() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -83,6 +84,7 @@ public fun test_update_campaign_basics_happy_path() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -172,6 +174,7 @@ public fun test_update_campaign_metadata_happy_path() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -223,6 +226,35 @@ public fun test_update_campaign_metadata_happy_path() {
     scenario.end();
 }
 
+#[test]
+public fun test_campaign_funding_goal_getter() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Funding Goal Check"),
+        utf8(b"Ensure typed goal stored"),
+        b"goalcheck",
+        vector::empty(),
+        vector::empty(),
+        2_500_000,
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    {
+        scenario.next_tx(campaign_owner);
+        let campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        assert_eq!(campaign::funding_goal_usd_micro(&campaign), 2_500_000);
+        ts::return_shared(campaign);
+    };
+
+    scenario.end();
+}
+
 // TODO(human): Add test for funding_goal immutability
 // Test name: test_update_campaign_metadata_funding_goal_immutable
 // This test should verify that attempting to update the "funding_goal"
@@ -241,6 +273,7 @@ public fun test_update_campaign_metadata_funding_goal_immutable() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -283,6 +316,7 @@ public fun test_update_campaign_metadata_recipient_address_immutable() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -324,6 +358,7 @@ public fun test_update_campaign_metadata_key_value_mismatch() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -365,6 +400,7 @@ public fun test_update_active_status_changes() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -434,6 +470,7 @@ public fun test_update_active_status_no_op() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -479,6 +516,7 @@ public fun test_mark_deleted_sets_flags() {
         b"markdeleted",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         campaign_owner,
         0,
         U64_MAX,
@@ -515,6 +553,7 @@ public fun test_add_update_rejects_deleted_campaign() {
         b"noupdates",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         campaign_owner,
         0,
         U64_MAX,
@@ -567,6 +606,7 @@ public fun test_create_campaign_start_date_in_past() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            1_000_000,
             USER1, // recipient_address
             0,  // This is now in the past since we advanced the clock
             U64_MAX,
@@ -588,6 +628,7 @@ public fun test_create_campaign_invalid_date_range() {
         b"invalid_date_range",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         100,
         50,
@@ -609,6 +650,7 @@ public fun test_create_campaign_invalid_recipient_address() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         @0x0,
         0,
         U64_MAX,
@@ -632,6 +674,7 @@ public fun test_add_update_happy_path() {
         b"update",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -724,6 +767,7 @@ public fun test_add_multiple_updates_sequences() {
         b"multi",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -827,6 +871,7 @@ public fun test_add_update_empty_metadata_allowed() {
         b"empty",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -879,6 +924,7 @@ public fun test_add_update_wrong_cap_fails() {
         b"companya",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -892,6 +938,7 @@ public fun test_add_update_wrong_cap_fails() {
         b"companyb",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER2,
         0,
         U64_MAX,
@@ -933,6 +980,7 @@ public fun test_add_update_key_value_mismatch() {
         b"mismatch",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -975,6 +1023,7 @@ public fun test_add_update_duplicate_metadata_keys() {
         b"dup",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1015,6 +1064,7 @@ public fun test_update_author_after_cap_transfer() {
         b"transfer",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1069,6 +1119,7 @@ public fun test_update_try_get_missing_returns_none() {
         b"none",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1097,6 +1148,7 @@ public fun test_get_update_id_missing_sequence_aborts() {
         b"noupdates",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1122,6 +1174,7 @@ public fun test_add_update_emits_event() {
         b"event",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,

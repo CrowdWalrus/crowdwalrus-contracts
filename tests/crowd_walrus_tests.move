@@ -43,6 +43,7 @@ public fun test_create_campaign() {
             b"sub",
             vector[string::utf8(b"key1"), string::utf8(b"key2")],
             vector[string::utf8(b"value1"), string::utf8(b"value2")],
+            1_000_000,
             USER1, // recipient_address
             0,
             U64_MAX,
@@ -69,6 +70,7 @@ public fun test_create_campaign() {
         assert_eq!(metadata.length(), 2);
         assert_eq!(*metadata.get(&string::utf8(b"key1")), string::utf8(b"value1"));
         assert_eq!(*metadata.get(&string::utf8(b"key2")), string::utf8(b"value2"));
+        assert_eq!(campaign::funding_goal_usd_micro(&campaign), 1_000_000);
         // Clean up
         tu::destroy(campaign_owner_cap);
         ts::return_shared(campaign);
@@ -92,6 +94,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            500_000,
             USER1, // recipient_address
             0,
             U64_MAX,
@@ -109,6 +112,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            500_000,
             USER2, // recipient_address
             0,
             U64_MAX,
@@ -147,6 +151,7 @@ public fun test_verify_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            750_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -229,6 +234,7 @@ public fun test_delete_campaign_happy_path() {
         b"delete",
         vector::empty(),
         vector::empty(),
+        900_000,
         owner,
         0,
         U64_MAX,
@@ -313,6 +319,7 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
         b"deletefail",
         vector::empty(),
         vector::empty(),
+        700_000,
         owner,
         0,
         U64_MAX,
@@ -371,6 +378,7 @@ public fun test_delete_campaign_requires_matching_cap() {
         b"deletea",
         vector::empty(),
         vector::empty(),
+        600_000,
         owner,
         0,
         U64_MAX,
@@ -389,6 +397,7 @@ public fun test_delete_campaign_requires_matching_cap() {
         b"deleteb",
         vector::empty(),
         vector::empty(),
+        600_000,
         owner,
         0,
         U64_MAX,
@@ -458,6 +467,7 @@ public fun test_verify_campaign_twice() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            800_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -510,6 +520,7 @@ public fun test_delete_campaign_tolerates_missing_subdomain() {
         b"deletemissing",
         vector::empty(),
         vector::empty(),
+        650_000,
         owner,
         0,
         U64_MAX,
@@ -597,6 +608,7 @@ public fun test_unverify_invalid_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            800_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -654,6 +666,7 @@ public fun create_test_campaign(
     subname: vector<u8>,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    funding_goal_usd_micro: u64,
     recipient_address: address,
     start_date: u64,
     end_date: u64,
@@ -673,6 +686,7 @@ public fun create_test_campaign(
         subdomain_name,
         metadata_keys,
         metadata_values,
+        funding_goal_usd_micro,
         recipient_address,
         start_date,
         end_date,
