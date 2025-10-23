@@ -2,9 +2,10 @@
 
 [move]
 version = 3
-manifest_digest = "4537EAAE4D035BA0CABAEE224BBC4087AF19761F74FCD9D345A31F480B57EE16"
-deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
+manifest_digest = "DD1B11FD61F1CABC4E78ED94E4231961F13C05BA993D69933C9A3F8BBAB1C866"
+deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
 dependencies = [
+  { id = "Pyth", name = "Pyth" },
   { id = "Sui", name = "Sui" },
   { id = "denylist", name = "denylist" },
   { id = "subdomains", name = "subdomains" },
@@ -16,11 +17,28 @@ id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/mainnet", subdir = "crates/sui-framework/packages/move-stdlib" }
 
 [[move.package]]
+id = "Pyth"
+source = { git = "https://github.com/pyth-network/pyth-crosschain.git", rev = "sui-contract-testnet", subdir = "target_chains/sui/contracts" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "Wormhole", name = "Wormhole" },
+]
+
+[[move.package]]
 id = "Sui"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "framework/mainnet", subdir = "crates/sui-framework/packages/sui-framework" }
 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
+]
+
+[[move.package]]
+id = "Wormhole"
+source = { git = "https://github.com/wormhole-foundation/wormhole.git", rev = "sui/testnet", subdir = "sui/wormhole" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
