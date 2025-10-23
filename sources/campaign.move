@@ -18,6 +18,7 @@ const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
 const E_CAMPAIGN_DELETED: u64 = 11;
 const E_INVALID_BPS: u64 = 12;
 const E_ZERO_ADDRESS: u64 = 13;
+const E_STATS_ALREADY_SET: u64 = 14;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
@@ -68,12 +69,14 @@ public struct Campaign has key, store {
     metadata: VecMap<String, String>,
     funding_goal_usd_micro: u64,
     payout_policy: PayoutPolicy,
+    stats_id: object::ID,
     start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
     end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
     created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
     is_deleted: bool,
+    parameters_locked: bool,
     deleted_at_ms: std::option::Option<u64>,
     // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
     // Updates now stored as frozen objects referenced via dynamic fields.
@@ -202,12 +205,14 @@ public(package) fun new<App: drop>(
         metadata,
         funding_goal_usd_micro,
         payout_policy,
+        stats_id: object::id_from_address(@0x0),
         start_date,
         end_date,
         created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
         is_deleted: false,
+        parameters_locked: false,
         deleted_at_ms: std::option::none(),
         next_update_seq: 0,
     };
@@ -223,6 +228,11 @@ public(package) fun new<App: drop>(
 
     transfer::share_object(campaign);
     (campaign_id, campaign_owner_cap)
+}
+
+public(package) fun set_stats_id(campaign: &mut Campaign, stats_id: object::ID) {
+    assert!(object::id_to_address(&campaign.stats_id) == @0x0, E_STATS_ALREADY_SET);
+    campaign.stats_id = stats_id;
 }
 
 public fun subdomain_name(campaign: &Campaign): String {
@@ -263,6 +273,14 @@ public fun payout_policy_platform_address(policy: &PayoutPolicy): address {
 
 public fun payout_policy_recipient_address(policy: &PayoutPolicy): address {
     policy.recipient_address
+}
+
+public fun stats_id(campaign: &Campaign): object::ID {
+    campaign.stats_id
+}
+
+public fun parameters_locked(campaign: &Campaign): bool {
+    campaign.parameters_locked
 }
 
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
