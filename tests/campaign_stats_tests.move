@@ -39,16 +39,13 @@ public fun test_create_for_campaign_happy_path() {
 
     assert_eq!(sui_object::id_to_address(&campaign::stats_id(&campaign_obj)), @0x0);
 
-    let stats = campaign_stats::create_for_campaign(
+    let stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
         ctx(&mut scenario),
     );
 
-    let stats_id = sui_object::id(&stats);
     assert_eq!(campaign::stats_id(&campaign_obj), stats_id);
-
-    sui::transfer::public_share_object(stats);
 
     ts::return_shared(campaign_obj);
     ts::return_shared(clock);
@@ -85,13 +82,11 @@ public fun test_create_for_campaign_twice_aborts() {
     let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
     let clock = scenario.take_shared<Clock>();
 
-    let stats = campaign_stats::create_for_campaign(
+    let _stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
         ctx(&mut scenario),
     );
-
-    sui::transfer::public_share_object(stats);
 
     ts::return_shared(campaign_obj);
     ts::return_shared(clock);
@@ -101,13 +96,11 @@ public fun test_create_for_campaign_twice_aborts() {
     let clock_again = scenario.take_shared<Clock>();
 
     // This call should abort because stats were already created.
-    let stats_again = campaign_stats::create_for_campaign(
+    let _stats_again_id = campaign_stats::create_for_campaign(
         &mut campaign_again,
         &clock_again,
         ctx(&mut scenario),
     );
-
-    sui::transfer::public_share_object(stats_again);
 
     ts::return_shared(campaign_again);
     ts::return_shared(clock_again);
