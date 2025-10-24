@@ -60,7 +60,7 @@ fun assert_valid_payout_policy_fields(
     assert!(recipient_address != @0x0, E_ZERO_ADDRESS);
 }
 
-public struct Campaign has key, store {
+public struct Campaign has key {
     id: object::UID,
     admin_id: object::ID,
     name: String,
