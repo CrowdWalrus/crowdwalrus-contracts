@@ -205,7 +205,7 @@ Extend to accept funding_goal_usd_micro and PayoutPolicy or preset (H2).
 
 Call profiles::create_or_get_profile_for_sender (E5) to handle registry lookup and conditional creation; this avoids duplicating logic.
 
-After campaign::new, call campaign_stats::create_for_campaign and set stats_id. Emit CampaignStatsCreated.
+After campaign::new, call campaign_stats::create_for_campaign (returns shared stats_id and sets it internally). Emit CampaignStatsCreated.
 
 Preconditions: Valid time & policy; ProfilesRegistry available.
 
@@ -320,9 +320,9 @@ Product intent: Live totals without scanning events.
 
 Implement:
 
-Shared CampaignStats { parent_id, total_usd_micro }.
+Shared CampaignStats { parent_id, total_usd_micro } (has key only).
 
-create_for_campaign(&Campaign, &mut TxContext) -> CampaignStats; emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
+create_for_campaign(&mut Campaign, &Clock, &mut TxContext) -> object::ID; share internally and emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
 
 Preconditions: Not previously created.
 
