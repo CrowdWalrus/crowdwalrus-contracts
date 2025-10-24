@@ -11,7 +11,7 @@ public fun e_stats_already_exists(): u64 {
     E_STATS_ALREADY_EXISTS
 }
 
-public struct CampaignStats has key, store {
+public struct CampaignStats has key {
     id: sui_object::UID,
     parent_id: sui_object::ID,
     total_usd_micro: u64,
@@ -27,7 +27,7 @@ public(package) fun create_for_campaign(
     campaign: &mut Campaign,
     clock: &Clock,
     ctx: &mut sui::tx_context::TxContext,
-): CampaignStats {
+): sui_object::ID {
     assert!(
         sui_object::id_to_address(&campaign::stats_id(campaign)) == @0x0,
         E_STATS_ALREADY_EXISTS,
@@ -46,11 +46,13 @@ public(package) fun create_for_campaign(
 
     campaign::set_stats_id(campaign, stats_id);
 
+    sui::transfer::share_object(stats);
+
     event::emit(CampaignStatsCreated {
         campaign_id,
         stats_id,
         timestamp_ms,
     });
 
-    stats
+    stats_id
 }
