@@ -25,6 +25,8 @@ const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
 
+const DEFAULT_PLATFORM_BPS: u16 = 500;
+
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
 const E_CAMPAIGN_DELETED: u64 = 11;
 const E_APP_NOT_AUTHORIZED: u64 = 1;
@@ -43,6 +45,7 @@ public fun test_create_campaign() {
             b"sub",
             vector[string::utf8(b"key1"), string::utf8(b"key2")],
             vector[string::utf8(b"value1"), string::utf8(b"value2")],
+            1_000_000,
             USER1, // recipient_address
             0,
             U64_MAX,
@@ -69,6 +72,10 @@ public fun test_create_campaign() {
         assert_eq!(metadata.length(), 2);
         assert_eq!(*metadata.get(&string::utf8(b"key1")), string::utf8(b"value1"));
         assert_eq!(*metadata.get(&string::utf8(b"key2")), string::utf8(b"value2"));
+        assert_eq!(campaign::funding_goal_usd_micro(&campaign), 1_000_000);
+        assert_eq!(campaign::payout_platform_bps(&campaign), DEFAULT_PLATFORM_BPS);
+        assert_eq!(campaign::payout_platform_address(&campaign), ADMIN);
+        assert_eq!(campaign::payout_recipient_address(&campaign), USER1);
         // Clean up
         tu::destroy(campaign_owner_cap);
         ts::return_shared(campaign);
@@ -92,6 +99,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            500_000,
             USER1, // recipient_address
             0,
             U64_MAX,
@@ -109,6 +117,7 @@ public fun test_create_campaign_with_duplicate_subdomain_name() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            500_000,
             USER2, // recipient_address
             0,
             U64_MAX,
@@ -147,6 +156,7 @@ public fun test_verify_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            750_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -229,6 +239,7 @@ public fun test_delete_campaign_happy_path() {
         b"delete",
         vector::empty(),
         vector::empty(),
+        900_000,
         owner,
         0,
         U64_MAX,
@@ -313,6 +324,7 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
         b"deletefail",
         vector::empty(),
         vector::empty(),
+        700_000,
         owner,
         0,
         U64_MAX,
@@ -371,6 +383,7 @@ public fun test_delete_campaign_requires_matching_cap() {
         b"deletea",
         vector::empty(),
         vector::empty(),
+        600_000,
         owner,
         0,
         U64_MAX,
@@ -389,6 +402,7 @@ public fun test_delete_campaign_requires_matching_cap() {
         b"deleteb",
         vector::empty(),
         vector::empty(),
+        600_000,
         owner,
         0,
         U64_MAX,
@@ -458,6 +472,7 @@ public fun test_verify_campaign_twice() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            800_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -510,6 +525,7 @@ public fun test_delete_campaign_tolerates_missing_subdomain() {
         b"deletemissing",
         vector::empty(),
         vector::empty(),
+        650_000,
         owner,
         0,
         U64_MAX,
@@ -597,6 +613,7 @@ public fun test_unverify_invalid_campaign() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            800_000,
             campaign_owner, // recipient_address
             0,
             U64_MAX,
@@ -654,7 +671,38 @@ public fun create_test_campaign(
     subname: vector<u8>,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    funding_goal_usd_micro: u64,
     recipient_address: address,
+    start_date: u64,
+    end_date: u64,
+): ID {
+    create_test_campaign_with_policy(
+        sc,
+        title,
+        short_description,
+        subname,
+        metadata_keys,
+        metadata_values,
+        funding_goal_usd_micro,
+        recipient_address,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        start_date,
+        end_date,
+    )
+}
+
+public fun create_test_campaign_with_policy(
+    sc: &mut Scenario,
+    title: String,
+    short_description: String,
+    subname: vector<u8>,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    funding_goal_usd_micro: u64,
+    recipient_address: address,
+    platform_bps: u16,
+    platform_address: address,
     start_date: u64,
     end_date: u64,
 ): ID {
@@ -673,7 +721,10 @@ public fun create_test_campaign(
         subdomain_name,
         metadata_keys,
         metadata_values,
+        funding_goal_usd_micro,
         recipient_address,
+        platform_bps,
+        platform_address,
         start_date,
         end_date,
         ctx(sc),

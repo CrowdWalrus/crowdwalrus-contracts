@@ -16,10 +16,49 @@ const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;
 const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;
 const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
 const E_CAMPAIGN_DELETED: u64 = 11;
+const E_INVALID_BPS: u64 = 12;
+const E_ZERO_ADDRESS: u64 = 13;
+const E_STATS_ALREADY_SET: u64 = 14;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
+public fun e_invalid_bps(): u64 { E_INVALID_BPS }
+public fun e_zero_address(): u64 { E_ZERO_ADDRESS }
 public fun e_campaign_deleted(): u64 { E_CAMPAIGN_DELETED }
+public fun e_recipient_address_invalid(): u64 { E_RECIPIENT_ADDRESS_INVALID }
+
+public struct PayoutPolicy has copy, drop, store {
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+}
+
+public fun new_payout_policy(
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+): PayoutPolicy {
+    assert_valid_payout_policy_fields(platform_bps, platform_address, recipient_address);
+    PayoutPolicy { platform_bps, platform_address, recipient_address }
+}
+
+fun assert_valid_payout_policy(policy: &PayoutPolicy) {
+    assert_valid_payout_policy_fields(
+        policy.platform_bps,
+        policy.platform_address,
+        policy.recipient_address,
+    );
+}
+
+fun assert_valid_payout_policy_fields(
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+) {
+    assert!(platform_bps <= 10_000, E_INVALID_BPS);
+    assert!(platform_address != @0x0, E_ZERO_ADDRESS);
+    assert!(recipient_address != @0x0, E_ZERO_ADDRESS);
+}
 
 public struct Campaign has key, store {
     id: object::UID,
@@ -28,13 +67,16 @@ public struct Campaign has key, store {
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
-    recipient_address: address, // Immutable - where donations are sent
+    funding_goal_usd_micro: u64,
+    payout_policy: PayoutPolicy,
+    stats_id: object::ID,
     start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
     end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
     created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
     is_deleted: bool,
+    parameters_locked: bool,
     deleted_at_ms: std::option::Option<u64>,
     // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
     // Updates now stored as frozen objects referenced via dynamic fields.
@@ -132,7 +174,6 @@ public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
 /// Validation: Only enforces date range (start < end). No validation for:
 /// - String lengths (name, short_description) - frontend handles
 /// - Metadata size limits - frontend handles
-/// - Recipient address non-zero - frontend handles
 ///
 /// This is intentional to maximize flexibility.
 public(package) fun new<App: drop>(
@@ -142,7 +183,8 @@ public(package) fun new<App: drop>(
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
-    recipient_address: address,
+    funding_goal_usd_micro: u64,
+    payout_policy: PayoutPolicy,
     start_date: u64,
     end_date: u64,
     clock: &Clock,
@@ -151,8 +193,8 @@ public(package) fun new<App: drop>(
     let creation_time_ms = clock::timestamp_ms(clock);
     // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
-    assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
     assert!(start_date >= creation_time_ms, E_START_DATE_IN_PAST);
+    assert_valid_payout_policy(&payout_policy);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -161,13 +203,16 @@ public(package) fun new<App: drop>(
         short_description,
         subdomain_name,
         metadata,
-        recipient_address,
+        funding_goal_usd_micro,
+        payout_policy,
+        stats_id: object::id_from_address(@0x0),
         start_date,
         end_date,
         created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
         is_deleted: false,
+        parameters_locked: false,
         deleted_at_ms: std::option::none(),
         next_update_seq: 0,
     };
@@ -185,12 +230,57 @@ public(package) fun new<App: drop>(
     (campaign_id, campaign_owner_cap)
 }
 
+public(package) fun set_stats_id(campaign: &mut Campaign, stats_id: object::ID) {
+    assert!(object::id_to_address(&campaign.stats_id) == @0x0, E_STATS_ALREADY_SET);
+    campaign.stats_id = stats_id;
+}
+
 public fun subdomain_name(campaign: &Campaign): String {
     campaign.subdomain_name
 }
 
+public fun funding_goal_usd_micro(campaign: &Campaign): u64 {
+    campaign.funding_goal_usd_micro
+}
+
 public fun metadata(campaign: &Campaign): VecMap<String, String> {
     campaign.metadata
+}
+
+public fun payout_policy(campaign: &Campaign): &PayoutPolicy {
+    &campaign.payout_policy
+}
+
+public fun payout_platform_bps(campaign: &Campaign): u16 {
+    campaign.payout_policy.platform_bps
+}
+
+public fun payout_platform_address(campaign: &Campaign): address {
+    campaign.payout_policy.platform_address
+}
+
+public fun payout_recipient_address(campaign: &Campaign): address {
+    campaign.payout_policy.recipient_address
+}
+
+public fun payout_policy_platform_bps(policy: &PayoutPolicy): u16 {
+    policy.platform_bps
+}
+
+public fun payout_policy_platform_address(policy: &PayoutPolicy): address {
+    policy.platform_address
+}
+
+public fun payout_policy_recipient_address(policy: &PayoutPolicy): address {
+    policy.recipient_address
+}
+
+public fun stats_id(campaign: &Campaign): object::ID {
+    campaign.stats_id
+}
+
+public fun parameters_locked(campaign: &Campaign): bool {
+    campaign.parameters_locked
 }
 
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {

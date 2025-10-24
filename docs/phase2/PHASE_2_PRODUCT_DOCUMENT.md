@@ -38,7 +38,7 @@ Lock critical campaign parameters after first donation.
 
 2.2 Non‑Goals
 
-Holding/withdrawing funds (we route direct to sinks).
+Holding/withdrawing funds (we route direct to addresses).
 
 Off‑chain storage design (beyond Walrus image URIs and indexer guidance).
 
@@ -109,15 +109,15 @@ Updates BadgeConfig (thresholds + image URIs).
 
 Typed Funding Goal: funding_goal_usd_micro: u64 stored in Campaign; immutable after creation.
 
-PayoutPolicy (per campaign): {platform_bps, platform_sink, recipient_sink}; validated at creation; locks on first donation.
+PayoutPolicy (per campaign): {platform_bps, platform_address, recipient_address}; validated at creation; locks on first donation.
 
-Parameter Locking: On first donation, set parameters_locked = true. After this, cannot change: start/end times, funding goal, payout policy; can change: name/description (emit events). Recipient address stays immutable.
+Parameter Locking: On first donation, set parameters_locked = true. After this, cannot change: start/end times, funding goal, payout policy; can change: name/description (emit events). Recipient address (via the payout policy) stays immutable.
 
 Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
 
 Acceptance Criteria
 
-Creating a campaign with invalid bps (>10_000) or zero sinks fails.
+Creating a campaign with invalid bps (>10_000) or zero addresses fails.
 
 After first donation, attempts to change locked fields abort with explicit error.
 
@@ -165,7 +165,7 @@ CampaignStatsCreated includes campaign_id and stats_id.
 
 precheck: campaign active, not deleted, within dates; token enabled.
 
-split_and_send: basis‑points split; recipient gets remainder; immediate transfers to sinks.
+split_and_send: basis‑points split; recipient gets remainder; immediate transfers to addresses.
 
 donate<T>: precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms.
 
@@ -179,7 +179,7 @@ donate_and_award<T>: For repeat donors. Requires &mut Profile parameter (user's 
 
 Event Requirements
 
-DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms.
+DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
 
 Acceptance Criteria
 
@@ -234,7 +234,7 @@ BadgeConfig validation (lengths equal, ascending).
 
 5.7 Split Policy Presets (Admin, Future Campaigns)
 
-SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_sink}) managed by AdminCap.
+SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_address}) managed by AdminCap.
 
 Create Campaign: Accept either policy_name to snapshot a preset OR explicit PayoutPolicy.
 
@@ -250,12 +250,12 @@ Creating with preset resolves to stored values; existing campaigns remain unaffe
 Event	When	Fields (required)
 CampaignStatsCreated	On stats creation	campaign_id, stats_id, timestamp_ms
 CampaignParametersLocked	First donation	campaign_id, timestamp_ms
-DonationReceived	Each donation	campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms
+DonationReceived	Each donation	campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms
 ProfileCreated	Profile first creation	owner, profile_id, timestamp_ms
 ProfileMetadataUpdated	User updates profile	profile_id, owner, key, value, timestamp_ms
 BadgeConfigUpdated	Admin change	thresholds_micro, image_uris, timestamp_ms
 BadgeMinted	On award	owner, level, profile_id, timestamp_ms
-PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_name, platform_bps, platform_sink, timestamp_ms
+PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_name, platform_bps, platform_address, timestamp_ms
 TokenAdded/TokenUpdated/TokenEnabled/TokenDisabled	Registry changes	symbol, decimals, feed_id, max_age_ms, enabled, timestamp_ms
 
 Indexer Guidance
@@ -305,7 +305,7 @@ Indexer available to consume events and provide feeds/search/leaderboards.
 10) Risks & Mitigations
 Risk	Mitigation
 Oracle staleness or missing update	Enforce staleness; require expected_min_usd_micro; abort if invalid.
-Admin misconfiguration (bad bps/sinks)	Strict validation; capability‑gated; event logs; presets only affect new campaigns.
+Admin misconfiguration (bad bps/addresses)	Strict validation; capability‑gated; event logs; presets only affect new campaigns.
 Rounding disputes	Document rule ("recipient gets remainder") and include bps + amounts in events.
 Shared object contention on popular campaigns	Separate CampaignStats object; admin edits don't lock donation path.
 Symbol drift vs canonical type	Emit both canonical and human symbol in events.
@@ -380,7 +380,7 @@ SplitPolicyRegistry (shared): presets for future campaigns.
 16) Event Schemas (Reference)
 
 DonationReceived
-campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms
+campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms
 
 BadgeMinted
 owner, level, profile_id, timestamp_ms
@@ -401,7 +401,7 @@ BadgeConfigUpdated
 thresholds_micro, image_uris, timestamp_ms
 
 PolicyAdded / PolicyUpdated / PolicyDisabled
-policy_name, platform_bps, platform_sink, enabled, timestamp_ms
+policy_name, platform_bps, platform_address, enabled, timestamp_ms
 
 TokenAdded / TokenUpdated / TokenEnabled / TokenDisabled
 symbol, name, decimals, feed_id, max_age_ms, enabled, timestamp_ms

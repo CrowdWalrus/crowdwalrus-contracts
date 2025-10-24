@@ -122,7 +122,10 @@ entry fun create_campaign(
     subdomain_name: String,
     metadata_keys: vector<String>,
     metadata_values: vector<String>,
+    funding_goal_usd_micro: u64,
     recipient_address: address,
+    platform_bps: u16,
+    platform_address: address,
     start_date: u64,
     end_date: u64,
     ctx: &mut TxContext,
@@ -134,6 +137,8 @@ entry fun create_campaign(
     // register subname
     let app = CrowdWalrusApp {};
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
+    assert!(recipient_address != @0x0, campaign::e_recipient_address_invalid());
+    let payout_policy = campaign::new_payout_policy(platform_bps, platform_address, recipient_address);
 
     let (campaign_id, campaign_owner_cap) = campaign::new(
         &app,
@@ -142,7 +147,8 @@ entry fun create_campaign(
         short_description,
         subdomain_name,
         metadata,
-        recipient_address,
+        funding_goal_usd_micro,
+        payout_policy,
         start_date,
         end_date,
         clock,
