@@ -23,6 +23,7 @@ fun test_create_profile_initial_state() {
 
     assert_eq!(profiles::owner(&profile), OWNER);
     assert_eq!(profiles::total_usd_micro(&profile), 0);
+    assert_eq!(profiles::total_donations_count(&profile), 0);
     assert_eq!(profiles::badge_levels_earned(&profile), 0);
     assert_eq!(profiles::metadata(&profile).length(), 0);
 
@@ -31,7 +32,7 @@ fun test_create_profile_initial_state() {
 }
 
 #[test]
-fun test_add_usd_increments_total() {
+fun test_add_contribution_updates_totals_and_count() {
     let mut scenario = ts::begin(OWNER);
     let mut profile = profiles::create(
         OWNER,
@@ -40,16 +41,37 @@ fun test_add_usd_increments_total() {
         ts::ctx(&mut scenario),
     );
 
-    profiles::add_usd(&mut profile, 500);
-    profiles::add_usd(&mut profile, 250);
+    profiles::add_contribution(&mut profile, 500);
+    profiles::add_contribution(&mut profile, 250);
     assert_eq!(profiles::total_usd_micro(&profile), 750);
+    assert_eq!(profiles::total_donations_count(&profile), 2);
+
+    test_utils::destroy(profile);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_add_contribution_zero_amount_noop() {
+    let mut scenario = ts::begin(OWNER);
+    let mut profile = profiles::create(
+        OWNER,
+        vector::empty(),
+        vector::empty(),
+        ts::ctx(&mut scenario),
+    );
+
+    profiles::add_contribution(&mut profile, 0);
+    profiles::add_contribution(&mut profile, 0);
+
+    assert_eq!(profiles::total_usd_micro(&profile), 0);
+    assert_eq!(profiles::total_donations_count(&profile), 0);
 
     test_utils::destroy(profile);
     ts::end(scenario);
 }
 
 #[test, expected_failure(abort_code = profiles::E_OVERFLOW)]
-fun test_add_usd_overflow_aborts() {
+fun test_add_contribution_overflow_aborts() {
     let mut scenario = ts::begin(OWNER);
     let mut profile = profiles::create(
         OWNER,
@@ -58,8 +80,25 @@ fun test_add_usd_overflow_aborts() {
         ts::ctx(&mut scenario),
     );
 
-    profiles::add_usd(&mut profile, U64_MAX);
-    profiles::add_usd(&mut profile, 1);
+    profiles::add_contribution(&mut profile, U64_MAX);
+    profiles::add_contribution(&mut profile, 1);
+
+    test_utils::destroy(profile);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_OVERFLOW)]
+fun test_add_contribution_donation_count_overflow_aborts() {
+    let mut scenario = ts::begin(OWNER);
+    let mut profile = profiles::create(
+        OWNER,
+        vector::empty(),
+        vector::empty(),
+        ts::ctx(&mut scenario),
+    );
+
+    profiles::set_totals_for_test(&mut profile, 10, U64_MAX);
+    profiles::add_contribution(&mut profile, 1);
 
     test_utils::destroy(profile);
     ts::end(scenario);
