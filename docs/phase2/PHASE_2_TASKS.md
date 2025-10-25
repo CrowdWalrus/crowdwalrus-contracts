@@ -423,6 +423,8 @@ Deps: E2.
 
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
+✅ COMPLETED (Oct 25, 2025) — Profiles are soulbound, badge bitset monotonic, metadata upserts validated.
+
 E2. Profile object + bitset + metadata
 
 File/Module: sources/profiles.move
@@ -441,7 +443,7 @@ Postconditions: Totals and bitset persist.
 
 Patterns: Owned object with strict owner checks.
 
-Security/Edges: Overflow; KV length mismatch.
+Security/Edges: Overflow; KV length mismatch; non-transferable (Profile omits `store`, only module helpers may transfer).
 
 Tests: Owner vs non‑owner; totals add; metadata changes.
 
