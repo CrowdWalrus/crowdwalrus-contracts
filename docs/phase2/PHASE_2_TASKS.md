@@ -398,6 +398,7 @@ Deps: D2.
 
 E) Profiles (owned)
 E1. ProfilesRegistry (address → profile_id)
+✅ COMPLETED (Oct 25, 2025) — Shared registry + ProfileCreated event landed; publish-time init hook remains tracked under B0a.
 
 File/Module: sources/profiles.move / crowd_walrus::profiles
 
