@@ -75,6 +75,22 @@ public(package) fun create_for(
     profile
 }
 
+public(package) fun create_or_get_profile_for_sender(
+    registry: &mut ProfilesRegistry,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+): sui_object::ID {
+    let sender = tx_ctx::sender(ctx);
+    if (exists(registry, sender)) {
+        id_of(registry, sender)
+    } else {
+        let profile = create_for(registry, sender, clock, ctx);
+        let profile_id = sui_object::id(&profile);
+        sui::transfer::transfer(profile, sender);
+        profile_id
+    }
+}
+
 #[test_only]
 public fun create_registry_for_tests(ctx: &mut tx_ctx::TxContext): ProfilesRegistry {
     create_registry(ctx)
