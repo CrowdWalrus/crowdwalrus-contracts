@@ -264,6 +264,61 @@ fun test_profiles_registry_duplicate_creation_aborts() {
 }
 
 #[test]
+fun test_create_or_get_profile_creates_when_missing() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = profiles::create_registry_for_tests(ts::ctx(&mut scenario));
+
+    let profile_id = profiles::create_or_get_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert!(profiles::exists(&registry, OWNER));
+    assert_eq!(profiles::id_of(&registry, OWNER), profile_id);
+
+    profiles::share_registry(registry);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_create_or_get_profile_returns_existing_id() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = profiles::create_registry_for_tests(ts::ctx(&mut scenario));
+
+    let first_id = profiles::create_or_get_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    let second_id = profiles::create_or_get_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(first_id, second_id);
+    assert!(profiles::exists(&registry, OWNER));
+
+    profiles::share_registry(registry);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
 fun test_grant_badge_level_monotonic() {
     let mut scenario = ts::begin(OWNER);
     let mut profile = profiles::create(
