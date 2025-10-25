@@ -551,6 +551,7 @@ Deps: E2.
 Err codes: E_NOT_PROFILE_OWNER, E_EMPTY_KEY.
 
 E5. Helper: create_or_get_profile_for_sender (internal helper)
+✅ COMPLETED (Oct 25, 2025) — Helper now auto-mints or reuses profiles with test coverage for both paths.
 
 File/Module: sources/profiles.move
 
