@@ -19,6 +19,7 @@ public struct Profile has key {
     id: sui_object::UID,
     owner: address,
     total_usd_micro: u64,
+    total_donations_count: u64,
     badge_levels_earned: u16,
     metadata: vec_map::VecMap<String, String>,
 }
@@ -31,12 +32,26 @@ public fun total_usd_micro(profile: &Profile): u64 {
     profile.total_usd_micro
 }
 
+public fun total_donations_count(profile: &Profile): u64 {
+    profile.total_donations_count
+}
+
 public fun badge_levels_earned(profile: &Profile): u16 {
     profile.badge_levels_earned
 }
 
 public fun metadata(profile: &Profile): &vec_map::VecMap<String, String> {
     &profile.metadata
+}
+
+#[test_only]
+public(package) fun set_totals_for_test(
+    profile: &mut Profile,
+    usd_micro: u64,
+    donations_count: u64,
+) {
+    profile.total_usd_micro = usd_micro;
+    profile.total_donations_count = donations_count;
 }
 
 public fun has_badge_level(profile: &Profile, level: u8): bool {
@@ -63,12 +78,13 @@ public(package) fun create(
         id: sui_object::new(ctx),
         owner,
         total_usd_micro: 0,
+        total_donations_count: 0,
         badge_levels_earned: 0,
         metadata: vec_map::from_keys_values(metadata_keys, metadata_values),
     }
 }
 
-public(package) fun add_usd(profile: &mut Profile, amount_micro: u64) {
+public(package) fun add_contribution(profile: &mut Profile, amount_micro: u64) {
     if (amount_micro == 0) {
         return
     };
@@ -76,6 +92,8 @@ public(package) fun add_usd(profile: &mut Profile, amount_micro: u64) {
     let remaining = U64_MAX - profile.total_usd_micro;
     assert!(amount_micro <= remaining, E_OVERFLOW);
     profile.total_usd_micro = profile.total_usd_micro + amount_micro;
+    assert!(profile.total_donations_count < U64_MAX, E_OVERFLOW);
+    profile.total_donations_count = profile.total_donations_count + 1;
 }
 
 public(package) fun grant_badge_level(profile: &mut Profile, level: u8) {
