@@ -423,7 +423,7 @@ Deps: E2.
 
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
-✅ COMPLETED (Oct 25, 2025) — Profiles are soulbound, badge bitset monotonic, metadata upserts validated.
+✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
 
 E2. Profile object + bitset + metadata
 
@@ -433,19 +433,19 @@ Product intent: Lifetime giving + badges per user.
 
 Implement:
 
-Owned Profile { owner, total_usd_micro: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
+Owned Profile { owner, total_usd_micro: u64, total_donations_count: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
 
-add_usd(u64) with overflow check; set_metadata (owner‑only); getters.
+add_contribution(amount_micro: u64) with overflow checks; increments both total_usd_micro and total_donations_count; set_metadata (owner‑only); getters exposed for both totals.
 
 Preconditions: Owned by signer for mutators.
 
-Postconditions: Totals and bitset persist.
+Postconditions: Totals, donation count, and bitset persist; donation count reflects number of distinct payments contributing to totals.
 
-Patterns: Owned object with strict owner checks.
+Patterns: Owned object with strict owner checks; true soulbound (Profile omits `store`, no transfer after creation).
 
-Security/Edges: Overflow; KV length mismatch; non-transferable (Profile omits `store`, only module helpers may transfer).
+Security/Edges: Overflow; KV length mismatch; ensure donation count increments exactly once per contribution.
 
-Tests: Owner vs non‑owner; totals add; metadata changes.
+Tests: Owner vs non‑owner; totals add; donation count increments; metadata changes.
 
 Acceptance: Pass.
 
@@ -578,7 +578,7 @@ Product intent: Marketing controls milestones & art.
 
 Implement:
 
-Shared BadgeConfig { thresholds_micro (len=5, ascending), image_uris (len=5) }.
+Shared BadgeConfig { amount_thresholds_micro (len=5, ascending), payment_thresholds (len=5, ascending), image_uris (len=5) }.
 
 Admin setters with validation; emit BadgeConfigUpdated.
 
@@ -588,9 +588,9 @@ Preconditions: AdminCap only.
 
 Postconditions: Config stored.
 
-Patterns: Cap‑gated; strict validation.
+Patterns: Cap‑gated; strict validation across both threshold vectors (length match, monotonic growth) + URIs.
 
-Security/Edges: Length/order enforced; URIs non‑empty.
+Security/Edges: Length/order enforced; URIs non‑empty; supports future threshold tuning without code change.
 
 Tests: Invalid shapes abort; valid emits event.
 
@@ -634,17 +634,17 @@ Product intent: Instant recognition when donors cross milestones.
 
 Implement:
 
-maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_total:u64, new_total:u64, clock) sets bits for newly crossed levels, mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector of u8).
+maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_amount:u64, old_count:u64, new_amount:u64, new_count:u64, clock) sets bits for newly satisfied levels (both amount + payment thresholds), mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector<u8>).
 
-Preconditions: Config set; profile owned by signer.
+Preconditions: Config set; profile owned by signer; caller supplies pre/post totals and counts.
 
-Postconditions: New badges minted exactly once per level.
+Postconditions: New badges minted exactly once per level; both thresholds satisfied before mint.
 
-Patterns: Idempotent; multi‑level crossing.
+Patterns: Idempotent; multi‑level crossing; evaluates amount and payment thresholds together.
 
-Security/Edges: Boundary equality mints once; no duplicates.
+Security/Edges: Boundary equality (amount OR payments alone) does not mint; requires satisfying both; no duplicates.
 
-Tests: 0→L1; L1→L3; re‑donate no duplicate; exact boundary.
+Tests: Amount-only increase (no mint); payment-only increase (no mint); 0→L1 with both satisfied; L1→L3 jump meeting both; repeat call no duplicate; exact dual-boundary.
 
 Acceptance: Pass.
 
