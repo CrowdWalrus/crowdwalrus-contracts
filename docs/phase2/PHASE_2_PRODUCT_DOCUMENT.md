@@ -193,7 +193,7 @@ First-time donation creates and transfers profile; repeat donation uses existing
 
 ProfilesRegistry (shared): address → profile_id mapping; enforces 1:1 uniqueness; emits ProfileCreated.
 
-Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), metadata (VecMap).
+Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), metadata (VecMap). Profiles omit the `store` ability so they cannot be moved outside the module; only creation helpers inside profiles.move perform the initial transfer to the wallet.
 
 **Profile Creation Patterns:**
 
