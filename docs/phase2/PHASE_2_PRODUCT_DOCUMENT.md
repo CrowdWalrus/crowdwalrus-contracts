@@ -193,7 +193,7 @@ First-time donation creates and transfers profile; repeat donation uses existing
 
 ProfilesRegistry (shared): address → profile_id mapping; enforces 1:1 uniqueness; emits ProfileCreated.
 
-Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), metadata (VecMap). Profiles omit the `store` ability so they cannot be moved outside the module; only creation helpers inside profiles.move perform the initial transfer to the wallet.
+Profile (owned): owner, total_usd_micro, total_donations_count, badge_levels_earned (bitset, u16), metadata (VecMap). Profiles omit the `store` ability so they cannot be moved outside the module; only creation helpers inside profiles.move perform the initial transfer to the wallet.
 
 **Profile Creation Patterns:**
 
@@ -218,11 +218,11 @@ ProfilesRegistry prevents duplicate profiles per address.
 
 5.6 Badge Rewards (Soulbound)
 
-BadgeConfig (shared, admin‑managed): 5 ascending thresholds_micro with image_uris (Walrus).
+BadgeConfig (shared, admin‑managed): 5 ascending amount_thresholds_micro paired with 5 ascending payment_thresholds plus image_uris (Walrus).
 
 DonorBadge (owned, no transfer functions): level, owner, image_uri, issued_at_ms. Display template registered via admin entry; must render in wallets.
 
-maybe_award_badges: compares old_total → new_total, sets bitset, mints any newly crossed levels; emits BadgeMinted.
+maybe_award_badges: compares old→new totals and payment counts, mints levels only when both thresholds are crossed; emits BadgeMinted.
 
 Acceptance Criteria
 
@@ -230,7 +230,7 @@ No duplicate badge mints per level (bitset enforces).
 
 Wallets display badges using configured Display fields.
 
-BadgeConfig validation (lengths equal, ascending).
+BadgeConfig validation (lengths equal across amount/payment/image vectors; each ascending).
 
 5.7 Split Policy Presets (Admin, Future Campaigns)
 
