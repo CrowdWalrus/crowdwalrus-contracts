@@ -1,9 +1,12 @@
 #[test_only]
 module crowd_walrus::profiles_tests;
 
+use crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::profiles::{Self as profiles};
 use std::string::{Self as string};
 use std::unit_test::assert_eq;
+use sui::clock::Clock;
+use sui::object::{Self as sui_object};
 use sui::test_scenario::{Self as ts};
 use sui::test_utils;
 
@@ -197,6 +200,66 @@ fun test_set_metadata_non_owner_aborts() {
         ts::ctx(&mut scenario),
     );
     test_utils::destroy(profile);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_profiles_registry_create_for_and_lookup() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = profiles::create_registry_for_tests(ts::ctx(&mut scenario));
+
+    let profile = profiles::create_for(
+        &mut registry,
+        OWNER,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    assert!(profiles::exists(&registry, OWNER));
+    let profile_id = sui_object::id(&profile);
+    assert_eq!(profiles::id_of(&registry, OWNER), profile_id);
+    assert_eq!(profiles::owner(&profile), OWNER);
+
+    test_utils::destroy(profile);
+    profiles::share_registry(registry);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test, expected_failure(
+    abort_code = profiles::E_PROFILE_EXISTS,
+    location = 0x0::profiles
+)]
+fun test_profiles_registry_duplicate_creation_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = profiles::create_registry_for_tests(ts::ctx(&mut scenario));
+
+    let profile = profiles::create_for(
+        &mut registry,
+        OWNER,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    test_utils::destroy(profile);
+    let profile_again = profiles::create_for(
+        &mut registry,
+        OWNER,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    test_utils::destroy(profile_again);
+    profiles::share_registry(registry);
+    ts::return_shared(clock);
     ts::end(scenario);
 }
 
