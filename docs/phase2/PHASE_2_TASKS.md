@@ -312,7 +312,11 @@ Acceptance: Correct outputs; tests pass.
 Deps: B0, B1.
 
 D) Campaign aggregates
+
 D1. CampaignStats creation + event
+
+✅ COMPLETED (Oct 25, 2025) — CampaignStats now stores total USD and donation counts with creation event.
+
 
 File/Module: sources/campaign_stats.move / crowd_walrus::campaign_stats
 
@@ -320,19 +324,19 @@ Product intent: Live totals without scanning events.
 
 Implement:
 
-Shared CampaignStats { parent_id, total_usd_micro } (has key only).
+Shared CampaignStats { parent_id, total_usd_micro, total_donations_count } (has key only).
 
 create_for_campaign(&mut Campaign, &Clock, &mut TxContext) -> object::ID; share internally and emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
 
 Preconditions: Not previously created.
 
-Postconditions: Shared stats exists & is linked in A5.
+Postconditions: Shared stats exists & is linked in A5 with zeroed totals/counts.
 
 Patterns: Separate shared object.
 
 Security/Edges: Enforce one‑per‑campaign via A3 setter.
 
-Tests: Created; event correct.
+Tests: Created; event correct; initial totals/counts zero.
 
 Acceptance: Pass.
 
@@ -350,7 +354,7 @@ Implement:
 
 DOF PerCoinStats<T> { total_raw: u128, donation_count: u64 }.
 
-Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro and per‑coin stats with overflow checks.
+Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro, total_donations_count, and per‑coin stats with overflow checks.
 
 Preconditions: Stats exist.
 
@@ -376,7 +380,7 @@ Product intent: Lightweight UIs without indexer.
 
 Implement:
 
-Views: total_usd_micro, per_coin_total_raw<T>, per_coin_donation_count<T>.
+Views: total_usd_micro, total_donations_count, per_coin_total_raw<T>, per_coin_donation_count<T>.
 
 Preconditions: —
 
@@ -394,6 +398,7 @@ Deps: D2.
 
 E) Profiles (owned)
 E1. ProfilesRegistry (address → profile_id)
+✅ COMPLETED (Oct 25, 2025) — Shared registry + ProfileCreated event landed; publish-time init hook remains tracked under B0a.
 
 File/Module: sources/profiles.move / crowd_walrus::profiles
 
@@ -423,6 +428,8 @@ Deps: E2.
 
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
+✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
+
 E2. Profile object + bitset + metadata
 
 File/Module: sources/profiles.move
@@ -431,19 +438,19 @@ Product intent: Lifetime giving + badges per user.
 
 Implement:
 
-Owned Profile { owner, total_usd_micro: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
+Owned Profile { owner, total_usd_micro: u64, total_donations_count: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
 
-add_usd(u64) with overflow check; set_metadata (owner‑only); getters.
+add_contribution(amount_micro: u64) with overflow checks; increments both total_usd_micro and total_donations_count; set_metadata (owner‑only); getters exposed for both totals.
 
 Preconditions: Owned by signer for mutators.
 
-Postconditions: Totals and bitset persist.
+Postconditions: Totals, donation count, and bitset persist; donation count reflects number of distinct payments contributing to totals.
 
-Patterns: Owned object with strict owner checks.
+Patterns: Owned object with strict owner checks; true soulbound (Profile omits `store`, no transfer after creation).
 
-Security/Edges: Overflow; KV length mismatch.
+Security/Edges: Overflow; KV length mismatch; ensure donation count increments exactly once per contribution.
 
-Tests: Owner vs non‑owner; totals add; metadata changes.
+Tests: Owner vs non‑owner; totals add; donation count increments; metadata changes.
 
 Acceptance: Pass.
 
@@ -576,7 +583,7 @@ Product intent: Marketing controls milestones & art.
 
 Implement:
 
-Shared BadgeConfig { thresholds_micro (len=5, ascending), image_uris (len=5) }.
+Shared BadgeConfig { amount_thresholds_micro (len=5, ascending), payment_thresholds (len=5, ascending), image_uris (len=5) }.
 
 Admin setters with validation; emit BadgeConfigUpdated.
 
@@ -586,9 +593,9 @@ Preconditions: AdminCap only.
 
 Postconditions: Config stored.
 
-Patterns: Cap‑gated; strict validation.
+Patterns: Cap‑gated; strict validation across both threshold vectors (length match, monotonic growth) + URIs.
 
-Security/Edges: Length/order enforced; URIs non‑empty.
+Security/Edges: Length/order enforced; URIs non‑empty; supports future threshold tuning without code change.
 
 Tests: Invalid shapes abort; valid emits event.
 
@@ -632,17 +639,17 @@ Product intent: Instant recognition when donors cross milestones.
 
 Implement:
 
-maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_total:u64, new_total:u64, clock) sets bits for newly crossed levels, mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector of u8).
+maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_amount:u64, old_count:u64, new_amount:u64, new_count:u64, clock) sets bits for newly satisfied levels (both amount + payment thresholds), mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector<u8>).
 
-Preconditions: Config set; profile owned by signer.
+Preconditions: Config set; profile owned by signer; caller supplies pre/post totals and counts.
 
-Postconditions: New badges minted exactly once per level.
+Postconditions: New badges minted exactly once per level; both thresholds satisfied before mint.
 
-Patterns: Idempotent; multi‑level crossing.
+Patterns: Idempotent; multi‑level crossing; evaluates amount and payment thresholds together.
 
-Security/Edges: Boundary equality mints once; no duplicates.
+Security/Edges: Boundary equality (amount OR payments alone) does not mint; requires satisfying both; no duplicates.
 
-Tests: 0→L1; L1→L3; re‑donate no duplicate; exact boundary.
+Tests: Amount-only increase (no mint); payment-only increase (no mint); 0→L1 with both satisfied; L1→L3 jump meeting both; repeat call no duplicate; exact dual-boundary.
 
 Acceptance: Pass.
 

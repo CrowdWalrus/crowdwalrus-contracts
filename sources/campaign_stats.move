@@ -15,12 +15,21 @@ public struct CampaignStats has key {
     id: sui_object::UID,
     parent_id: sui_object::ID,
     total_usd_micro: u64,
+    total_donations_count: u64,
 }
 
 public struct CampaignStatsCreated has copy, drop {
     campaign_id: sui_object::ID,
     stats_id: sui_object::ID,
     timestamp_ms: u64,
+}
+
+public fun total_usd_micro(stats: &CampaignStats): u64 {
+    stats.total_usd_micro
+}
+
+public fun total_donations_count(stats: &CampaignStats): u64 {
+    stats.total_donations_count
 }
 
 public(package) fun create_for_campaign(
@@ -39,6 +48,7 @@ public(package) fun create_for_campaign(
         id: sui_object::new(ctx),
         parent_id: campaign_id,
         total_usd_micro: 0,
+        total_donations_count: 0,
     };
 
     let stats_id = sui_object::id(&stats);

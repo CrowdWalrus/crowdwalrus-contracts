@@ -50,9 +50,15 @@ public fun test_create_for_campaign_happy_path() {
     ts::return_shared(campaign_obj);
     ts::return_shared(clock);
 
-    let effects = ts::end(scenario);
-
+    let effects = ts::next_tx(&mut scenario, USER1);
     assert_eq!(ts::num_user_events(&effects), 1);
+
+    let stats = scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
+    assert_eq!(campaign_stats::total_donations_count(&stats), 0);
+    ts::return_shared(stats);
+
+    ts::end(scenario);
     // NOTE: test_scenario currently exposes the user event count only.
     // Later tasks can decode BCS when helper lands in sui-framework.
 }
