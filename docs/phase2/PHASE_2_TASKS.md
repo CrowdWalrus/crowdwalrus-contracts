@@ -845,6 +845,7 @@ Err codes: Propagate underlying + E_NOT_PROFILE_OWNER on misuse.
 
 H) Platform split presets (admin; future campaigns)
 H1. platform_policy presets registry
+✅ COMPLETED (Oct 25, 2025)
 
 File/Module: sources/platform_policy.move / crowd_walrus::platform_policy
 
@@ -860,15 +861,15 @@ Hook into B0a bootstrap so the registry is created and shared exactly once durin
 
 Preconditions: Valid bps & address; unique name.
 
-Postconditions: Presets set for future campaigns.
+Postconditions: Presets set for future campaigns; registry ID persisted on CrowdWalrus and emitted at init for discovery.
 
 Patterns: Snapshot at creation (H2); existing campaigns unaffected.
 
 Security/Edges: Duplicate names abort; bounds enforced.
 
-Tests: Admin ops; errors; events.
+Tests: Admin ops; errors; events (incl. invalid bps/address, missing/disabled policy).
 
-Acceptance: Pass.
+Acceptance: Pass — entry functions callable by PTBs, registry discoverable via stored field/event.
 
 Deps: I1.
 
