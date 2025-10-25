@@ -312,7 +312,11 @@ Acceptance: Correct outputs; tests pass.
 Deps: B0, B1.
 
 D) Campaign aggregates
+
 D1. CampaignStats creation + event
+
+✅ COMPLETED (Oct 25, 2025) — CampaignStats now stores total USD and donation counts with creation event.
+
 
 File/Module: sources/campaign_stats.move / crowd_walrus::campaign_stats
 
@@ -320,19 +324,19 @@ Product intent: Live totals without scanning events.
 
 Implement:
 
-Shared CampaignStats { parent_id, total_usd_micro } (has key only).
+Shared CampaignStats { parent_id, total_usd_micro, total_donations_count } (has key only).
 
 create_for_campaign(&mut Campaign, &Clock, &mut TxContext) -> object::ID; share internally and emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
 
 Preconditions: Not previously created.
 
-Postconditions: Shared stats exists & is linked in A5.
+Postconditions: Shared stats exists & is linked in A5 with zeroed totals/counts.
 
 Patterns: Separate shared object.
 
 Security/Edges: Enforce one‑per‑campaign via A3 setter.
 
-Tests: Created; event correct.
+Tests: Created; event correct; initial totals/counts zero.
 
 Acceptance: Pass.
 
@@ -350,7 +354,7 @@ Implement:
 
 DOF PerCoinStats<T> { total_raw: u128, donation_count: u64 }.
 
-Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro and per‑coin stats with overflow checks.
+Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro, total_donations_count, and per‑coin stats with overflow checks.
 
 Preconditions: Stats exist.
 
@@ -376,7 +380,7 @@ Product intent: Lightweight UIs without indexer.
 
 Implement:
 
-Views: total_usd_micro, per_coin_total_raw<T>, per_coin_donation_count<T>.
+Views: total_usd_micro, total_donations_count, per_coin_total_raw<T>, per_coin_donation_count<T>.
 
 Preconditions: —
 

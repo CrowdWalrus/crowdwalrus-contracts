@@ -147,7 +147,7 @@ Donation aborts if usd < expected_min_usd_micro.
 
 5.3 Campaign Aggregates (Hot Path)
 
-CampaignStats (shared, one per campaign) stores total_usd_micro and parent link.
+CampaignStats (shared, one per campaign) stores total_usd_micro, total_donations_count, and parent link.
 
 Per‑coin stats via dynamic object fields under CampaignStats:
 
@@ -363,7 +363,7 @@ All unit & integration tests pass; documentation updated.
 
 Campaign: core metadata; funding_goal_usd_micro, payout_policy, stats_id, parameters_locked.
 
-CampaignStats (shared): parent_id, total_usd_micro; DOFs: PerCoinStats<T>.
+CampaignStats (shared): parent_id, total_usd_micro, total_donations_count; DOFs: PerCoinStats<T>.
 
 TokenRegistry (shared): Coin<T> → {symbol, name, decimals, feed_id, enabled, max_age_ms}.
 
