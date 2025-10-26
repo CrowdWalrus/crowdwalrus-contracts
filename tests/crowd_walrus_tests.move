@@ -5,6 +5,7 @@ module crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap};
 use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, VerifyCap};
+use crowd_walrus::platform_policy::{Self as platform_policy};
 use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{
     Self as suins_manager,
@@ -749,6 +750,7 @@ public fun create_test_campaign(
         metadata_values,
         funding_goal_usd_micro,
         recipient_address,
+        option::none(),
         DEFAULT_PLATFORM_BPS,
         ADMIN,
         start_date,
@@ -765,12 +767,14 @@ public fun create_test_campaign_with_policy(
     metadata_values: vector<String>,
     funding_goal_usd_micro: u64,
     recipient_address: address,
+    policy_name: option::Option<String>,
     platform_bps: u16,
     platform_address: address,
     start_date: u64,
     end_date: u64,
 ): sui_object::ID {
     let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
     let mut profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
     let suins_manager = sc.take_shared<SuiNSManager>();
     let mut suins = sc.take_shared<SuiNS>();
@@ -778,6 +782,7 @@ public fun create_test_campaign_with_policy(
     let subdomain_name = get_test_subdomain_name(subname);
     let campaign_id = crowd_walrus::create_campaign(
         &crowd_walrus,
+        &policy_registry,
         &mut profiles_registry,
         &suins_manager,
         &mut suins,
@@ -789,6 +794,7 @@ public fun create_test_campaign_with_policy(
         metadata_values,
         funding_goal_usd_micro,
         recipient_address,
+        policy_name,
         platform_bps,
         platform_address,
         start_date,
@@ -796,6 +802,7 @@ public fun create_test_campaign_with_policy(
         ctx(sc),
     );
     ts::return_shared(crowd_walrus);
+    ts::return_shared(policy_registry);
     ts::return_shared(profiles_registry);
     ts::return_shared(suins);
     ts::return_shared(clock);
@@ -854,6 +861,7 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
 
     sc.next_tx(USER1);
     let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
     let mut profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
     let suins_manager = sc.take_shared<SuiNSManager>();
     let mut suins = sc.take_shared<SuiNS>();
@@ -861,6 +869,7 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
     let subdomain_name = get_test_subdomain_name(b"profile-auto");
     let campaign_id = crowd_walrus::create_campaign(
         &crowd_walrus,
+        &policy_registry,
         &mut profiles_registry,
         &suins_manager,
         &mut suins,
@@ -872,6 +881,7 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
         vector::empty(),
         2_000_000,
         USER1,
+        option::none(),
         DEFAULT_PLATFORM_BPS,
         ADMIN,
         0,
@@ -879,6 +889,7 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
         ctx(&mut sc),
     );
     ts::return_shared(crowd_walrus);
+    ts::return_shared(policy_registry);
     ts::return_shared(profiles_registry);
     ts::return_shared(suins);
     ts::return_shared(clock);
@@ -904,5 +915,154 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
     ts::return_shared(stats);
 
     ts::next_tx(&mut sc, USER1);
+    sc.end();
+}
+
+#[test]
+public fun test_create_campaign_uses_policy_preset() {
+    let mut sc = test_init(ADMIN);
+    let preset_bps: u16 = 250;
+    let preset_address: address = USER2;
+
+    sc.next_tx(ADMIN);
+    let mut policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = sc.take_from_sender<AdminCap>();
+    let clock = sc.take_shared<Clock>();
+    crowd_walrus::add_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        string::utf8(b"nonprofit"),
+        preset_bps,
+        preset_address,
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    sc.return_to_sender(admin_cap);
+    ts::next_tx(&mut sc, ADMIN);
+
+    sc.next_tx(USER1);
+    let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
+    let mut profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
+    let suins_manager = sc.take_shared<SuiNSManager>();
+    let mut suins = sc.take_shared<SuiNS>();
+    let clock = sc.take_shared<Clock>();
+    let subdomain_name = get_test_subdomain_name(b"preset-success");
+    let fallback_bps: u16 = 900;
+    let fallback_address: address = ADMIN;
+    let campaign_id = crowd_walrus::create_campaign(
+        &crowd_walrus,
+        &policy_registry,
+        &mut profiles_registry,
+        &suins_manager,
+        &mut suins,
+        &clock,
+        string::utf8(b"Preset Snapshot"),
+        string::utf8(b"Uses preset values"),
+        subdomain_name,
+        vector::empty(),
+        vector::empty(),
+        1_000_000,
+        USER1,
+        option::some(string::utf8(b"nonprofit")),
+        fallback_bps,
+        fallback_address,
+        0,
+        U64_MAX,
+        ctx(&mut sc),
+    );
+    ts::return_shared(crowd_walrus);
+    ts::return_shared(policy_registry);
+    ts::return_shared(profiles_registry);
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
+    ts::next_tx(&mut sc, USER1);
+
+    sc.next_tx(USER1);
+    let campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+    assert_eq!(campaign::payout_platform_bps(&campaign), preset_bps);
+    assert_eq!(campaign::payout_platform_address(&campaign), preset_address);
+    assert_eq!(campaign::payout_recipient_address(&campaign), USER1);
+    ts::return_shared(campaign);
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0x0::platform_policy)]
+public fun test_create_campaign_with_missing_preset_aborts() {
+    let mut sc = test_init(ADMIN);
+
+    sc.next_tx(USER1);
+    create_test_campaign_with_policy(
+        &mut sc,
+        string::utf8(b"Missing Preset Fails"),
+        string::utf8(b""),
+        b"missing-preset",
+        vector::empty(),
+        vector::empty(),
+        1_000_000,
+        USER1,
+        option::some(string::utf8(b"does-not-exist")),
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+    );
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
+public fun test_create_campaign_with_disabled_preset_aborts() {
+    let mut sc = test_init(ADMIN);
+
+    sc.next_tx(ADMIN);
+    let mut policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = sc.take_from_sender<AdminCap>();
+    let clock = sc.take_shared<Clock>();
+    crowd_walrus::add_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        string::utf8(b"disabled"),
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    sc.return_to_sender(admin_cap);
+    ts::next_tx(&mut sc, ADMIN);
+
+    sc.next_tx(ADMIN);
+    let mut policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = sc.take_from_sender<AdminCap>();
+    let clock = sc.take_shared<Clock>();
+    crowd_walrus::disable_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        string::utf8(b"disabled"),
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    sc.return_to_sender(admin_cap);
+    ts::next_tx(&mut sc, ADMIN);
+
+    sc.next_tx(USER1);
+    create_test_campaign_with_policy(
+        &mut sc,
+        string::utf8(b"Disabled Preset Fails"),
+        string::utf8(b""),
+        b"disabled-preset",
+        vector::empty(),
+        vector::empty(),
+        1_000_000,
+        USER1,
+        option::some(string::utf8(b"disabled")),
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+    );
     sc.end();
 }
