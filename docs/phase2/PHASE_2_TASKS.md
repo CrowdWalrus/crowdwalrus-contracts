@@ -877,6 +877,7 @@ Deps: I1.
 Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_ADDRESS.
 
 H2. create_campaign snapshots preset policies only
+✅ COMPLETED (Oct 26, 2025) — seeded `"standard"` fallback preset and removed explicit policy inputs.
 
 File/Module: sources/crowd_walrus.move
 
