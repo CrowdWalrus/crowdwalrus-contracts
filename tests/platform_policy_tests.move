@@ -14,6 +14,20 @@ const ADMIN: address = @0xA;
 const OTHER: address = @0xB;
 
 #[test]
+fun test_default_policy_seeded() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    scenario.next_tx(ADMIN);
+    let registry = scenario.take_shared<platform_policy::PolicyRegistry>();
+    let default_name = crowd_walrus::default_policy_name();
+    let policy = platform_policy::borrow_policy(&registry, &default_name);
+    assert_eq!(platform_policy::policy_platform_bps(policy), 0);
+    assert_eq!(platform_policy::policy_platform_address(policy), ADMIN);
+    assert_eq!(platform_policy::policy_enabled(policy), true);
+    ts::return_shared(registry);
+    ts::end(scenario);
+}
+
+#[test]
 fun test_add_policy_persists_enabled_state() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -21,7 +35,7 @@ fun test_add_policy_persists_enabled_state() {
     let admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
     let clock = scenario.take_shared<Clock>();
 
-    let name = string::utf8(b"standard");
+    let name = string::utf8(b"custom");
     crowd_walrus::add_platform_policy_internal(
         &mut registry,
         &admin_cap,
