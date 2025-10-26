@@ -3,6 +3,7 @@ module crowd_walrus::crowd_walrus;
 use crowd_walrus::campaign::{Self as campaign};
 use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::platform_policy::{Self as platform_policy};
+use crowd_walrus::token_registry::{Self as token_registry};
 use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager, register_subdomain};
 use std::string::{Self as string, String};
@@ -24,6 +25,7 @@ public struct CrowdWalrusApp has drop {}
 const E_NOT_AUTHORIZED: u64 = 1;
 const E_ALREADY_VERIFIED: u64 = 2;
 const E_NOT_VERIFIED: u64 = 3;
+const E_TOKEN_REGISTRY_NOT_INITIALIZED: u64 = 4;
 
 const DEFAULT_POLICY_NAME: vector<u8> = b"standard";
 
@@ -101,6 +103,17 @@ public struct ProfilesRegistryCreated has copy, drop {
     profiles_registry_id: sui_object::ID,
 }
 
+public struct TokenRegistryCreated has copy, drop {
+    crowd_walrus_id: sui_object::ID,
+    token_registry_id: sui_object::ID,
+}
+
+public struct TokenRegistryKey has copy, drop, store {}
+
+public struct TokenRegistrySlot has store {
+    id: sui_object::ID,
+}
+
 // === Init Function ===
 
 /// Initialize the crowd walrus
@@ -118,17 +131,21 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
     // Persist the registry sui_object::ID so admins can resolve it without replaying events.
     let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
+    let token_registry = token_registry::create_registry(crowd_walrus_id, ctx);
+    let token_registry_id = sui_object::id(&token_registry);
+    token_registry::share_registry(token_registry);
     let profiles_registry = profiles::create_registry(ctx);
     let profiles_registry_id = sui_object::id(&profiles_registry);
     profiles::share_registry(profiles_registry);
 
-    let crowd_walrus = CrowdWalrus {
+    let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
         policy_registry_id,
         profiles_registry_id,
     };
+    record_token_registry_id(&mut crowd_walrus, token_registry_id);
 
     // Create admin capability for the creator
     let admin_cap = AdminCap {
@@ -150,6 +167,10 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
     event::emit(ProfilesRegistryCreated {
         crowd_walrus_id,
         profiles_registry_id,
+    });
+    event::emit(TokenRegistryCreated {
+        crowd_walrus_id,
+        token_registry_id,
     });
 
     // Transfer capability to creator
@@ -440,6 +461,22 @@ public fun crowd_walrus_id(cap: &AdminCap): sui_object::ID {
     cap.crowd_walrus_id
 }
 
+fun token_registry_key(): TokenRegistryKey {
+    TokenRegistryKey {}
+}
+
+fun record_token_registry_id(crowd_walrus: &mut CrowdWalrus, token_registry_id: sui_object::ID) {
+    df::add(
+        &mut crowd_walrus.id,
+        token_registry_key(),
+        TokenRegistrySlot { id: token_registry_id },
+    );
+}
+
+fun borrow_token_registry_slot(crowd_walrus: &CrowdWalrus): &TokenRegistrySlot {
+    df::borrow(&crowd_walrus.id, token_registry_key())
+}
+
 /// Get the shared PolicyRegistry sui_object::ID managed by this CrowdWalrus instance.
 public fun policy_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
     crowd_walrus.policy_registry_id
@@ -448,6 +485,15 @@ public fun policy_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
 /// Get the shared ProfilesRegistry sui_object::ID managed by this CrowdWalrus instance.
 public fun profiles_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
     crowd_walrus.profiles_registry_id
+}
+
+/// Get the shared TokenRegistry sui_object::ID managed by this CrowdWalrus instance.
+public fun token_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
+    assert!(
+        df::exists_(&crowd_walrus.id, token_registry_key()),
+        E_TOKEN_REGISTRY_NOT_INITIALIZED,
+    );
+    borrow_token_registry_slot(crowd_walrus).id
 }
 
 /// Check if a campaign is verified
@@ -476,9 +522,11 @@ public fun test_init_function() {
 
     let policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
     let profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let token_registry = scenario.take_shared<token_registry::TokenRegistry>();
     // Ensure the stored registry sui_object::ID matches the shared object we just fetched.
     assert!(sui_object::id(&policy_registry) == policy_registry_id(&crowd_walrus));
     assert!(sui_object::id(&profiles_registry) == profiles_registry_id(&crowd_walrus));
+    assert!(sui_object::id(&token_registry) == token_registry_id(&crowd_walrus));
 
     let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
     let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
@@ -489,10 +537,72 @@ public fun test_init_function() {
     scenario.return_to_sender(crowd_walrus_cap);
     ts::return_shared(policy_registry);
     ts::return_shared(profiles_registry);
+    ts::return_shared(token_registry);
     scenario.return_to_sender(suins_manager_cap);
     ts::return_shared(crowd_walrus);
     ts::return_shared(suins_manager);
 
+    scenario.end();
+}
+
+#[test]
+public fun test_migrate_token_registry_creates_when_missing() {
+    use sui::test_scenario::{Self as ts, ctx};
+    let admin: address = @0xA;
+    let mut scenario = ts::begin(admin);
+
+    scenario.next_tx(admin);
+
+    let crowd_walrus_uid = sui_object::new(ctx(&mut scenario));
+    let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
+
+    let mut policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx(&mut scenario));
+    platform_policy::add_policy_bootstrap(
+        &mut policy_registry,
+        default_policy_name_internal(),
+        0,
+        admin,
+    );
+    let policy_registry_id = sui_object::id(&policy_registry);
+    platform_policy::share_registry(policy_registry);
+
+    let profiles_registry = profiles::create_registry(ctx(&mut scenario));
+    let profiles_registry_id = sui_object::id(&profiles_registry);
+    profiles::share_registry(profiles_registry);
+
+    let crowd_walrus = CrowdWalrus {
+        id: crowd_walrus_uid,
+        verified_maps: table::new(ctx(&mut scenario)),
+        verified_campaigns_list: std::vector::empty(),
+        policy_registry_id,
+        profiles_registry_id,
+    };
+    transfer::share_object(crowd_walrus);
+
+    let admin_cap = AdminCap {
+        id: sui_object::new(ctx(&mut scenario)),
+        crowd_walrus_id,
+    };
+    transfer::transfer(admin_cap, admin);
+
+    ts::next_tx(&mut scenario, admin);
+
+    let mut crowd_walrus = scenario.take_shared<CrowdWalrus>();
+    let admin_cap = scenario.take_from_sender<AdminCap>();
+
+    migrate_token_registry(&mut crowd_walrus, &admin_cap, ctx(&mut scenario));
+
+    assert!(df::exists_(&crowd_walrus.id, token_registry_key()));
+    let slot = borrow_token_registry_slot(&crowd_walrus);
+    let new_registry_id = slot.id;
+
+    scenario.return_to_sender(admin_cap);
+    ts::return_shared(crowd_walrus);
+
+    ts::next_tx(&mut scenario, admin);
+
+    let new_registry = scenario.take_shared_by_id<token_registry::TokenRegistry>(new_registry_id);
+    ts::return_shared(new_registry);
     scenario.end();
 }
 
@@ -514,17 +624,21 @@ public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): s
     );
     let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
+    let token_registry = token_registry::create_registry(crowd_walrus_id, ctx);
+    let token_registry_id = sui_object::id(&token_registry);
+    token_registry::share_registry(token_registry);
     let profiles_registry = profiles::create_registry(ctx);
     let profiles_registry_id = sui_object::id(&profiles_registry);
     profiles::share_registry(profiles_registry);
 
-    let crowd_walrus = CrowdWalrus {
+    let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
         policy_registry_id,
         profiles_registry_id,
     };
+    record_token_registry_id(&mut crowd_walrus, token_registry_id);
     transfer::share_object(crowd_walrus);
     crowd_walrus_id
 }
@@ -639,6 +753,154 @@ entry fun enable_platform_policy(
     _ctx: &mut sui_tx_context::TxContext,
 ) {
     enable_platform_policy_internal(registry, admin_cap, name, clock);
+}
+
+public(package) fun add_token_internal<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    symbol: String,
+    name: String,
+    decimals: u8,
+    pyth_feed_id: vector<u8>,
+    max_age_ms: u64,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, token_registry::registry_owner_id(registry));
+    token_registry::add_coin<T>(
+        registry,
+        symbol,
+        name,
+        decimals,
+        pyth_feed_id,
+        max_age_ms,
+        clock,
+    );
+}
+
+entry fun add_token<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    symbol: String,
+    name: String,
+    decimals: u8,
+    pyth_feed_id: vector<u8>,
+    max_age_ms: u64,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    add_token_internal<T>(
+        registry,
+        admin_cap,
+        symbol,
+        name,
+        decimals,
+        pyth_feed_id,
+        max_age_ms,
+        clock,
+    );
+}
+
+public(package) fun update_token_metadata_internal<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    symbol: String,
+    name: String,
+    decimals: u8,
+    pyth_feed_id: vector<u8>,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, token_registry::registry_owner_id(registry));
+    token_registry::update_metadata<T>(
+        registry,
+        symbol,
+        name,
+        decimals,
+        pyth_feed_id,
+        clock,
+    );
+}
+
+entry fun update_token_metadata<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    symbol: String,
+    name: String,
+    decimals: u8,
+    pyth_feed_id: vector<u8>,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    update_token_metadata_internal<T>(
+        registry,
+        admin_cap,
+        symbol,
+        name,
+        decimals,
+        pyth_feed_id,
+        clock,
+    );
+}
+
+public(package) fun set_token_enabled_internal<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    enabled: bool,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, token_registry::registry_owner_id(registry));
+    token_registry::set_enabled<T>(registry, enabled, clock);
+}
+
+entry fun set_token_enabled<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    enabled: bool,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    set_token_enabled_internal<T>(registry, admin_cap, enabled, clock);
+}
+
+public(package) fun set_token_max_age_internal<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    max_age_ms: u64,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, token_registry::registry_owner_id(registry));
+    token_registry::set_max_age_ms<T>(registry, max_age_ms, clock);
+}
+
+entry fun set_token_max_age<T>(
+    registry: &mut token_registry::TokenRegistry,
+    admin_cap: &AdminCap,
+    max_age_ms: u64,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    set_token_max_age_internal<T>(registry, admin_cap, max_age_ms, clock);
+}
+
+entry fun migrate_token_registry(
+    crowd_walrus: &mut CrowdWalrus,
+    admin_cap: &AdminCap,
+    ctx: &mut sui_tx_context::TxContext,
+) {
+    let crowd_walrus_id = sui_object::id(crowd_walrus);
+    assert_admin_cap_for(admin_cap, crowd_walrus_id);
+
+    if (df::exists_(&crowd_walrus.id, token_registry_key())) {
+        return
+    };
+
+    let token_registry = token_registry::create_registry(crowd_walrus_id, ctx);
+    let token_registry_id = sui_object::id(&token_registry);
+    token_registry::share_registry(token_registry);
+    record_token_registry_id(crowd_walrus, token_registry_id);
+    event::emit(TokenRegistryCreated {
+        crowd_walrus_id,
+        token_registry_id,
+    });
 }
 
 public(package) fun assert_admin_cap_for(cap: &AdminCap, crowd_walrus_id: sui_object::ID) {
