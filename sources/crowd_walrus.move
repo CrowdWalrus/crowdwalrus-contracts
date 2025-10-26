@@ -1,14 +1,18 @@
 module crowd_walrus::crowd_walrus;
 
-use crowd_walrus::campaign;
-use crowd_walrus::platform_policy;
+use crowd_walrus::campaign::{Self as campaign};
+use crowd_walrus::campaign_stats::{Self as campaign_stats};
+use crowd_walrus::platform_policy::{Self as platform_policy};
+use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager, register_subdomain};
 use std::string::String;
-use sui::clock::Clock;
-use sui::dynamic_field as df;
-use sui::event;
-use sui::table;
-use sui::vec_map;
+use sui::clock::{Self as clock, Clock};
+use sui::dynamic_field::{Self as df};
+use sui::event::{Self as event};
+use sui::object::{Self as sui_object};
+use sui::table::{Self as table};
+use sui::tx_context::{Self as sui_tx_context};
+use sui::vec_map::{Self as vec_map};
 use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
@@ -23,7 +27,7 @@ const E_NOT_VERIFIED: u64 = 3;
 
 // === Events ===
 public struct CampaignCreated has copy, drop {
-    campaign_id: ID,
+    campaign_id: sui_object::ID,
     creator: address,
 }
 
@@ -31,93 +35,108 @@ public struct CampaignCreated has copy, drop {
 
 /// The crowd walrus object
 public struct CrowdWalrus has key, store {
-    id: UID,
-    verified_maps: table::Table<ID, bool>,
-    verified_campaigns_list: vector<ID>,
+    id: sui_object::UID,
+    verified_maps: table::Table<sui_object::ID, bool>,
+    verified_campaigns_list: vector<sui_object::ID>,
     /// Shared policy presets registry ObjectID created at publish time.
-    policy_registry_id: ID,
+    policy_registry_id: sui_object::ID,
+    /// Shared profiles registry ObjectID created at publish time.
+    profiles_registry_id: sui_object::ID,
 }
 
 /// Capability for admin operations
 public struct AdminCap has key, store {
-    id: UID,
-    crowd_walrus_id: ID,
+    id: sui_object::UID,
+    crowd_walrus_id: sui_object::ID,
 }
 
 /// Capability for verifying admin operations
 public struct VerifyCap has key, store {
-    id: UID,
-    crowd_walrus_id: ID,
+    id: sui_object::UID,
+    crowd_walrus_id: sui_object::ID,
 }
 
 // === Events ====
 
 public struct AdminCreated has copy, drop {
-    crowd_walrus_id: ID,
-    admin_id: ID,
+    crowd_walrus_id: sui_object::ID,
+    admin_id: sui_object::ID,
     creator: address,
 }
 
 public struct CampaignVerified has copy, drop {
-    campaign_id: ID,
+    campaign_id: sui_object::ID,
     verifier: address,
 }
 
 public struct CampaignUnverified has copy, drop {
-    campaign_id: ID,
+    campaign_id: sui_object::ID,
     unverifier: address,
 }
 
 public struct CampaignDeleted has copy, drop {
-    campaign_id: ID,
+    campaign_id: sui_object::ID,
     editor: address,
     timestamp_ms: u64,
 }
 
 public struct PolicyRegistryCreated has copy, drop {
-    crowd_walrus_id: ID,
-    policy_registry_id: ID,
+    crowd_walrus_id: sui_object::ID,
+    policy_registry_id: sui_object::ID,
+}
+
+public struct ProfilesRegistryCreated has copy, drop {
+    crowd_walrus_id: sui_object::ID,
+    profiles_registry_id: sui_object::ID,
 }
 
 // === Init Function ===
 
 /// Initialize the crowd walrus
-fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
-    let crowd_walrus_uid = object::new(ctx);
-    let crowd_walrus_id = object::uid_to_inner(&crowd_walrus_uid);
+fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
+    let crowd_walrus_uid = sui_object::new(ctx);
+    let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
 
     let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
-    // Persist the registry ID so admins can resolve it without replaying events.
-    let policy_registry_id = object::id(&policy_registry);
+    // Persist the registry sui_object::ID so admins can resolve it without replaying events.
+    let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
+    let profiles_registry = profiles::create_registry(ctx);
+    let profiles_registry_id = sui_object::id(&profiles_registry);
+    profiles::share_registry(profiles_registry);
 
     let crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
         policy_registry_id,
+        profiles_registry_id,
     };
 
     // Create admin capability for the creator
     let admin_cap = AdminCap {
-        id: object::new(ctx),
+        id: sui_object::new(ctx),
         crowd_walrus_id,
     };
 
     // Emit creation event
     event::emit(AdminCreated {
         crowd_walrus_id,
-        admin_id: object::id(&admin_cap),
-        creator: tx_context::sender(ctx),
+        admin_id: sui_object::id(&admin_cap),
+        creator: sui_tx_context::sender(ctx),
     });
     // Announce the shared registry to indexers and deployment tooling.
     event::emit(PolicyRegistryCreated {
         crowd_walrus_id,
         policy_registry_id,
     });
+    event::emit(ProfilesRegistryCreated {
+        crowd_walrus_id,
+        profiles_registry_id,
+    });
 
     // Transfer capability to creator
-    transfer::transfer(admin_cap, tx_context::sender(ctx));
+    transfer::transfer(admin_cap, sui_tx_context::sender(ctx));
 
     // Share crowd walrus object with creator
     transfer::share_object(crowd_walrus);
@@ -126,7 +145,7 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
         ctx,
     );
 
-    transfer::public_transfer(suins_manager_cap, tx_context::sender(ctx));
+    transfer::public_transfer(suins_manager_cap, sui_tx_context::sender(ctx));
 }
 
 // === Public Functions ===
@@ -134,6 +153,7 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
 /// Register a new campaign
 entry fun create_campaign(
     crowd_walrus: &CrowdWalrus,
+    profiles_registry: &mut profiles::ProfilesRegistry,
     suins_manager: &SuiNSManager,
     suins: &mut SuiNS,
     clock: &Clock,
@@ -148,21 +168,22 @@ entry fun create_campaign(
     platform_address: address,
     start_date: u64,
     end_date: u64,
-    ctx: &mut TxContext,
-): ID {
+    ctx: &mut sui_tx_context::TxContext,
+): sui_object::ID {
     // Ensure start_date is not in the past
-    let current_time_ms = sui::clock::timestamp_ms(clock);
+    let current_time_ms = clock::timestamp_ms(clock);
     assert!(start_date >= current_time_ms, campaign::e_start_date_in_past());
 
     // register subname
     let app = CrowdWalrusApp {};
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
     assert!(recipient_address != @0x0, campaign::e_recipient_address_invalid());
+    // TODO(H2): allow resolving preset policies in place of explicit parameters.
     let payout_policy = campaign::new_payout_policy(platform_bps, platform_address, recipient_address);
 
-    let (campaign_id, campaign_owner_cap) = campaign::new(
+    let (mut campaign_obj, campaign_owner_cap) = campaign::new(
         &app,
-        object::id(crowd_walrus),
+        sui_object::id(crowd_walrus),
         name,
         short_description,
         subdomain_name,
@@ -174,6 +195,21 @@ entry fun create_campaign(
         clock,
         ctx,
     );
+    let campaign_id = sui_object::id(&campaign_obj);
+    assert!(
+        sui_object::id(profiles_registry) == profiles_registry_id(crowd_walrus),
+        E_NOT_AUTHORIZED,
+    );
+    let _stats_id = campaign_stats::create_for_campaign(
+        &mut campaign_obj,
+        clock,
+        ctx,
+    );
+    let _profile_id = profiles::create_or_get_profile_for_sender(
+        profiles_registry,
+        clock,
+        ctx,
+    );
     suins_manager.register_subdomain(
         &app,
         suins,
@@ -182,11 +218,12 @@ entry fun create_campaign(
         campaign_id.to_address(),
         ctx,
     );
+    campaign::share(campaign_obj);
 
-    transfer::public_transfer(campaign_owner_cap, tx_context::sender(ctx));
+    transfer::public_transfer(campaign_owner_cap, sui_tx_context::sender(ctx));
     event::emit(CampaignCreated {
         campaign_id,
-        creator: tx_context::sender(ctx),
+        creator: sui_tx_context::sender(ctx),
     });
     campaign_id
 }
@@ -196,11 +233,11 @@ entry fun verify_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
-    ctx: &TxContext,
+    ctx: &sui_tx_context::TxContext,
 ) {
-    let campaign_id = object::id(campaign);
+    let campaign_id = sui_object::id(campaign);
 
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(!table::contains(&crowd_walrus.verified_maps, campaign_id), E_ALREADY_VERIFIED);
     campaign::assert_not_deleted(campaign);
 
@@ -212,7 +249,7 @@ entry fun verify_campaign(
     // event
     event::emit(CampaignVerified {
         campaign_id,
-        verifier: tx_context::sender(ctx),
+        verifier: sui_tx_context::sender(ctx),
     });
 }
 
@@ -220,11 +257,11 @@ entry fun unverify_campaign(
     crowd_walrus: &mut CrowdWalrus,
     cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
-    ctx: &TxContext,
+    ctx: &sui_tx_context::TxContext,
 ) {
-    let campaign_id = object::id(campaign);
+    let campaign_id = sui_object::id(campaign);
 
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
     assert!(table::contains(&crowd_walrus.verified_maps, campaign_id), E_NOT_VERIFIED);
 
     campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
@@ -232,13 +269,13 @@ entry fun unverify_campaign(
     remove_verified_campaign(crowd_walrus, campaign_id);
     event::emit(CampaignUnverified {
         campaign_id,
-        unverifier: tx_context::sender(ctx),
+        unverifier: sui_tx_context::sender(ctx),
     });
 }
 
 fun remove_verified_campaign(
     crowd_walrus: &mut CrowdWalrus,
-    campaign_id: ID,
+    campaign_id: sui_object::ID,
 ) {
     if (!table::contains(&crowd_walrus.verified_maps, campaign_id)) {
         return
@@ -266,15 +303,15 @@ entry fun delete_campaign(
     campaign: &mut campaign::Campaign,
     cap: campaign::CampaignOwnerCap,
     clock: &Clock,
-    ctx: &TxContext,
+    ctx: &sui_tx_context::TxContext,
 ) {
-    let campaign_id = object::id(campaign);
+    let campaign_id = sui_object::id(campaign);
 
-    assert!(campaign::admin_id(campaign) == object::id(crowd_walrus), E_NOT_AUTHORIZED);
+    assert!(campaign::admin_id(campaign) == sui_object::id(crowd_walrus), E_NOT_AUTHORIZED);
     campaign::assert_owner(campaign, &cap);
     campaign::assert_not_deleted(campaign);
 
-    let deleted_at_ms = sui::clock::timestamp_ms(clock);
+    let deleted_at_ms = clock::timestamp_ms(clock);
     let subdomain_name = campaign::subdomain_name(campaign);
 
     if (table::contains(&crowd_walrus.verified_maps, campaign_id)) {
@@ -294,7 +331,7 @@ entry fun delete_campaign(
 
     event::emit(CampaignDeleted {
         campaign_id,
-        editor: tx_context::sender(ctx),
+        editor: sui_tx_context::sender(ctx),
         timestamp_ms: deleted_at_ms,
     });
 
@@ -309,7 +346,7 @@ public fun add_field<K: copy + drop + store, V: store>(
     key: K,
     value: V,
 ) {
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     df::add(&mut crowd_walrus.id, key, value);
 }
@@ -320,7 +357,7 @@ public fun remove_field<K: copy + drop + store, V: store>(
     cap: &AdminCap,
     key: K,
 ): V {
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     df::remove(&mut crowd_walrus.id, key)
 }
@@ -330,14 +367,14 @@ entry fun create_verify_cap(
     crowd_walrus: &CrowdWalrus,
     cap: &AdminCap,
     new_verifier: address,
-    ctx: &mut TxContext,
+    ctx: &mut sui_tx_context::TxContext,
 ) {
-    assert!(object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
 
     transfer::transfer(
         VerifyCap {
-            id: object::new(ctx),
-            crowd_walrus_id: object::id(crowd_walrus),
+            id: sui_object::new(ctx),
+            crowd_walrus_id: sui_object::id(crowd_walrus),
         },
         new_verifier,
     )
@@ -345,22 +382,27 @@ entry fun create_verify_cap(
 
 // === View Functions ===
 /// Get Admin Cap crowd_walrus_id
-public fun crowd_walrus_id(cap: &AdminCap): ID {
+public fun crowd_walrus_id(cap: &AdminCap): sui_object::ID {
     cap.crowd_walrus_id
 }
 
-/// Get the shared PolicyRegistry ID managed by this CrowdWalrus instance.
-public fun policy_registry_id(crowd_walrus: &CrowdWalrus): ID {
+/// Get the shared PolicyRegistry sui_object::ID managed by this CrowdWalrus instance.
+public fun policy_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
     crowd_walrus.policy_registry_id
 }
 
+/// Get the shared ProfilesRegistry sui_object::ID managed by this CrowdWalrus instance.
+public fun profiles_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
+    crowd_walrus.profiles_registry_id
+}
+
 /// Check if a campaign is verified
-public fun is_campaign_verified(crowd_walrus: &CrowdWalrus, campaign_id: ID): bool {
+public fun is_campaign_verified(crowd_walrus: &CrowdWalrus, campaign_id: sui_object::ID): bool {
     table::contains(&crowd_walrus.verified_maps, campaign_id)
 }
 
 /// Get the verified campaigns list
-public fun get_verified_campaigns_list(crowd_walrus: &CrowdWalrus): vector<ID> {
+public fun get_verified_campaigns_list(crowd_walrus: &CrowdWalrus): vector<sui_object::ID> {
     crowd_walrus.verified_campaigns_list
 }
 
@@ -376,11 +418,13 @@ public fun test_init_function() {
 
     let crowd_walrus = scenario.take_shared<CrowdWalrus>();
     let crowd_walrus_cap = scenario.take_from_sender<AdminCap>();
-    assert!(object::id(&crowd_walrus) == crowd_walrus_cap.crowd_walrus_id);
+    assert!(sui_object::id(&crowd_walrus) == crowd_walrus_cap.crowd_walrus_id);
 
     let policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
-    // Ensure the stored registry ID matches the shared object we just fetched.
-    assert!(object::id(&policy_registry) == policy_registry_id(&crowd_walrus));
+    let profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    // Ensure the stored registry sui_object::ID matches the shared object we just fetched.
+    assert!(sui_object::id(&policy_registry) == policy_registry_id(&crowd_walrus));
+    assert!(sui_object::id(&profiles_registry) == profiles_registry_id(&crowd_walrus));
 
     let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
     let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
@@ -390,6 +434,7 @@ public fun test_init_function() {
     // clean up
     scenario.return_to_sender(crowd_walrus_cap);
     ts::return_shared(policy_registry);
+    ts::return_shared(profiles_registry);
     scenario.return_to_sender(suins_manager_cap);
     ts::return_shared(crowd_walrus);
     ts::return_shared(suins_manager);
@@ -403,30 +448,34 @@ public fun get_app(): CrowdWalrusApp {
 }
 
 #[test_only]
-public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
-    let crowd_walrus_uid = object::new(ctx);
-    let crowd_walrus_id = object::uid_to_inner(&crowd_walrus_uid);
+public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): sui_object::ID {
+    let crowd_walrus_uid = sui_object::new(ctx);
+    let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
     let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
-    let policy_registry_id = object::id(&policy_registry);
+    let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
+    let profiles_registry = profiles::create_registry(ctx);
+    let profiles_registry_id = sui_object::id(&profiles_registry);
+    profiles::share_registry(profiles_registry);
 
     let crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
         policy_registry_id,
+        profiles_registry_id,
     };
     transfer::share_object(crowd_walrus);
     crowd_walrus_id
 }
 
 #[test_only]
-public fun create_admin_cap_for_user(crowd_walrus_id: ID, user: address, ctx: &mut TxContext): ID {
+public fun create_admin_cap_for_user(crowd_walrus_id: sui_object::ID, user: address, ctx: &mut sui_tx_context::TxContext): sui_object::ID {
     let admin_cap = AdminCap {
-        id: object::new(ctx),
+        id: sui_object::new(ctx),
         crowd_walrus_id: crowd_walrus_id,
     };
-    let admin_cap_id = object::id(&admin_cap);
+    let admin_cap_id = sui_object::id(&admin_cap);
     transfer::transfer(admin_cap, user);
     admin_cap_id
 }
@@ -456,7 +505,7 @@ entry fun add_platform_policy(
     platform_bps: u16,
     platform_address: address,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    _ctx: &mut sui_tx_context::TxContext,
 ) {
     // Entry wrapper allows direct PTB invocation; logic lives in the internal helper for reuse.
     add_platform_policy_internal(registry, admin_cap, name, platform_bps, platform_address, clock);
@@ -487,7 +536,7 @@ entry fun update_platform_policy(
     platform_bps: u16,
     platform_address: address,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    _ctx: &mut sui_tx_context::TxContext,
 ) {
     update_platform_policy_internal(registry, admin_cap, name, platform_bps, platform_address, clock);
 }
@@ -507,7 +556,7 @@ entry fun disable_platform_policy(
     admin_cap: &AdminCap,
     name: String,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    _ctx: &mut sui_tx_context::TxContext,
 ) {
     disable_platform_policy_internal(registry, admin_cap, name, clock);
 }
@@ -527,30 +576,30 @@ entry fun enable_platform_policy(
     admin_cap: &AdminCap,
     name: String,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    _ctx: &mut sui_tx_context::TxContext,
 ) {
     enable_platform_policy_internal(registry, admin_cap, name, clock);
 }
 
-public(package) fun assert_admin_cap_for(cap: &AdminCap, crowd_walrus_id: ID) {
+public(package) fun assert_admin_cap_for(cap: &AdminCap, crowd_walrus_id: sui_object::ID) {
     assert!(cap.crowd_walrus_id == crowd_walrus_id, E_NOT_AUTHORIZED);
 }
 
-public(package) fun admin_cap_crowd_walrus_id(cap: &AdminCap): ID {
+public(package) fun admin_cap_crowd_walrus_id(cap: &AdminCap): sui_object::ID {
     cap.crowd_walrus_id
 }
 
 #[test_only]
 public fun create_verify_cap_for_user(
-    crowd_walrus_id: ID,
+    crowd_walrus_id: sui_object::ID,
     user: address,
-    ctx: &mut TxContext,
-): ID {
+    ctx: &mut sui_tx_context::TxContext,
+): sui_object::ID {
     let verify_cap = VerifyCap {
-        id: object::new(ctx),
+        id: sui_object::new(ctx),
         crowd_walrus_id: crowd_walrus_id,
     };
-    let verify_cap_id = object::id(&verify_cap);
+    let verify_cap_id = sui_object::id(&verify_cap);
     transfer::transfer(verify_cap, user);
     verify_cap_id
 }
