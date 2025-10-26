@@ -328,7 +328,7 @@ public fun test_campaign_stats_id_defaults_and_setter() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(campaign_owner);
-    let campaign_id = crowd_walrus_tests::create_test_campaign(
+    let (mut campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Link"),
         utf8(b"Verify stats linkage defaults"),
@@ -337,13 +337,13 @@ public fun test_campaign_stats_id_defaults_and_setter() {
         vector::empty(),
         1_000,
         USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
         0,
         U64_MAX,
     );
 
-    scenario.next_tx(campaign_owner);
-    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
-
+    ts::return_shared(clock);
     assert!(!campaign::parameters_locked(&campaign));
     assert_eq!(object::id_to_address(&campaign::stats_id(&campaign)), @0x0);
 
@@ -351,7 +351,8 @@ public fun test_campaign_stats_id_defaults_and_setter() {
     campaign::set_stats_id(&mut campaign, expected_stats_id);
     assert_eq!(campaign::stats_id(&campaign), expected_stats_id);
 
-    ts::return_shared(campaign);
+    campaign::share(campaign);
+    campaign::delete_owner_cap(owner_cap);
     scenario.end();
 }
 
@@ -361,7 +362,7 @@ public fun test_campaign_stats_id_double_set_fails() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(campaign_owner);
-    let campaign_id = crowd_walrus_tests::create_test_campaign(
+    let (mut campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Write Once"),
         utf8(b"Ensure stats id cannot reset"),
@@ -370,14 +371,15 @@ public fun test_campaign_stats_id_double_set_fails() {
         vector::empty(),
         1_000,
         USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
         0,
         U64_MAX,
     );
 
-    scenario.next_tx(campaign_owner);
-    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
-
+    ts::return_shared(clock);
     campaign::set_stats_id(&mut campaign, object::id_from_address(@0x111));
+    campaign::delete_owner_cap(owner_cap);
     campaign::set_stats_id(&mut campaign, object::id_from_address(@0x222));
 
     ts::return_shared(campaign);
