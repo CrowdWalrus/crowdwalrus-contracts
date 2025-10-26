@@ -14,7 +14,7 @@ use sui::test_scenario::{Self as ts, ctx};
 const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
-const DEFAULT_PLATFORM_BPS: u16 = 500;
+const DEFAULT_PLATFORM_BPS: u16 = 0;
 
 #[test]
 public fun test_create_for_campaign_happy_path() {
