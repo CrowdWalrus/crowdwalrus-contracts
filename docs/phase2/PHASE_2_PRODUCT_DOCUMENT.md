@@ -62,7 +62,7 @@ Create Campaign (Owner)
 
 Owner calls create_campaign with:
 
-Split preset (e.g., Non‑profit 0% platform, Commercial 5% platform) or explicit PayoutPolicy.
+Split preset name (e.g., Standard 0% platform, Commercial 5% platform). Omitting the name applies the seeded `"standard"` preset automatically (initially 0% platform fee pointing to the deployer's address, but admins can update it later); custom payout values are not accepted.
 
 funding_goal_usd_micro, start/end dates, recipient address.
 
@@ -236,7 +236,7 @@ BadgeConfig validation (lengths equal across amount/payment/image vectors; each 
 
 SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_address}) managed by AdminCap.
 
-Create Campaign: Accept either policy_name to snapshot a preset OR explicit PayoutPolicy.
+Create Campaign: Accept policy_name to snapshot a preset. If policy_name is omitted, snapshot the seeded `"standard"` preset (initially 0 bps with platform_address set to the deployer). Explicit custom payout values are not accepted.
 
 Snapshots are copied into campaign and locked on first donation; later changes in presets affect only future campaigns.
 
@@ -244,7 +244,9 @@ Acceptance Criteria
 
 Admin can add/update/disable presets.
 
-Creating with preset resolves to stored values; existing campaigns remain unaffected by later changes.
+Creating with preset (or the default when omitted) resolves to stored values; existing campaigns remain unaffected by later changes.
+
+Omitting policy_name resolves to the `"standard"` preset; creation aborts if that preset is missing or disabled.
 
 6) Events (for Indexer)
 Event	When	Fields (required)
