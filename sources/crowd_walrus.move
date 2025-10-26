@@ -5,7 +5,7 @@ use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::platform_policy::{Self as platform_policy};
 use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager, register_subdomain};
-use std::string::String;
+use std::string::{Self as string, String};
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field::{Self as df};
 use sui::event::{Self as event};
@@ -24,6 +24,17 @@ public struct CrowdWalrusApp has drop {}
 const E_NOT_AUTHORIZED: u64 = 1;
 const E_ALREADY_VERIFIED: u64 = 2;
 const E_NOT_VERIFIED: u64 = 3;
+
+const DEFAULT_POLICY_NAME: vector<u8> = b"standard";
+
+fun default_policy_name_internal(): String {
+    string::utf8(DEFAULT_POLICY_NAME)
+}
+
+/// Returns the name of the preset used when campaign creators omit a policy.
+public fun default_policy_name(): String {
+    default_policy_name_internal()
+}
 
 // === Events ===
 public struct CampaignCreated has copy, drop {
@@ -97,7 +108,13 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
     let crowd_walrus_uid = sui_object::new(ctx);
     let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
 
-    let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    let mut policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    platform_policy::add_policy_bootstrap(
+        &mut policy_registry,
+        default_policy_name_internal(),
+        0,
+        sui_tx_context::sender(ctx),
+    );
     // Persist the registry sui_object::ID so admins can resolve it without replaying events.
     let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
@@ -150,13 +167,14 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
 
 // === Public Functions ===
 
-/// Register a new campaign using either a preset or explicit payout parameters.
+/// Register a new campaign using a preset payout policy.
 ///
 /// Payout policy resolution rules:
 /// - If `policy_name` is `std::option::Option::Some`, the preset is resolved from `policy_registry`
-///   and its values are copied into the campaign, ignoring `platform_bps` and `platform_address`.
-/// - If `policy_name` is `std::option::Option::None`, the explicit `platform_bps` and
-///   `platform_address` arguments are validated and stored directly.
+///   and its values are copied into the campaign.
+/// - If `policy_name` is `std::option::Option::None`, the default preset (`"standard"`) seeded
+///   during initialization is resolved from `policy_registry` and copied into the campaign instead.
+///   This call aborts if that preset has been removed or disabled by admins.
 entry fun create_campaign(
     crowd_walrus: &CrowdWalrus,
     policy_registry: &platform_policy::PolicyRegistry,
@@ -172,8 +190,6 @@ entry fun create_campaign(
     funding_goal_usd_micro: u64,
     recipient_address: address,
     policy_name: std::option::Option<String>,
-    platform_bps: u16,
-    platform_address: address,
     start_date: u64,
     end_date: u64,
     ctx: &mut sui_tx_context::TxContext,
@@ -193,8 +209,6 @@ entry fun create_campaign(
     let payout_policy = resolve_payout_policy(
         policy_registry,
         policy_name,
-        platform_bps,
-        platform_address,
         recipient_address,
     );
 
@@ -248,8 +262,6 @@ entry fun create_campaign(
 fun resolve_payout_policy(
     policy_registry: &platform_policy::PolicyRegistry,
     policy_name_opt: std::option::Option<String>,
-    explicit_platform_bps: u16,
-    explicit_platform_address: address,
     recipient_address: address,
 ): campaign::PayoutPolicy {
     if (std::option::is_some(&policy_name_opt)) {
@@ -261,7 +273,13 @@ fun resolve_payout_policy(
             recipient_address,
         )
     };
-    campaign::new_payout_policy(explicit_platform_bps, explicit_platform_address, recipient_address)
+    let default_policy_name = default_policy_name_internal();
+    let preset = platform_policy::require_enabled_policy(policy_registry, &default_policy_name);
+    campaign::new_payout_policy(
+        platform_policy::policy_platform_bps(preset),
+        platform_policy::policy_platform_address(preset),
+        recipient_address,
+    )
 }
 
 /// Verify a campaign
@@ -487,7 +505,13 @@ public fun get_app(): CrowdWalrusApp {
 public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): sui_object::ID {
     let crowd_walrus_uid = sui_object::new(ctx);
     let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
-    let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    let mut policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    platform_policy::add_policy_bootstrap(
+        &mut policy_registry,
+        default_policy_name_internal(),
+        0,
+        sui_tx_context::sender(ctx),
+    );
     let policy_registry_id = sui_object::id(&policy_registry);
     platform_policy::share_registry(policy_registry);
     let profiles_registry = profiles::create_registry(ctx);
