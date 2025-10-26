@@ -14,13 +14,14 @@ use sui::test_scenario::{Self as ts, ctx};
 const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
+const DEFAULT_PLATFORM_BPS: u16 = 500;
 
 #[test]
 public fun test_create_for_campaign_happy_path() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
-    let campaign_id = crowd_walrus_tests::create_test_campaign(
+    let (mut campaign_obj, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Ready"),
         utf8(b"Campaign stats creation"),
@@ -29,26 +30,21 @@ public fun test_create_for_campaign_happy_path() {
         vector::empty(),
         1_000,
         USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
         0,
         U64_MAX,
     );
-
-    scenario.next_tx(USER1);
-    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
-    let clock = scenario.take_shared<Clock>();
-
     assert_eq!(sui_object::id_to_address(&campaign::stats_id(&campaign_obj)), @0x0);
-
     let stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
         ctx(&mut scenario),
     );
-
     assert_eq!(campaign::stats_id(&campaign_obj), stats_id);
-
-    ts::return_shared(campaign_obj);
     ts::return_shared(clock);
+    campaign::share(campaign_obj);
+    campaign::delete_owner_cap(owner_cap);
 
     let effects = ts::next_tx(&mut scenario, USER1);
     assert_eq!(ts::num_user_events(&effects), 1);
@@ -71,7 +67,7 @@ public fun test_create_for_campaign_twice_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
-    let campaign_id = crowd_walrus_tests::create_test_campaign(
+    let (mut campaign_obj, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Twice"),
         utf8(b"Prevent duplicate stats"),
@@ -80,22 +76,20 @@ public fun test_create_for_campaign_twice_aborts() {
         vector::empty(),
         10_000,
         USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
         0,
         U64_MAX,
     );
-
-    scenario.next_tx(USER1);
-    let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
-    let clock = scenario.take_shared<Clock>();
-
+    let campaign_id = sui_object::id(&campaign_obj);
     let _stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
         ctx(&mut scenario),
     );
-
-    ts::return_shared(campaign_obj);
     ts::return_shared(clock);
+    campaign::share(campaign_obj);
+    campaign::delete_owner_cap(owner_cap);
 
     scenario.next_tx(USER1);
     let mut campaign_again = scenario.take_shared_by_id<Campaign>(campaign_id);
