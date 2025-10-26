@@ -4,6 +4,7 @@ module crowd_walrus::campaign_tests;
 
 use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap, CampaignUpdate};
 use crowd_walrus::crowd_walrus_tests as crowd_walrus_tests;
+use crowd_walrus::platform_policy;
 use std::string::{String, utf8};
 use std::unit_test::assert_eq;
 use sui::clock::Clock;
@@ -14,7 +15,7 @@ const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
 
-const DEFAULT_PLATFORM_BPS: u16 = 500;
+const DEFAULT_PLATFORM_BPS: u16 = 0;
 const TEST_DOMAIN_NAME: vector<u8> = b"test.sui";
 
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
@@ -90,6 +91,23 @@ public fun test_payout_policy_custom_values() {
     let recipient_address_policy = USER1;
     let custom_bps: u16 = 1_234;
 
+    scenario.next_tx(ADMIN);
+    let mut policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = scenario.take_from_sender<crowd_walrus::crowd_walrus::AdminCap>();
+    let clock = scenario.take_shared<Clock>();
+    crowd_walrus::crowd_walrus::add_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        utf8(b"custompolicy"),
+        custom_bps,
+        platform_address,
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    scenario.return_to_sender(admin_cap);
+    ts::next_tx(&mut scenario, ADMIN);
+
     scenario.next_tx(campaign_owner);
     let campaign_id = crowd_walrus_tests::create_test_campaign_with_policy(
         &mut scenario,
@@ -100,9 +118,7 @@ public fun test_payout_policy_custom_values() {
         vector::empty(),
         2_000_000,
         recipient_address_policy,
-        option::none(),
-        custom_bps,
-        platform_address,
+        option::some(utf8(b"custompolicy")),
         0,
         U64_MAX,
     );
@@ -785,8 +801,6 @@ public fun test_create_campaign_invalid_recipient_address() {
         1_000_000,
         @0x0,
         option::none(),
-        DEFAULT_PLATFORM_BPS,
-        ADMIN,
         0,
         U64_MAX,
     );
