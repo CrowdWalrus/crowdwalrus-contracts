@@ -1,6 +1,7 @@
 module crowd_walrus::crowd_walrus;
 
 use crowd_walrus::campaign;
+use crowd_walrus::platform_policy;
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager, register_subdomain};
 use std::string::String;
 use sui::clock::Clock;
@@ -33,6 +34,8 @@ public struct CrowdWalrus has key, store {
     id: UID,
     verified_maps: table::Table<ID, bool>,
     verified_campaigns_list: vector<ID>,
+    /// Shared policy presets registry ObjectID created at publish time.
+    policy_registry_id: ID,
 }
 
 /// Capability for admin operations
@@ -71,17 +74,29 @@ public struct CampaignDeleted has copy, drop {
     timestamp_ms: u64,
 }
 
+public struct PolicyRegistryCreated has copy, drop {
+    crowd_walrus_id: ID,
+    policy_registry_id: ID,
+}
+
 // === Init Function ===
 
 /// Initialize the crowd walrus
 fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
+    let crowd_walrus_uid = object::new(ctx);
+    let crowd_walrus_id = object::uid_to_inner(&crowd_walrus_uid);
+
+    let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    // Persist the registry ID so admins can resolve it without replaying events.
+    let policy_registry_id = object::id(&policy_registry);
+    platform_policy::share_registry(policy_registry);
+
     let crowd_walrus = CrowdWalrus {
-        id: object::new(ctx),
+        id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
+        policy_registry_id,
     };
-
-    let crowd_walrus_id = object::id(&crowd_walrus);
 
     // Create admin capability for the creator
     let admin_cap = AdminCap {
@@ -94,6 +109,11 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut TxContext) {
         crowd_walrus_id,
         admin_id: object::id(&admin_cap),
         creator: tx_context::sender(ctx),
+    });
+    // Announce the shared registry to indexers and deployment tooling.
+    event::emit(PolicyRegistryCreated {
+        crowd_walrus_id,
+        policy_registry_id,
     });
 
     // Transfer capability to creator
@@ -329,6 +349,11 @@ public fun crowd_walrus_id(cap: &AdminCap): ID {
     cap.crowd_walrus_id
 }
 
+/// Get the shared PolicyRegistry ID managed by this CrowdWalrus instance.
+public fun policy_registry_id(crowd_walrus: &CrowdWalrus): ID {
+    crowd_walrus.policy_registry_id
+}
+
 /// Check if a campaign is verified
 public fun is_campaign_verified(crowd_walrus: &CrowdWalrus, campaign_id: ID): bool {
     table::contains(&crowd_walrus.verified_maps, campaign_id)
@@ -353,6 +378,10 @@ public fun test_init_function() {
     let crowd_walrus_cap = scenario.take_from_sender<AdminCap>();
     assert!(object::id(&crowd_walrus) == crowd_walrus_cap.crowd_walrus_id);
 
+    let policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
+    // Ensure the stored registry ID matches the shared object we just fetched.
+    assert!(object::id(&policy_registry) == policy_registry_id(&crowd_walrus));
+
     let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
     let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
 
@@ -360,6 +389,7 @@ public fun test_init_function() {
 
     // clean up
     scenario.return_to_sender(crowd_walrus_cap);
+    ts::return_shared(policy_registry);
     scenario.return_to_sender(suins_manager_cap);
     ts::return_shared(crowd_walrus);
     ts::return_shared(suins_manager);
@@ -374,12 +404,18 @@ public fun get_app(): CrowdWalrusApp {
 
 #[test_only]
 public fun create_and_share_crowd_walrus(ctx: &mut TxContext): ID {
+    let crowd_walrus_uid = object::new(ctx);
+    let crowd_walrus_id = object::uid_to_inner(&crowd_walrus_uid);
+    let policy_registry = platform_policy::create_registry(crowd_walrus_id, ctx);
+    let policy_registry_id = object::id(&policy_registry);
+    platform_policy::share_registry(policy_registry);
+
     let crowd_walrus = CrowdWalrus {
-        id: object::new(ctx),
+        id: crowd_walrus_uid,
         verified_maps: table::new(ctx),
         verified_campaigns_list: vector::empty(),
+        policy_registry_id,
     };
-    let crowd_walrus_id = object::id(&crowd_walrus);
     transfer::share_object(crowd_walrus);
     crowd_walrus_id
 }
@@ -393,6 +429,115 @@ public fun create_admin_cap_for_user(crowd_walrus_id: ID, user: address, ctx: &m
     let admin_cap_id = object::id(&admin_cap);
     transfer::transfer(admin_cap, user);
     admin_cap_id
+}
+
+public(package) fun add_platform_policy_internal(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, platform_policy::registry_owner_id(registry));
+    platform_policy::add_policy(
+        registry,
+        name,
+        platform_bps,
+        platform_address,
+        clock,
+    );
+}
+
+entry fun add_platform_policy(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Entry wrapper allows direct PTB invocation; logic lives in the internal helper for reuse.
+    add_platform_policy_internal(registry, admin_cap, name, platform_bps, platform_address, clock);
+}
+
+public(package) fun update_platform_policy_internal(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, platform_policy::registry_owner_id(registry));
+    platform_policy::update_policy(
+        registry,
+        name,
+        platform_bps,
+        platform_address,
+        clock,
+    );
+}
+
+entry fun update_platform_policy(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    update_platform_policy_internal(registry, admin_cap, name, platform_bps, platform_address, clock);
+}
+
+public(package) fun disable_platform_policy_internal(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, platform_policy::registry_owner_id(registry));
+    platform_policy::disable_policy(registry, name, clock);
+}
+
+entry fun disable_platform_policy(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    disable_platform_policy_internal(registry, admin_cap, name, clock);
+}
+
+public(package) fun enable_platform_policy_internal(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, platform_policy::registry_owner_id(registry));
+    platform_policy::enable_policy(registry, name, clock);
+}
+
+entry fun enable_platform_policy(
+    registry: &mut platform_policy::PolicyRegistry,
+    admin_cap: &AdminCap,
+    name: String,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    enable_platform_policy_internal(registry, admin_cap, name, clock);
+}
+
+public(package) fun assert_admin_cap_for(cap: &AdminCap, crowd_walrus_id: ID) {
+    assert!(cap.crowd_walrus_id == crowd_walrus_id, E_NOT_AUTHORIZED);
+}
+
+public(package) fun admin_cap_crowd_walrus_id(cap: &AdminCap): ID {
+    cap.crowd_walrus_id
 }
 
 #[test_only]
