@@ -225,7 +225,9 @@ Deps: C1 (CampaignStats), E1-E2 and E5 (ProfilesRegistry + Profile + helper), H1
 Err codes: E_INVALID_BPS, E_ZERO_ADDRESS, time validation errors.
 
 B) Token & oracle infrastructure
-B1. TokenRegistry (per‑token metadata & staleness)
+B1. TokenRegistry (per-token metadata & staleness)
+
+✅ COMPLETED (Oct 26, 2025) — Shared registry + admin flows merged; migration entry guards legacy deployments.
 
 File/Module: sources/token_registry.move / crowd_walrus::token_registry
 
