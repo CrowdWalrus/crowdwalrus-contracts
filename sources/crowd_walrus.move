@@ -150,9 +150,16 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
 
 // === Public Functions ===
 
-/// Register a new campaign
+/// Register a new campaign using either a preset or explicit payout parameters.
+///
+/// Payout policy resolution rules:
+/// - If `policy_name` is `std::option::Option::Some`, the preset is resolved from `policy_registry`
+///   and its values are copied into the campaign, ignoring `platform_bps` and `platform_address`.
+/// - If `policy_name` is `std::option::Option::None`, the explicit `platform_bps` and
+///   `platform_address` arguments are validated and stored directly.
 entry fun create_campaign(
     crowd_walrus: &CrowdWalrus,
+    policy_registry: &platform_policy::PolicyRegistry,
     profiles_registry: &mut profiles::ProfilesRegistry,
     suins_manager: &SuiNSManager,
     suins: &mut SuiNS,
@@ -164,6 +171,7 @@ entry fun create_campaign(
     metadata_values: vector<String>,
     funding_goal_usd_micro: u64,
     recipient_address: address,
+    policy_name: std::option::Option<String>,
     platform_bps: u16,
     platform_address: address,
     start_date: u64,
@@ -177,9 +185,18 @@ entry fun create_campaign(
     // register subname
     let app = CrowdWalrusApp {};
     let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
+    assert!(
+        sui_object::id(policy_registry) == policy_registry_id(crowd_walrus),
+        E_NOT_AUTHORIZED,
+    );
     assert!(recipient_address != @0x0, campaign::e_recipient_address_invalid());
-    // TODO(H2): allow resolving preset policies in place of explicit parameters.
-    let payout_policy = campaign::new_payout_policy(platform_bps, platform_address, recipient_address);
+    let payout_policy = resolve_payout_policy(
+        policy_registry,
+        policy_name,
+        platform_bps,
+        platform_address,
+        recipient_address,
+    );
 
     let (mut campaign_obj, campaign_owner_cap) = campaign::new(
         &app,
@@ -226,6 +243,25 @@ entry fun create_campaign(
         creator: sui_tx_context::sender(ctx),
     });
     campaign_id
+}
+
+fun resolve_payout_policy(
+    policy_registry: &platform_policy::PolicyRegistry,
+    policy_name_opt: std::option::Option<String>,
+    explicit_platform_bps: u16,
+    explicit_platform_address: address,
+    recipient_address: address,
+): campaign::PayoutPolicy {
+    if (std::option::is_some(&policy_name_opt)) {
+        let policy_name = std::option::destroy_some(policy_name_opt);
+        let preset = platform_policy::require_enabled_policy(policy_registry, &policy_name);
+        return campaign::new_payout_policy(
+            platform_policy::policy_platform_bps(preset),
+            platform_policy::policy_platform_address(preset),
+            recipient_address,
+        )
+    };
+    campaign::new_payout_policy(explicit_platform_bps, explicit_platform_address, recipient_address)
 }
 
 /// Verify a campaign
