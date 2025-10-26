@@ -3,7 +3,9 @@
 module crowd_walrus::crowd_walrus_tests;
 
 use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap};
+use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus, CrowdWalrus, AdminCap, VerifyCap};
+use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{
     Self as suins_manager,
     AdminCap as SuiNSManagerAdminCap,
@@ -14,6 +16,7 @@ use crowd_walrus::suins_manager_tests::{Self as suins_manager_tests, get_test_su
 use std::string::{Self, String};
 use std::unit_test::assert_eq;
 use sui::clock::Clock;
+use sui::object as sui_object;
 use sui::test_scenario::{Self as ts, ctx, Scenario};
 use sui::test_utils as tu;
 use sui::vec_map::VecMap;
@@ -66,6 +69,11 @@ public fun test_create_campaign() {
         sc.next_tx(USER1);
         let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
         let campaign = sc.take_shared_by_id<Campaign>(campaign_owner_cap.campaign_id());
+        let profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
+        let stats = sc.take_shared_by_id<campaign_stats::CampaignStats>(campaign::stats_id(&campaign));
+        assert!(profiles::exists(&profiles_registry, USER1));
+        let profile_id = profiles::id_of(&profiles_registry, USER1);
+        assert!(sui_object::id_to_address(&profile_id) != @0x0);
 
         assert_eq!(campaign.subdomain_name(), subdomain_name);
         let metadata: VecMap<String, String> = campaign.metadata();
@@ -76,10 +84,66 @@ public fun test_create_campaign() {
         assert_eq!(campaign::payout_platform_bps(&campaign), DEFAULT_PLATFORM_BPS);
         assert_eq!(campaign::payout_platform_address(&campaign), ADMIN);
         assert_eq!(campaign::payout_recipient_address(&campaign), USER1);
+        assert_eq!(campaign::stats_id(&campaign), sui_object::id(&stats));
+        assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
+        assert_eq!(campaign_stats::total_donations_count(&stats), 0);
         // Clean up
         tu::destroy(campaign_owner_cap);
+        ts::return_shared(stats);
+        ts::return_shared(profiles_registry);
         ts::return_shared(campaign);
     };
+
+    sc.end();
+}
+
+#[test]
+public fun test_create_campaign_reuses_existing_profile() {
+    let mut sc = test_init(ADMIN);
+    sc.next_tx(USER1);
+    let mut registry = sc.take_shared<profiles::ProfilesRegistry>();
+    let clock = sc.take_shared<Clock>();
+    let initial_profile_id = profiles::create_or_get_profile_for_sender(
+        &mut registry,
+        &clock,
+        ctx(&mut sc),
+    );
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    ts::next_tx(&mut sc, USER1);
+
+    sc.next_tx(USER1);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Reuse Profile"),
+        string::utf8(b"Existing profile should be reused"),
+        b"reuse-profile",
+        vector::empty(),
+        vector::empty(),
+        1_500_000,
+        USER1,
+        0,
+        U64_MAX,
+    );
+    let effects = ts::next_tx(&mut sc, USER1);
+    assert_eq!(ts::num_user_events(&effects), 2);
+
+    sc.next_tx(USER1);
+    let registry_after = sc.take_shared<profiles::ProfilesRegistry>();
+    assert_eq!(profiles::id_of(&registry_after, USER1), initial_profile_id);
+    ts::return_shared(registry_after);
+
+    let campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+    let stats_id = campaign::stats_id(&campaign);
+    assert!(sui_object::id_to_address(&stats_id) != @0x0);
+    ts::return_shared(campaign);
+
+    let stats = sc.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
+    assert_eq!(campaign_stats::total_donations_count(&stats), 0);
+    ts::return_shared(stats);
+
+    ts::next_tx(&mut sc, USER1);
 
     sc.end();
 }
@@ -171,19 +235,19 @@ public fun test_verify_campaign() {
         let verify_cap = sc.take_from_sender<VerifyCap>();
 
         // Before verify
-        assert!(!crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert!(!crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
         assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
 
         // Verify
         crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
         // After verify
-        assert!(crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert!(crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
         assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 1);
         assert!(
-            vector::contains<ID>(
+            vector::contains<sui_object::ID>(
                 &crowd_walrus.get_verified_campaigns_list(),
-                &object::id(&campaign),
+                &sui_object::id(&campaign),
             ),
         );
         assert!(campaign.is_verified());
@@ -202,7 +266,7 @@ public fun test_verify_campaign() {
         let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
         crowd_walrus.unverify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
-        assert!(!crowd_walrus.is_campaign_verified(object::id(&campaign)));
+        assert!(!crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
         assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
 
         assert!(!campaign.is_verified());
@@ -675,7 +739,7 @@ public fun create_test_campaign(
     recipient_address: address,
     start_date: u64,
     end_date: u64,
-): ID {
+): sui_object::ID {
     create_test_campaign_with_policy(
         sc,
         title,
@@ -705,14 +769,16 @@ public fun create_test_campaign_with_policy(
     platform_address: address,
     start_date: u64,
     end_date: u64,
-): ID {
+): sui_object::ID {
     let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let mut profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
     let suins_manager = sc.take_shared<SuiNSManager>();
     let mut suins = sc.take_shared<SuiNS>();
     let clock = sc.take_shared<Clock>();
     let subdomain_name = get_test_subdomain_name(subname);
     let campaign_id = crowd_walrus::create_campaign(
         &crowd_walrus,
+        &mut profiles_registry,
         &suins_manager,
         &mut suins,
         &clock,
@@ -730,8 +796,113 @@ public fun create_test_campaign_with_policy(
         ctx(sc),
     );
     ts::return_shared(crowd_walrus);
+    ts::return_shared(profiles_registry);
     ts::return_shared(suins);
     ts::return_shared(clock);
     ts::return_shared(suins_manager);
     campaign_id
+}
+
+#[test_only]
+public fun create_unshared_campaign(
+    sc: &mut Scenario,
+    title: String,
+    short_description: String,
+    subname: vector<u8>,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    funding_goal_usd_micro: u64,
+    recipient_address: address,
+    platform_bps: u16,
+    platform_address: address,
+    start_date: u64,
+    end_date: u64,
+): (Campaign, CampaignOwnerCap, Clock) {
+    let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let clock = sc.take_shared<Clock>();
+    let app = crowd_walrus::get_app();
+    let payout_policy = campaign::new_payout_policy(platform_bps, platform_address, recipient_address);
+    let subdomain_name = get_test_subdomain_name(subname);
+    let metadata = sui::vec_map::from_keys_values(metadata_keys, metadata_values);
+    let (campaign, owner_cap) = campaign::new(
+        &app,
+        sui_object::id(&crowd_walrus),
+        title,
+        short_description,
+        subdomain_name,
+        metadata,
+        funding_goal_usd_micro,
+        payout_policy,
+        start_date,
+        end_date,
+        &clock,
+        ctx(sc),
+    );
+    ts::return_shared(crowd_walrus);
+    (campaign, owner_cap, clock)
+}
+
+#[test]
+public fun test_create_campaign_auto_creates_profile_and_stats() {
+    let mut sc = test_init(ADMIN);
+
+    sc.next_tx(USER1);
+    let registry_check = sc.take_shared<profiles::ProfilesRegistry>();
+    assert!(!profiles::exists(&registry_check, USER1));
+    ts::return_shared(registry_check);
+    ts::next_tx(&mut sc, USER1);
+
+    sc.next_tx(USER1);
+    let crowd_walrus = sc.take_shared<CrowdWalrus>();
+    let mut profiles_registry = sc.take_shared<profiles::ProfilesRegistry>();
+    let suins_manager = sc.take_shared<SuiNSManager>();
+    let mut suins = sc.take_shared<SuiNS>();
+    let clock = sc.take_shared<Clock>();
+    let subdomain_name = get_test_subdomain_name(b"profile-auto");
+    let campaign_id = crowd_walrus::create_campaign(
+        &crowd_walrus,
+        &mut profiles_registry,
+        &suins_manager,
+        &mut suins,
+        &clock,
+        string::utf8(b"Auto Profile"),
+        string::utf8(b"Creates profile if missing"),
+        subdomain_name,
+        vector::empty(),
+        vector::empty(),
+        2_000_000,
+        USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+        ctx(&mut sc),
+    );
+    ts::return_shared(crowd_walrus);
+    ts::return_shared(profiles_registry);
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+    ts::return_shared(suins_manager);
+    let effects = ts::next_tx(&mut sc, USER1);
+    assert_eq!(ts::num_user_events(&effects), 3);
+
+    sc.next_tx(USER1);
+    let registry_after = sc.take_shared<profiles::ProfilesRegistry>();
+    assert!(profiles::exists(&registry_after, USER1));
+    let profile_id = profiles::id_of(&registry_after, USER1);
+    assert!(sui_object::id_to_address(&profile_id) != @0x0);
+    ts::return_shared(registry_after);
+
+    let campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+    let stats_id = campaign::stats_id(&campaign);
+    assert!(sui_object::id_to_address(&stats_id) != @0x0);
+    ts::return_shared(campaign);
+
+    let stats = sc.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
+    assert_eq!(campaign_stats::total_donations_count(&stats), 0);
+    ts::return_shared(stats);
+
+    ts::next_tx(&mut sc, USER1);
+    sc.end();
 }
