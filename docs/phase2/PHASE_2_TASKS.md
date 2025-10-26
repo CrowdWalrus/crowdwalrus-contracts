@@ -194,6 +194,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_PARAMETERS_LOCKED.
 
 A5. create_campaign wiring (fields + stats + profile)
+✅ COMPLETED (Oct 26, 2025) — create_campaign now wires stats + auto-profiles with integration tests for both fresh and existing owners.
 
 File/Module: sources/crowd_walrus.move / crowd_walrus::crowd_walrus
 
@@ -215,7 +216,7 @@ Patterns: Constructor composition; conditional profile creation (same pattern as
 
 Security/Edges: Profile uniqueness enforced by registry; validation aborts propagate.
 
-Tests: Happy path with existing profile (no ProfileCreated event); happy path without profile (ProfileCreated emitted); invalid policy/time aborts.
+Tests: Verified via create_campaign integration tests covering new and existing profile owners; invalid policy/time aborts.
 
 Acceptance: Correct linking; profile auto-creation works; events present.
 
