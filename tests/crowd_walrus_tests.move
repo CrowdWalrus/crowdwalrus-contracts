@@ -29,7 +29,7 @@ const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
 
-const DEFAULT_PLATFORM_BPS: u16 = 500;
+const DEFAULT_PLATFORM_BPS: u16 = 0;
 
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
 const E_CAMPAIGN_DELETED: u64 = 11;
@@ -751,8 +751,6 @@ public fun create_test_campaign(
         funding_goal_usd_micro,
         recipient_address,
         option::none(),
-        DEFAULT_PLATFORM_BPS,
-        ADMIN,
         start_date,
         end_date,
     )
@@ -768,8 +766,6 @@ public fun create_test_campaign_with_policy(
     funding_goal_usd_micro: u64,
     recipient_address: address,
     policy_name: option::Option<String>,
-    platform_bps: u16,
-    platform_address: address,
     start_date: u64,
     end_date: u64,
 ): sui_object::ID {
@@ -795,8 +791,6 @@ public fun create_test_campaign_with_policy(
         funding_goal_usd_micro,
         recipient_address,
         policy_name,
-        platform_bps,
-        platform_address,
         start_date,
         end_date,
         ctx(sc),
@@ -882,8 +876,6 @@ public fun test_create_campaign_auto_creates_profile_and_stats() {
         2_000_000,
         USER1,
         option::none(),
-        DEFAULT_PLATFORM_BPS,
-        ADMIN,
         0,
         U64_MAX,
         ctx(&mut sc),
@@ -931,7 +923,7 @@ public fun test_create_campaign_uses_policy_preset() {
     crowd_walrus::add_platform_policy_internal(
         &mut policy_registry,
         &admin_cap,
-        string::utf8(b"nonprofit"),
+        string::utf8(b"custom-tier"),
         preset_bps,
         preset_address,
         &clock,
@@ -949,8 +941,6 @@ public fun test_create_campaign_uses_policy_preset() {
     let mut suins = sc.take_shared<SuiNS>();
     let clock = sc.take_shared<Clock>();
     let subdomain_name = get_test_subdomain_name(b"preset-success");
-    let fallback_bps: u16 = 900;
-    let fallback_address: address = ADMIN;
     let campaign_id = crowd_walrus::create_campaign(
         &crowd_walrus,
         &policy_registry,
@@ -965,9 +955,7 @@ public fun test_create_campaign_uses_policy_preset() {
         vector::empty(),
         1_000_000,
         USER1,
-        option::some(string::utf8(b"nonprofit")),
-        fallback_bps,
-        fallback_address,
+        option::some(string::utf8(b"custom-tier")),
         0,
         U64_MAX,
         ctx(&mut sc),
@@ -1004,8 +992,6 @@ public fun test_create_campaign_with_missing_preset_aborts() {
         1_000_000,
         USER1,
         option::some(string::utf8(b"does-not-exist")),
-        DEFAULT_PLATFORM_BPS,
-        ADMIN,
         0,
         U64_MAX,
     );
@@ -1059,8 +1045,42 @@ public fun test_create_campaign_with_disabled_preset_aborts() {
         1_000_000,
         USER1,
         option::some(string::utf8(b"disabled")),
-        DEFAULT_PLATFORM_BPS,
-        ADMIN,
+        0,
+        U64_MAX,
+    );
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
+public fun test_create_campaign_with_default_disabled_aborts() {
+    let mut sc = test_init(ADMIN);
+
+    sc.next_tx(ADMIN);
+    let mut policy_registry = sc.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = sc.take_from_sender<AdminCap>();
+    let clock = sc.take_shared<Clock>();
+    crowd_walrus::disable_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        crowd_walrus::default_policy_name(),
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    sc.return_to_sender(admin_cap);
+    ts::next_tx(&mut sc, ADMIN);
+
+    sc.next_tx(USER1);
+    create_test_campaign_with_policy(
+        &mut sc,
+        string::utf8(b"Default Disabled Fails"),
+        string::utf8(b""),
+        b"default-disabled",
+        vector::empty(),
+        vector::empty(),
+        1_000_000,
+        USER1,
+        option::none(),
         0,
         U64_MAX,
     );
