@@ -194,6 +194,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_PARAMETERS_LOCKED.
 
 A5. create_campaign wiring (fields + stats + profile)
+✅ COMPLETED (Oct 26, 2025) — create_campaign now wires stats + auto-profiles with integration tests for both fresh and existing owners.
 
 File/Module: sources/crowd_walrus.move / crowd_walrus::crowd_walrus
 
@@ -215,7 +216,7 @@ Patterns: Constructor composition; conditional profile creation (same pattern as
 
 Security/Edges: Profile uniqueness enforced by registry; validation aborts propagate.
 
-Tests: Happy path with existing profile (no ProfileCreated event); happy path without profile (ProfileCreated emitted); invalid policy/time aborts.
+Tests: Verified via create_campaign integration tests covering new and existing profile owners; invalid policy/time aborts.
 
 Acceptance: Correct linking; profile auto-creation works; events present.
 
@@ -875,27 +876,28 @@ Deps: I1.
 
 Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_ADDRESS.
 
-H2. create_campaign supports preset or explicit policy
+H2. create_campaign snapshots preset policies only
+✅ COMPLETED (Oct 26, 2025) — seeded `"standard"` fallback preset and removed explicit policy inputs.
 
 File/Module: sources/crowd_walrus.move
 
-Product intent: Simple creation (choose preset) with preserved immutability post‑first donation.
+Product intent: Campaign creators must pick an admin-owned preset; omitting a name auto-selects the seeded `"standard"` preset so they cannot inject custom splits.
 
 Implement:
 
-Branch: if policy_name provided, resolve from platform_policy and copy into PayoutPolicy; else accept explicit PayoutPolicy.
+Bootstrap the `"standard"` preset during `crowd_walrus::init` (0 bps to start, platform address = publisher) so fallback is always present. Branch: if policy_name provided, resolve from platform_policy and copy into PayoutPolicy; else resolve the default preset and copy its values. No direct parameters for custom bps/address.
 
 This extends A5's create_campaign implementation (resolved policy is passed to campaign::new along with stats creation and profile creation).
 
-Preconditions: Enabled preset exists if referenced.
+Preconditions: Enabled preset exists if referenced; default preset is bootstrapped on init but must remain enabled (abort otherwise).
 
 Postconditions: Campaign stores snapshot; later preset changes don't affect it.
 
-Patterns: Resolve‑and‑copy; not a pointer.
+Patterns: Resolve‑and‑copy; default resolver fetches `"standard"` preset seeded with 0 bps and the publisher's address.
 
-Security/Edges: Missing/disabled preset abort; still validate.
+Security/Edges: Missing/disabled preset abort; default preset missing/disabled aborts and blocks creation (ops must restore preset).
 
-Tests: Preset and explicit paths; disabled preset abort.
+Tests: Preset path; default preset path (no policy name); missing/disabled presets abort.
 
 Acceptance: Pass.
 
@@ -1051,7 +1053,7 @@ Product intent: Engineers can assemble PTBs and admin workflows without reading 
 
 Implement:
 
-PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
+PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset selection or default seeded campaign creation (initially 0 bps), Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
 
 Explain how integrators fetch Pyth price updates off-chain (e.g., via Pyth SDK) and attach them to the same PTB, clarifying staleness semantics and donor overrides.
 

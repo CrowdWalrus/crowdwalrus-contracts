@@ -98,12 +98,12 @@ public fun require_enabled_policy(
     policy
 }
 
-public(package) fun add_policy(
+fun add_policy_with_timestamp(
     registry: &mut PolicyRegistry,
     name: String,
     platform_bps: u16,
     platform_address: address,
-    clock: &Clock,
+    timestamp_ms: u64,
 ) {
     assert!(!contains(registry, &name), E_POLICY_EXISTS);
     assert!(platform_bps <= 10_000, campaign::e_invalid_bps());
@@ -116,7 +116,38 @@ public(package) fun add_policy(
     };
     let event_name = copy name;
     table::add(&mut registry.policies, name, policy);
-    emit_added_event(event_name, platform_bps, platform_address, clock);
+    emit_added_event_with_timestamp(event_name, platform_bps, platform_address, timestamp_ms);
+}
+
+public(package) fun add_policy(
+    registry: &mut PolicyRegistry,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+    clock: &Clock,
+) {
+    add_policy_with_timestamp(
+        registry,
+        name,
+        platform_bps,
+        platform_address,
+        clock::timestamp_ms(clock),
+    );
+}
+
+public(package) fun add_policy_bootstrap(
+    registry: &mut PolicyRegistry,
+    name: String,
+    platform_bps: u16,
+    platform_address: address,
+) {
+    add_policy_with_timestamp(
+        registry,
+        name,
+        platform_bps,
+        platform_address,
+        0,
+    );
 }
 
 public(package) fun update_policy(
@@ -180,18 +211,18 @@ public fun policy_enabled(policy: &Policy): bool {
     policy.enabled
 }
 
-fun emit_added_event(
+fun emit_added_event_with_timestamp(
     policy_name: String,
     platform_bps: u16,
     platform_address: address,
-    clock: &Clock,
+    timestamp_ms: u64,
 ) {
     event::emit(PolicyAdded {
         policy_name,
         platform_bps,
         platform_address,
         enabled: true,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms,
     });
 }
 

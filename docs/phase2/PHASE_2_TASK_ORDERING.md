@@ -34,7 +34,7 @@ E5 — Helper: create_or_get_profile_for_sender (uses E2/E1)
 
 H1 — Platform split presets registry (cap‑gated; events)
 
-A5 + H2 — create_campaign wiring (preset or explicit policy), link stats_id, auto‑create Profile via E5, emit events
+A5 + H2 — create_campaign wiring (preset selection + seeded default preset), link stats_id, auto‑create Profile via E5, emit events
 
 ★ Checkpoint α — Campaign creation works end‑to‑end (with presets and auto‑profiles).
 

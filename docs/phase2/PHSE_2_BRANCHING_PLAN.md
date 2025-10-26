@@ -40,7 +40,7 @@ p2-<NN>-<track>-<scope>
 | 04 | **p2-04-t2a-profiles-core-e2-e1** | **E2, E1** | `main` | Profiles object + registry compile independently; tests: create, duplicate abort, owner checks. |
 | 05 | **p2-05-t2a-profiles-helper-e5** | **E5** | `p2-04…` | Adds `create_or_get_profile_for_sender` with tests for both branches (existing vs new). |
 | 06 | **p2-06-t5-platform-policy-h1** | **H1** | `main` | Presets registry behind AdminCap with events; tests admin ops + disabled path. |
-| 07 | **p2-07-t1-create-campaign-a5-h2** | **A5, H2** | `p2-02…`, `p2-03…`, `p2-04…`, `p2-05…`, `p2-06…` | Wires `create_campaign`: explicit or preset policy, links stats, auto‑creates profile via E5. **Checkpoint α** here. |
+| 07 | **p2-07-t1-create-campaign-a5-h2** | **A5, H2** | `p2-02…`, `p2-03…`, `p2-04…`, `p2-05…`, `p2-06…` | Wires `create_campaign`: preset selection + seeded default snapshot, links stats, auto‑creates profile via E5. **Checkpoint α** here. |
 | 08 | **p2-08-t3-tokens-oracle-b1-c1-b2** | **B1, C1, B2** | `p2-01…` | TokenRegistry + Pyth quote_usd + staleness helper as one coherent unit; tests cover decimals, floor to micro‑USD, staleness min logic. |
 | 09 | **p2-09-t1-per-coin-stats-d2-d3** | **D2, D3** | `p2-03…` | Adds per‑coin DOF math and views; unit tests for multi‑token increments + getters. |
 | 10 | **p2-10-t2b-badges-config-display-f1-f2-e2b** | **F1, F2, E2b** | `main` | BadgeConfig, DonorBadge, and Display setup entry (Publisher). Tests validate config shape and soulbound invariant. |

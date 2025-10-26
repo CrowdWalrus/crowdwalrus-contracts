@@ -189,7 +189,7 @@ public(package) fun new<App: drop>(
     end_date: u64,
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
-): (object::ID, CampaignOwnerCap) {
+): (Campaign, CampaignOwnerCap) {
     let creation_time_ms = clock::timestamp_ms(clock);
     // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
@@ -226,8 +226,11 @@ public(package) fun new<App: drop>(
     // Authorize the passed app
     df::add(&mut campaign.id, AppKey<App> {}, true);
 
+    (campaign, campaign_owner_cap)
+}
+
+public(package) fun share(campaign: Campaign) {
     transfer::share_object(campaign);
-    (campaign_id, campaign_owner_cap)
 }
 
 public(package) fun set_stats_id(campaign: &mut Campaign, stats_id: object::ID) {
