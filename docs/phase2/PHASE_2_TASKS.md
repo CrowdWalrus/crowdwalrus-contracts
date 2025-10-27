@@ -294,19 +294,19 @@ Product intent: Deterministic USD valuation for receipts, badges, stats.
 
 Implement:
 
-Inputs: amount_raw (u128), decimals (u8), feed_id (vector<u8>), clock, pyth_update (vector<u8>), max_age_ms (u64).
+Inputs: amount_raw (u128), decimals (u8), feed_id (vector<u8>), price_info_object (&PriceInfoObject), clock, max_age_ms (u64).
 
 Use u128 math; apply exponent; floor to micro‑USD; checked downcast to u64.
 
-Reject zero amounts; stale/invalid update.
+Reject zero amounts; stale price info; mismatched feed IDs.
 
-Preconditions: Fresh Pyth update in the same PTB.
+Preconditions: Caller must have updated the referenced PriceInfoObject via a verified Pyth update (same PTB).
 
 Postconditions: Returns micro‑USD or abort.
 
-Patterns: Stateless; pull‑update.
+Patterns: Stateless reader; update‑then‑consume.
 
-Security/Edges: Exponent sanity; staleness.
+Security/Edges: Exponent sanity; staleness; enforce PriceInfoObject feed matches registry metadata; no raw byte parsing.
 
 Tests: Decimals (6/9/18); stale abort; zero abort.
 
@@ -720,9 +720,9 @@ Product intent: Accurate receipt value & badge basis.
 
 Implement:
 
-Lookup token metadata; compute effective max age (B2); call PriceOracle to get micro‑USD.
+Lookup token metadata; compute effective max age (B2); validate that the supplied PriceInfoObject matches the feed; call PriceOracle to get micro‑USD.
 
-Preconditions: Token exists and enabled; update present.
+Preconditions: Token exists and enabled; caller has updated the PriceInfoObject earlier in the PTB.
 
 Postconditions: Returns micro‑USD or abort.
 
@@ -770,11 +770,11 @@ Product intent: Core donation API for integrators.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: G1 → G3 → assert slippage floor → G2 → D2 add_donation → if first donation then A4 lock → G4 event → return micro‑USD.
 
-Preconditions: Valid inputs.
+Preconditions: Valid inputs; PriceInfoObject already refreshed this PTB via Pyth update.
 
 Postconditions: Funds routed; stats updated; event emitted; maybe locked.
 
@@ -798,11 +798,11 @@ Product intent: Truly one‑tap first donation—no separate profile step.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
-Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T>; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
+Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T> with the verified PriceInfoObject; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
 
-Preconditions: Sender has no existing profile (abort if exists to avoid duplicates).
+Preconditions: Sender has no existing profile (abort if exists to avoid duplicates); caller supplies a freshly updated PriceInfoObject.
 
 Postconditions: Donation processed; profile minted to sender; badges minted if eligible.
 
@@ -826,11 +826,11 @@ Product intent: Efficient repeat donations with existing Profile.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: call G5 donate<T>; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
 
-Preconditions: Caller owns Profile (enforce owner).
+Preconditions: Caller owns Profile (enforce owner) and provides a recently updated PriceInfoObject.
 
 Postconditions: Donation processed; badges minted as needed.
 
