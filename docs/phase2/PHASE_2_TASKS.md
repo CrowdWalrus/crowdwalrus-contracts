@@ -262,6 +262,7 @@ Deps: B0 (Pyth added).
 Err codes: E_COIN_EXISTS, E_COIN_NOT_FOUND, E_BAD_FEED_ID.
 
 B2. Effective staleness helper
+✅ COMPLETED (Oct 27, 2025) — Helper computes min(registry max-age, donor override) with zero treated as no override; covered by unit tests.
 
 File/Module: sources/donations.move / crowd_walrus::donations
 
