@@ -19,6 +19,7 @@ const DEFAULT_PLATFORM_BPS: u16 = 0;
 
 public struct CoinA has drop, store {}
 public struct CoinB has drop, store {}
+public struct CoinC has drop, store {}
 
 #[test]
 public fun test_create_for_campaign_happy_path() {
@@ -56,6 +57,8 @@ public fun test_create_for_campaign_happy_path() {
     let stats = scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
     assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
     assert_eq!(campaign_stats::total_donations_count(&stats), 0);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinA>(&stats), 0);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinA>(&stats), 0);
     ts::return_shared(stats);
 
     ts::end(scenario);
@@ -100,13 +103,15 @@ public fun test_add_donation_tracks_per_coin_totals() {
     assert_eq!(campaign_stats::total_usd_micro(&stats), 650);
     assert_eq!(campaign_stats::total_donations_count(&stats), 3);
 
-    let (coin_a_raw, coin_a_count) = campaign_stats::per_coin_totals_for_test<CoinA>(&stats);
-    assert_eq!(coin_a_raw, 1_000);
-    assert_eq!(coin_a_count, 2);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinA>(&stats), 1_000);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinA>(&stats), 2);
 
-    let (coin_b_raw, coin_b_count) = campaign_stats::per_coin_totals_for_test<CoinB>(&stats);
-    assert_eq!(coin_b_raw, 500);
-    assert_eq!(coin_b_count, 1);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinB>(&stats), 500);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinB>(&stats), 1);
+
+    // Views should gracefully return zero for coin types that never received donations.
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinC>(&stats), 0);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinC>(&stats), 0);
 
     ts::return_shared(stats);
     ts::end(scenario);
