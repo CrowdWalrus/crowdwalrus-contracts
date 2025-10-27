@@ -80,7 +80,7 @@ Donor signs a PTB that:
 
 Includes a fresh Pyth update.
 
-Calls donate_and_award_first_time<T>: creates Profile internally, registers in ProfilesRegistry, performs donation (prechecks, USD valuation, split & send, stats update, lock campaign params if first donation to campaign), awards badges, transfers Profile to donor.
+Calls donate_and_award_first_time<T>: creates Profile internally, registers in ProfilesRegistry, performs donation (prechecks, USD valuation using the verified PriceInfoObject, split & send, stats update, lock campaign params if first donation to campaign), awards badges, transfers Profile to donor.
 
 Emits ProfileCreated, DonationReceived, and BadgeMinted (if threshold crossed) events.
 
@@ -92,7 +92,7 @@ Donor signs a PTB that:
 
 Includes owned Profile object reference and fresh Pyth update.
 
-Calls donate_and_award<T> with &mut Profile: performs donation, updates profile totals, awards additional badges if thresholds crossed.
+Calls donate_and_award<T> with &mut Profile: performs donation (consuming the verified PriceInfoObject), updates profile totals, awards additional badges if thresholds crossed.
 
 Emits DonationReceived and BadgeMinted (if new level) events.
 
@@ -129,7 +129,7 @@ Profile is auto-created for campaign owner if they don't have one; ProfileCreate
 
 TokenRegistry (shared): For each Coin<T>, store {symbol, name, decimals, pyth_feed_id (32 bytes), enabled, max_age_ms}.
 
-PriceOracle: quote_usd<T>(amount_raw, decimals, feed_id, clock, pyth_update, max_age_ms) → u64 (micro‑USD). Uses u128 intermediates, floor rounding, staleness check.
+PriceOracle: quote_usd<T>(amount_raw, decimals, feed_id, price_info_object, clock, max_age_ms) → u64 (micro‑USD). Consumes the verified Pyth PriceInfoObject produced earlier in the PTB, uses u128 intermediates, floor rounding, feed-id matching, and staleness checks.
 
 Per‑Token Staleness: Use min(registry.max_age_ms, donor.max_age_ms?).
 
@@ -139,7 +139,9 @@ Zero Amount: Abort on zero donation amount.
 
 Acceptance Criteria
 
-Disabled token or stale update aborts.
+Disabled token or stale price data aborts.
+
+Feed ID mismatch between registry metadata and PriceInfoObject aborts.
 
 Correct decimal scaling verified by tests.
 
@@ -298,7 +300,7 @@ Badges: Soulbound via no transfer functions + Sui Display; do not freeze badges.
 
 Sui Framework compatible with our repo; pinned to testnet channel.
 
-Pyth Crosschain Contracts for Sui; Pyth price update must be included in the same PTB as donate*.
+Pyth Crosschain Contracts for Sui; each PTB must first refresh the relevant PriceInfoObject via `pyth::update_single_price_feed` (or equivalent) before invoking donate* with that PriceInfoObject reference so our contracts read verified price data.
 
 Walrus Storage used for badge images (URIs stored in BadgeConfig).
 
