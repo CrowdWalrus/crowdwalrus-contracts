@@ -380,6 +380,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_OVERFLOW.
 
 D3. Views for stats
+✅ COMPLETED (Oct 27, 2025) — Added O(1) view helpers exposing total and per-coin aggregates.
 
 File/Module: sources/campaign_stats.move
 
