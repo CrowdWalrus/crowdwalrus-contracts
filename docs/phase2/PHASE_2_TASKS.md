@@ -287,6 +287,7 @@ Deps: B1.
 
 C) PriceOracle
 C1. quote_usd<T> valuation (staleness + floor)
+✅ COMPLETED (Oct 27, 2025) — quote_usd now reads verified PriceInfoObjects with feed-ID validation and staleness enforcement.
 
 File/Module: sources/price_oracle.move / crowd_walrus::price_oracle
 
