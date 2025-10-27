@@ -50,6 +50,26 @@ public fun total_donations_count(stats: &CampaignStats): u64 {
     stats.total_donations_count
 }
 
+public fun per_coin_total_raw<T>(stats: &CampaignStats): u128 {
+    let key = per_coin_key<T>();
+    if (!df::exists_(&stats.id, copy key)) {
+        0
+    } else {
+        let per_coin = df::borrow<PerCoinKey<T>, PerCoinStats<T>>(&stats.id, key);
+        per_coin.total_raw
+    }
+}
+
+public fun per_coin_donation_count<T>(stats: &CampaignStats): u64 {
+    let key = per_coin_key<T>();
+    if (!df::exists_(&stats.id, copy key)) {
+        0
+    } else {
+        let per_coin = df::borrow<PerCoinKey<T>, PerCoinStats<T>>(&stats.id, key);
+        per_coin.donation_count
+    }
+}
+
 fun per_coin_key<T>(): PerCoinKey<T> {
     PerCoinKey {}
 }
