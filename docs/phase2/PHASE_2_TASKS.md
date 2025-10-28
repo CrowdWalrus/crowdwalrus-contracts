@@ -584,6 +584,7 @@ Acceptance: Pass; works as helper for both flows.
 Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
+✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 F1. BadgeConfig (thresholds + URIs)
 
 File/Module: sources/badge_rewards.move
