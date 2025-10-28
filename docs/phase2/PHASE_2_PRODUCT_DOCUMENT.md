@@ -222,7 +222,7 @@ ProfilesRegistry prevents duplicate profiles per address.
 
 BadgeConfig (shared, admin‑managed): 5 ascending amount_thresholds_micro paired with 5 ascending payment_thresholds plus image_uris (Walrus).
 
-DonorBadge (owned, no transfer functions): level, owner, image_uri, issued_at_ms. Display template registered via admin entry; must render in wallets.
+DonorBadge (owned, no transfer functions): level, owner, image_uri, issued_at_ms. Display template registered via admin entry with standard Sui fields (name, image_url, description, link); must render in wallets.
 
 maybe_award_badges: compares old→new totals and payment counts, mints levels only when both thresholds are crossed; emits BadgeMinted.
 
