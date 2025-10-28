@@ -467,8 +467,9 @@ Deps: E1.
 Err codes: E_NOT_PROFILE_OWNER, E_KEY_VALUE_MISMATCH, E_OVERFLOW.
 
 E2b. Publisher handling for Display setup (clarification)
+✅ COMPLETED (Oct 28, 2025) — Publisher & Display deployer runbook captured in docs/phase2/PUBLISHER_DISPLAY_SETUP.md; matches badge_rewards::setup_badge_display implementation.
 
-File/Module: UPDATE_IMPLEMENTATION.md + sources/badge_rewards.move
+File/Module: docs/phase2/PUBLISHER_DISPLAY_SETUP.md + sources/badge_rewards.move
 
 Product intent: Ensure we can call Display registration with the correct Publisher.
 
@@ -1090,4 +1091,4 @@ F6 ambiguity → Resolved by splitting into G6a (creates Profile internally) and
 
 Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in Documentation/last_deploy.md. Acceptance requires build success and lockfile update.
 
-Publisher setup → Clarified in E2b and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
+Publisher setup → Clarified in E2b docs (docs/phase2/PUBLISHER_DISPLAY_SETUP.md) and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
