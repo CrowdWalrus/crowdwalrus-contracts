@@ -1,5 +1,6 @@
 module crowd_walrus::crowd_walrus;
 
+use crowd_walrus::badge_rewards::{Self as badge_rewards};
 use crowd_walrus::campaign::{Self as campaign};
 use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::platform_policy::{Self as platform_policy};
@@ -879,6 +880,43 @@ entry fun set_token_max_age<T>(
     _ctx: &mut sui_tx_context::TxContext,
 ) {
     set_token_max_age_internal<T>(registry, admin_cap, max_age_ms, clock);
+}
+
+public(package) fun update_badge_config_internal(
+    config: &mut badge_rewards::BadgeConfig,
+    admin_cap: &AdminCap,
+    amount_thresholds_micro: vector<u64>,
+    payment_thresholds: vector<u64>,
+    image_uris: vector<String>,
+    clock: &Clock,
+) {
+    assert_admin_cap_for(admin_cap, badge_rewards::crowd_walrus_id(config));
+    badge_rewards::set_config(
+        config,
+        amount_thresholds_micro,
+        payment_thresholds,
+        image_uris,
+        clock,
+    );
+}
+
+entry fun update_badge_config(
+    config: &mut badge_rewards::BadgeConfig,
+    admin_cap: &AdminCap,
+    amount_thresholds_micro: vector<u64>,
+    payment_thresholds: vector<u64>,
+    image_uris: vector<String>,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    update_badge_config_internal(
+        config,
+        admin_cap,
+        amount_thresholds_micro,
+        payment_thresholds,
+        image_uris,
+        clock,
+    );
 }
 
 entry fun migrate_token_registry(
