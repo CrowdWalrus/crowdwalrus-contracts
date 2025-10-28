@@ -467,8 +467,9 @@ Deps: E1.
 Err codes: E_NOT_PROFILE_OWNER, E_KEY_VALUE_MISMATCH, E_OVERFLOW.
 
 E2b. Publisher handling for Display setup (clarification)
+✅ COMPLETED (Oct 28, 2025) — Publisher & Display deployer runbook captured in docs/phase2/PUBLISHER_DISPLAY_SETUP.md; matches badge_rewards::setup_badge_display implementation.
 
-File/Module: UPDATE_IMPLEMENTATION.md + sources/badge_rewards.move
+File/Module: docs/phase2/PUBLISHER_DISPLAY_SETUP.md + sources/badge_rewards.move
 
 Product intent: Ensure we can call Display registration with the correct Publisher.
 
@@ -584,6 +585,7 @@ Acceptance: Pass; works as helper for both flows.
 Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
+✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 F1. BadgeConfig (thresholds + URIs)
 
 File/Module: sources/badge_rewards.move
@@ -613,6 +615,7 @@ Acceptance: Pass.
 Deps: I2.
 
 F2. DonorBadge (soulbound) + Display setup entry
+✅ COMPLETED (Oct 28, 2025) — DonorBadge minted via package-only helper and display registered with standard name/image_url/description/link templates.
 
 File/Module: sources/badge_rewards.move
 
@@ -622,7 +625,7 @@ Implement:
 
 Owned DonorBadge { level, owner, image_uri, issued_at_ms } with no transfer API.
 
-Admin entry setup_badge_display(pub:&Publisher, ctx) to register Display templates (name, image, description, link) using badge fields.
+Admin entry setup_badge_display(pub:&Publisher, ctx) to register Display templates (name, image_url, description, link) using badge fields.
 
 Preconditions: Level within 1..5.
 
@@ -1060,7 +1063,7 @@ Product intent: Engineers can assemble PTBs and admin workflows without reading 
 
 Implement:
 
-PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset selection or default seeded campaign creation (initially 0 bps), Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
+PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset selection or default seeded campaign creation (initially 0 bps), Display registration using Publisher; include the Display template keys (name, image_url, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
 
 Explain how integrators fetch Pyth price updates off-chain (e.g., via Pyth SDK) and attach them to the same PTB, clarifying staleness semantics and donor overrides.
 
@@ -1088,4 +1091,4 @@ F6 ambiguity → Resolved by splitting into G6a (creates Profile internally) and
 
 Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in Documentation/last_deploy.md. Acceptance requires build success and lockfile update.
 
-Publisher setup → Clarified in E2b and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
+Publisher setup → Clarified in E2b docs (docs/phase2/PUBLISHER_DISPLAY_SETUP.md) and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
