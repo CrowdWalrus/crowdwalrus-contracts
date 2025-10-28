@@ -349,7 +349,9 @@ Deps: A5.
 
 Err codes: Optional E_STATS_ALREADY_EXISTS.
 
-D2. Per‑coin stats via DOF
+D2. Per-coin stats via DOF
+
+✅ COMPLETED (Oct 27, 2025) — Per-coin totals tracked with overflow-safe helpers and tests.
 
 File/Module: sources/campaign_stats.move
 
@@ -378,6 +380,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_OVERFLOW.
 
 D3. Views for stats
+✅ COMPLETED (Oct 27, 2025) — Added O(1) view helpers exposing total and per-coin aggregates.
 
 File/Module: sources/campaign_stats.move
 
