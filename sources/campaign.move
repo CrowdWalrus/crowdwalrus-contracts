@@ -282,6 +282,14 @@ public fun stats_id(campaign: &Campaign): object::ID {
     campaign.stats_id
 }
 
+public fun start_date(campaign: &Campaign): u64 {
+    campaign.start_date
+}
+
+public fun end_date(campaign: &Campaign): u64 {
+    campaign.end_date
+}
+
 public fun parameters_locked(campaign: &Campaign): bool {
     campaign.parameters_locked
 }
