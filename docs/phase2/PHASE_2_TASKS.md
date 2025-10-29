@@ -697,6 +697,7 @@ Deps: B1, A1–A4.
 Err codes: E_CAMPAIGN_INACTIVE, E_CAMPAIGN_CLOSED, E_TOKEN_DISABLED.
 
 G2. Split & direct transfer
+✅ COMPLETED (Oct 29, 2025) — Added split_and_transfer helper with fee rounding tests.
 
 File/Module: sources/donations.move
 
