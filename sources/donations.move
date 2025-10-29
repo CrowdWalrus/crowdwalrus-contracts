@@ -1,6 +1,7 @@
 module crowd_walrus::donations;
 
 use crowd_walrus::campaign::{Self as campaign};
+use crowd_walrus::price_oracle;
 use crowd_walrus::token_registry::{Self as token_registry};
 use std::u64;
 use sui::clock::{Self as clock, Clock};
@@ -10,6 +11,7 @@ const E_CAMPAIGN_INACTIVE: u64 = 1;
 const E_CAMPAIGN_CLOSED: u64 = 2;
 const E_TOKEN_DISABLED: u64 = 3;
 const E_ZERO_DONATION: u64 = 4;
+const E_COIN_NOT_FOUND: u64 = 5;
 
 const BPS_DENOMINATOR: u64 = 10_000;
 
@@ -86,4 +88,29 @@ public fun split_and_transfer<T>(
     transfer::public_transfer(platform_coin, platform_address);
     transfer::public_transfer(remaining, recipient_address);
     (platform_amount, recipient_amount)
+}
+
+/// Quotes the USD value of a donation using registry metadata and a verified PriceInfoObject.
+public fun quote_usd_micro<T>(
+    registry: &token_registry::TokenRegistry,
+    clock: &Clock,
+    amount_raw: u64,
+    price_info_object: &pyth::price_info::PriceInfoObject,
+    override_ms: std::option::Option<u64>,
+): u64 {
+    assert!(token_registry::contains<T>(registry), E_COIN_NOT_FOUND);
+    assert!(token_registry::is_enabled<T>(registry), E_TOKEN_DISABLED);
+
+    let decimals = token_registry::decimals<T>(registry);
+    let feed_id = token_registry::pyth_feed_id<T>(registry);
+    let max_age = effective_max_age_ms<T>(registry, override_ms);
+
+    price_oracle::quote_usd<T>(
+        (amount_raw as u128),
+        decimals,
+        feed_id,
+        price_info_object,
+        clock,
+        max_age,
+    )
 }
