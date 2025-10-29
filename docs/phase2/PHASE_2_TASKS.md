@@ -670,6 +670,8 @@ Deps: E2, F1, F2.
 G) Donations (non‑custodial orchestration)
 G1. Precheck (time/status/token)
 
+✅ COMPLETED (Oct 29, 2025) — Added donation precheck validations and boundary/negative path tests.
+
 File/Module: sources/donations.move / crowd_walrus::donations
 
 Product intent: Early, clear failures.
