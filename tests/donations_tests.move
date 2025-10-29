@@ -8,12 +8,14 @@ use crowd_walrus::donations;
 use crowd_walrus::token_registry::{Self as token_registry};
 use std::string::{Self as string, String};
 use std::unit_test::assert_eq;
+use sui::coin::{Self as coin};
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts};
 use sui::test_utils::{Self as tu};
 
 const ADMIN: address = @0xA;
 const OWNER: address = @0xB;
+const DONOR: address = @0xD;
 const E_CAMPAIGN_DELETED: u64 = 11;
 public struct TestCoin has drop, store {}
 public struct DisabledCoin has drop, store {}
@@ -352,6 +354,140 @@ fun precheck_fails_when_token_unregistered() {
     ts::return_shared(registry);
     campaign::share(campaign);
     tu::destroy(_owner_cap);
+    ts::end(scenario);
+}
+
+#[test]
+fun split_and_transfer_routes_all_to_recipient_when_platform_zero() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    scenario.next_tx(DONOR);
+    let (campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        string::utf8(b"Zero Fee"),
+        string::utf8(b"All to recipient"),
+        b"split-zero",
+        vector::empty<String>(),
+        vector::empty<String>(),
+        1,
+        OWNER,
+        0,
+        ADMIN,
+        0,
+        10_000,
+    );
+
+    let donation = coin::mint_for_testing<TestCoin>(1_000, ts::ctx(&mut scenario));
+    let (platform_sent, recipient_sent) = donations::split_and_transfer<TestCoin>(
+        &campaign,
+        donation,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(platform_sent, 0);
+    assert_eq!(recipient_sent, 1_000);
+
+    ts::return_shared(clock);
+    campaign::share(campaign);
+    tu::destroy(owner_cap);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    assert_eq!(coin::value(&recipient_coin), recipient_sent);
+    ts::return_to_address(OWNER, recipient_coin);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun split_and_transfer_applies_platform_fee_with_floor_and_remainder() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    scenario.next_tx(DONOR);
+    let (campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        string::utf8(b"Five Percent"),
+        string::utf8(b"Checks remainder"),
+        b"split-five",
+        vector::empty<String>(),
+        vector::empty<String>(),
+        1,
+        OWNER,
+        500,
+        ADMIN,
+        0,
+        10_000,
+    );
+
+    let donation = coin::mint_for_testing<TestCoin>(101, ts::ctx(&mut scenario));
+    let (platform_sent, recipient_sent) = donations::split_and_transfer<TestCoin>(
+        &campaign,
+        donation,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(platform_sent, 5);
+    assert_eq!(recipient_sent, 96);
+
+    ts::return_shared(clock);
+    campaign::share(campaign);
+    tu::destroy(owner_cap);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    assert_eq!(coin::value(&platform_coin), platform_sent);
+    ts::return_to_address(ADMIN, platform_coin);
+
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    assert_eq!(coin::value(&recipient_coin), recipient_sent);
+    ts::return_to_address(OWNER, recipient_coin);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun split_and_transfer_routes_all_to_platform_when_fee_maximum() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    scenario.next_tx(DONOR);
+    let (campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        string::utf8(b"All Platform"),
+        string::utf8(b"Full fee"),
+        b"split-full",
+        vector::empty<String>(),
+        vector::empty<String>(),
+        1,
+        OWNER,
+        10_000,
+        ADMIN,
+        0,
+        10_000,
+    );
+
+    let donation = coin::mint_for_testing<TestCoin>(250, ts::ctx(&mut scenario));
+    let (platform_sent, recipient_sent) = donations::split_and_transfer<TestCoin>(
+        &campaign,
+        donation,
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(platform_sent, 250);
+    assert_eq!(recipient_sent, 0);
+
+    ts::return_shared(clock);
+    campaign::share(campaign);
+    tu::destroy(owner_cap);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    assert_eq!(coin::value(&platform_coin), platform_sent);
+    ts::return_to_address(ADMIN, platform_coin);
+    assert_eq!(
+        ts::has_most_recent_for_address<coin::Coin<TestCoin>>(OWNER),
+        false
+    );
+
     ts::end(scenario);
 }
 
