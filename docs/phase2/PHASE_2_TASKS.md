@@ -724,6 +724,8 @@ Deps: A2.
 Err codes: E_ZERO_DONATION.
 
 G3. USD valuation helper (registry + oracle + override)
+✅ COMPLETED (Oct 29, 2025) — Added quote_usd_micro helper with feed/staleness/zero guard tests.
+
 
 File/Module: sources/donations.move
 
