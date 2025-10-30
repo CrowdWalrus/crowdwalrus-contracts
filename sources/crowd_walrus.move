@@ -83,11 +83,6 @@ public struct CampaignVerified has copy, drop {
     verifier: address,
 }
 
-public struct CampaignUnverified has copy, drop {
-    campaign_id: sui_object::ID,
-    unverifier: address,
-}
-
 public struct CampaignDeleted has copy, drop {
     campaign_id: sui_object::ID,
     editor: address,
@@ -343,10 +338,7 @@ entry fun unverify_campaign(
     campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
 
     remove_verified_campaign(crowd_walrus, campaign_id);
-    event::emit(CampaignUnverified {
-        campaign_id,
-        unverifier: sui_tx_context::sender(ctx),
-    });
+    campaign::emit_campaign_unverified(campaign, sui_tx_context::sender(ctx));
 }
 
 fun remove_verified_campaign(
@@ -393,6 +385,7 @@ entry fun delete_campaign(
     if (table::contains(&crowd_walrus.verified_maps, campaign_id)) {
         campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
         remove_verified_campaign(crowd_walrus, campaign_id);
+        campaign::emit_campaign_unverified(campaign, sui_tx_context::sender(ctx));
     };
 
     suins_manager::remove_subdomain_for_app<CrowdWalrusApp>(
