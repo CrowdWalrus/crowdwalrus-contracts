@@ -670,6 +670,8 @@ Deps: E2, F1, F2.
 G) Donations (non‑custodial orchestration)
 G1. Precheck (time/status/token)
 
+✅ COMPLETED (Oct 29, 2025) — Added donation precheck validations and boundary/negative path tests.
+
 File/Module: sources/donations.move / crowd_walrus::donations
 
 Product intent: Early, clear failures.
@@ -695,6 +697,7 @@ Deps: B1, A1–A4.
 Err codes: E_CAMPAIGN_INACTIVE, E_CAMPAIGN_CLOSED, E_TOKEN_DISABLED.
 
 G2. Split & direct transfer
+✅ COMPLETED (Oct 29, 2025) — Added split_and_transfer helper with fee rounding tests.
 
 File/Module: sources/donations.move
 
@@ -721,6 +724,8 @@ Deps: A2.
 Err codes: E_ZERO_DONATION.
 
 G3. USD valuation helper (registry + oracle + override)
+✅ COMPLETED (Oct 29, 2025) — Added quote_usd_micro helper with feed/staleness/zero guard tests.
+
 
 File/Module: sources/donations.move
 
@@ -747,6 +752,7 @@ Deps: B1, B2, C1.
 Err codes: E_COIN_NOT_FOUND (if missing), E_TOKEN_DISABLED.
 
 G4. DonationReceived event (canonical + symbol)
+✅ COMPLETED (Oct 30, 2025) — Event now includes split amounts with invariants + tests.
 
 File/Module: sources/donations.move
 
@@ -754,17 +760,17 @@ Product intent: Indexer uses a single event to power donation feeds.
 
 Implement:
 
-Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
+Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_amount_raw, recipient_amount_raw, platform_amount_usd_micro, recipient_amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
 
 Preconditions: Values computed.
 
 Postconditions: One event per donation.
 
-Patterns: Canonical + human labels.
+Patterns: Canonical + human labels; event records actual split results so indexer does not recompute.
 
 Security/Edges: No PII beyond addresses.
 
-Tests: Fields exact.
+Tests: Fields exact; split amounts sum back to totals.
 
 Acceptance: Pass.
 

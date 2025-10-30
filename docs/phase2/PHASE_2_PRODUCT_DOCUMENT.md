@@ -181,7 +181,7 @@ donate_and_award<T>: For repeat donors. Requires &mut Profile parameter (user's 
 
 Event Requirements
 
-DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
+DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_amount_raw, recipient_amount_raw, platform_amount_usd_micro, recipient_amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms. Split fields must equal the total amounts so indexers can sum without reapplying payout math.
 
 Acceptance Criteria
 
