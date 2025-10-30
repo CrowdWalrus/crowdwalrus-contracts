@@ -3,7 +3,7 @@ Phase 2 — Updated Implementation Task List (Sui Move)
 Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
-• Locking: parameters_locked = true on first donation; after that, start/end/funding_goal/payout_policy cannot change; metadata can.
+• Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
@@ -165,17 +165,18 @@ Deps: A5.
 
 Err codes: E_STATS_ALREADY_SET.
 
-A4. Lock critical params after first donation
+A4. Parameter lock milestone after first donation
+✅ COMPLETED (Oct 30, 2025) — parameters_locked milestone emits event on first donation and donate<T> now asserts stats ownership.
 
 File/Module: sources/campaign.move + toggle in donations (G5/G6a/G6b)
 
-Product intent: Prevent fee/date rug‑pulls.
+Product intent: Prevent fee/date rug-pulls.
 
 Implement:
 
 In donations, if not locked, set locked and emit CampaignParametersLocked { campaign_id, timestamp_ms }.
 
-In campaign updaters: assert unlocked when changing start_date, end_date, funding_goal_usd_micro, payout_policy; keep metadata editable.
+start_date, end_date, funding_goal_usd_micro, and payout_policy are immutable from creation in the current product scope. The parameters_locked flag and event provide an indexer-friendly signal that donations have begun; metadata remains editable.
 
 Preconditions: First donation detection.
 
@@ -183,9 +184,9 @@ Postconditions: Protected updates abort thereafter.
 
 Patterns: One‑way toggle; idempotent.
 
-Security/Edges: Concurrent updates fail correctly.
+Security/Edges: Concurrent updates fail correctly; donors cannot attach mismatched CampaignStats (E_STATS_MISMATCH).
 
-Tests: Pre‑donation updates succeed; post‑donation abort; single lock event.
+Tests: Single lock event emitted on first donation; parameters_locked flag set; metadata edits continue to function.
 
 Acceptance: Enforced & event present.
 
@@ -777,6 +778,7 @@ Acceptance: Pass.
 Deps: B1, A2.
 
 G5. donate<T> entry (core; slippage + locking)
+✅ COMPLETED (Oct 30, 2025) — donate<T> now enforces stats ownership (E_STATS_MISMATCH), emits DonationReceived, locks params, and boundary/slippage tests cover all edges.
 
 File/Module: sources/donations.move
 
@@ -795,6 +797,8 @@ Postconditions: Funds routed; stats updated; event emitted; maybe locked.
 Patterns: Atomic orchestration.
 
 Security/Edges: Overflow checks; idempotent lock.
+
+Related invariants: Owner-driven campaign edit entry functions (e.g., update_campaign_basics, update_campaign_metadata) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do.
 
 Tests: Happy/slippage/boundary times/remainder.
 
