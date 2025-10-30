@@ -341,6 +341,54 @@ entry fun unverify_campaign(
     campaign::emit_campaign_unverified(campaign, sui_tx_context::sender(ctx));
 }
 
+entry fun update_campaign_basics(
+    crowd_walrus: &mut CrowdWalrus,
+    campaign: &mut campaign::Campaign,
+    cap: &campaign::CampaignOwnerCap,
+    new_name: std::option::Option<String>,
+    new_description: std::option::Option<String>,
+    clock: &Clock,
+    ctx: &sui_tx_context::TxContext,
+) {
+    assert!(
+        campaign::admin_id(campaign) == sui_object::id(crowd_walrus),
+        E_NOT_AUTHORIZED,
+    );
+    let verification_cleared = campaign::update_campaign_basics_internal(
+        campaign,
+        cap,
+        new_name,
+        new_description,
+        clock,
+        ctx,
+    );
+    remove_verification_if_tracked(crowd_walrus, campaign, verification_cleared);
+}
+
+entry fun update_campaign_metadata(
+    crowd_walrus: &mut CrowdWalrus,
+    campaign: &mut campaign::Campaign,
+    cap: &campaign::CampaignOwnerCap,
+    keys: vector<String>,
+    values: vector<String>,
+    clock: &Clock,
+    ctx: &sui_tx_context::TxContext,
+) {
+    assert!(
+        campaign::admin_id(campaign) == sui_object::id(crowd_walrus),
+        E_NOT_AUTHORIZED,
+    );
+    let verification_cleared = campaign::update_campaign_metadata_internal(
+        campaign,
+        cap,
+        keys,
+        values,
+        clock,
+        ctx,
+    );
+    remove_verification_if_tracked(crowd_walrus, campaign, verification_cleared);
+}
+
 fun remove_verified_campaign(
     crowd_walrus: &mut CrowdWalrus,
     campaign_id: sui_object::ID,
@@ -361,6 +409,17 @@ fun remove_verified_campaign(
         } else {
             i = i + 1;
         }
+    };
+}
+
+fun remove_verification_if_tracked(
+    crowd_walrus: &mut CrowdWalrus,
+    campaign: &campaign::Campaign,
+    verification_cleared: bool,
+) {
+    let campaign_id = sui_object::id(campaign);
+    if (verification_cleared || (table::contains(&crowd_walrus.verified_maps, campaign_id) && !campaign::is_verified(campaign))) {
+        remove_verified_campaign(crowd_walrus, campaign_id);
     };
 }
 
