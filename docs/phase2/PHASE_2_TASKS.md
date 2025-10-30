@@ -752,6 +752,7 @@ Deps: B1, B2, C1.
 Err codes: E_COIN_NOT_FOUND (if missing), E_TOKEN_DISABLED.
 
 G4. DonationReceived event (canonical + symbol)
+✅ COMPLETED (Oct 30, 2025) — Event now includes split amounts with invariants + tests.
 
 File/Module: sources/donations.move
 
@@ -759,17 +760,17 @@ Product intent: Indexer uses a single event to power donation feeds.
 
 Implement:
 
-Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
+Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_amount_raw, recipient_amount_raw, platform_amount_usd_micro, recipient_amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
 
 Preconditions: Values computed.
 
 Postconditions: One event per donation.
 
-Patterns: Canonical + human labels.
+Patterns: Canonical + human labels; event records actual split results so indexer does not recompute.
 
 Security/Edges: No PII beyond addresses.
 
-Tests: Fields exact.
+Tests: Fields exact; split amounts sum back to totals.
 
 Acceptance: Pass.
 

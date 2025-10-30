@@ -17,6 +17,7 @@ use std::string::{Self as string, String};
 use std::unit_test::assert_eq;
 use sui::coin::{Self as coin};
 use sui::clock::{Self as clock, Clock};
+use sui::event;
 use sui::test_scenario::{Self as ts};
 use sui::test_utils::{Self as tu};
 use wormhole::state::State as WormState;
@@ -497,6 +498,111 @@ fun split_and_transfer_routes_all_to_platform_when_fee_maximum() {
         ts::has_most_recent_for_address<coin::Coin<TestCoin>>(OWNER),
         false
     );
+
+    ts::end(scenario);
+}
+
+#[test]
+fun donation_received_event_emits_expected_payload() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    scenario.next_tx(OWNER);
+    let (campaign, owner_cap, mut clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        string::utf8(b"Event Campaign"),
+        string::utf8(b"Payload validation"),
+        b"donation-event",
+        vector::empty<String>(),
+        vector::empty<String>(),
+        1,
+        OWNER,
+        750,
+        ADMIN,
+        0,
+        20_000,
+    );
+    clock.increment_for_testing(2_500);
+
+    let mut registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let admin_cap = scenario.take_from_address<crowd_walrus::AdminCap>(ADMIN);
+    add_enabled_token(&mut registry, &admin_cap, &clock, 6_000);
+
+    let expected_campaign_id = sui::object::id(&campaign);
+    let expected_platform_bps = campaign::payout_platform_bps(&campaign);
+    let expected_platform_address = campaign::payout_platform_address(&campaign);
+    let expected_recipient_address = campaign::payout_recipient_address(&campaign);
+    let expected_coin_type = token_registry::coin_type_canonical<TestCoin>();
+    let expected_coin_symbol = token_registry::symbol<TestCoin>(&registry);
+    let expected_timestamp = clock::timestamp_ms(&clock);
+
+    let amount_raw = 5_432;
+    let amount_usd_micro = 987_654;
+    let platform_bps = expected_platform_bps as u128;
+    let denom = 10_000u128;
+    let platform_amount_raw =
+        (((amount_raw as u128) * platform_bps) / denom) as u64;
+    let recipient_amount_raw = amount_raw - platform_amount_raw;
+    let platform_amount_usd_micro =
+        (((amount_usd_micro as u128) * platform_bps) / denom) as u64;
+    let recipient_amount_usd_micro = amount_usd_micro - platform_amount_usd_micro;
+
+    donations::emit_donation_received_event<TestCoin>(
+        &campaign,
+        &registry,
+        DONOR,
+        amount_raw,
+        amount_usd_micro,
+        platform_amount_raw,
+        recipient_amount_raw,
+        platform_amount_usd_micro,
+        recipient_amount_usd_micro,
+        &clock,
+    );
+
+    ts::return_shared(clock);
+    ts::return_shared(registry);
+    ts::return_to_address(ADMIN, admin_cap);
+    campaign::share(campaign);
+    tu::destroy(owner_cap);
+
+    let events = event::events_by_type<donations::DonationReceived>();
+    assert_eq!(vector::length(&events), 1);
+    let recorded = vector::borrow(&events, 0);
+    let (
+        recorded_campaign_id,
+        recorded_donor,
+        recorded_coin_type,
+        recorded_coin_symbol,
+        recorded_amount_raw,
+        recorded_amount_usd_micro,
+        recorded_platform_amount_raw,
+        recorded_recipient_amount_raw,
+        recorded_platform_amount_usd_micro,
+        recorded_recipient_amount_usd_micro,
+        recorded_platform_bps,
+        recorded_platform_address,
+        recorded_recipient_address,
+        recorded_timestamp_ms,
+    ) = donations::unpack_donation_received(recorded);
+    assert_eq!(recorded_campaign_id, expected_campaign_id);
+    assert_eq!(recorded_donor, DONOR);
+    assert_eq!(recorded_coin_type, expected_coin_type);
+    assert_eq!(recorded_coin_symbol, expected_coin_symbol);
+    assert_eq!(recorded_amount_raw, amount_raw);
+    assert_eq!(recorded_amount_usd_micro, amount_usd_micro);
+    assert_eq!(recorded_platform_amount_raw, platform_amount_raw);
+    assert_eq!(recorded_recipient_amount_raw, recipient_amount_raw);
+    assert_eq!(
+        recorded_platform_amount_usd_micro,
+        platform_amount_usd_micro
+    );
+    assert_eq!(
+        recorded_recipient_amount_usd_micro,
+        recipient_amount_usd_micro
+    );
+    assert_eq!(recorded_platform_bps, expected_platform_bps);
+    assert_eq!(recorded_platform_address, expected_platform_address);
+    assert_eq!(recorded_recipient_address, expected_recipient_address);
+    assert_eq!(recorded_timestamp_ms, expected_timestamp);
 
     ts::end(scenario);
 }
