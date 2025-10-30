@@ -798,7 +798,7 @@ Patterns: Atomic orchestration.
 
 Security/Edges: Overflow checks; idempotent lock.
 
-Related invariants: Owner-driven campaign edit entry functions (e.g., update_campaign_basics, update_campaign_metadata) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do.
+Related invariants: Owner-driven campaign edit entry functions (e.g., `crowd_walrus::update_campaign_basics`, `crowd_walrus::update_campaign_metadata`) must clear `is_verified`, evict the verified registry entry, and emit `CampaignUnverified`; campaign update postings (add_update) never do.
 
 Tests: Happy/slippage/boundary times/remainder.
 
