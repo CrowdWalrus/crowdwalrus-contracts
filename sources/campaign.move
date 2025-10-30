@@ -479,14 +479,14 @@ entry fun add_update(
 /// No string length validation - frontend handles input validation.
 /// This is intentional to maximize flexibility at the cost of potential
 /// storage overhead.
-entry fun update_campaign_basics(
+public(package) fun update_campaign_basics_internal(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
     new_name: Option<String>,
     new_description: Option<String>,
     clock: &Clock,
     ctx: &tx_context::TxContext,
-) {
+): bool {
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
     let mut name_updated = false;
@@ -519,6 +519,7 @@ entry fun update_campaign_basics(
     if (verification_cleared) {
         emit_campaign_unverified(campaign, tx_context::sender(ctx));
     };
+    verification_cleared
 }
 
 /// Update campaign metadata (key-value pairs)
@@ -527,14 +528,14 @@ entry fun update_campaign_basics(
 /// No limits on metadata size or number of keys - frontend handles validation.
 /// This is intentional to maximize flexibility. VecMap updates use get_mut()
 /// to preserve insertion order for existing keys.
-entry fun update_campaign_metadata(
+public(package) fun update_campaign_metadata_internal(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
     keys: vector<String>,
     values: vector<String>,
     clock: &Clock,
     ctx: &tx_context::TxContext,
-) {
+): bool {
     // Verify ownership
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
@@ -585,6 +586,7 @@ entry fun update_campaign_metadata(
     if (verification_cleared) {
         emit_campaign_unverified(campaign, tx_context::sender(ctx));
     };
+    verification_cleared
 }
 
 // === View Functions ===
