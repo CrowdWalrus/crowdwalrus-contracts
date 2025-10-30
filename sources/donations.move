@@ -1,6 +1,7 @@
 module crowd_walrus::donations;
 
 use crowd_walrus::campaign::{Self as campaign};
+use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::price_oracle;
 use crowd_walrus::token_registry::{Self as token_registry};
 use std::string::String;
@@ -15,6 +16,8 @@ const E_TOKEN_DISABLED: u64 = 3;
 const E_ZERO_DONATION: u64 = 4;
 const E_COIN_NOT_FOUND: u64 = 5;
 const E_INVALID_SPLIT: u64 = 6;
+const E_SLIPPAGE_EXCEEDED: u64 = 7;
+const E_STATS_MISMATCH: u64 = 8;
 
 const BPS_DENOMINATOR: u64 = 10_000;
 
@@ -132,19 +135,19 @@ public fun split_and_transfer<T>(
     let recipient_address = campaign::payout_recipient_address(campaign);
 
     if (platform_amount == 0) {
-        transfer::public_transfer(donation, recipient_address);
+        sui::transfer::public_transfer(donation, recipient_address);
         return (0, recipient_amount)
     };
 
     if (platform_amount == total) {
-        transfer::public_transfer(donation, platform_address);
+        sui::transfer::public_transfer(donation, platform_address);
         return (platform_amount, 0)
     };
 
     let mut remaining = donation;
     let platform_coin = coin::split(&mut remaining, platform_amount, ctx);
-    transfer::public_transfer(platform_coin, platform_address);
-    transfer::public_transfer(remaining, recipient_address);
+    sui::transfer::public_transfer(platform_coin, platform_address);
+    sui::transfer::public_transfer(remaining, recipient_address);
     (platform_amount, recipient_amount)
 }
 
@@ -213,4 +216,61 @@ public(package) fun emit_donation_received_event<T>(
         recipient_address: campaign::payout_recipient_address(campaign),
         timestamp_ms,
     });
+}
+
+entry fun donate<T>(
+    campaign: &mut campaign::Campaign,
+    stats: &mut campaign_stats::CampaignStats,
+    registry: &token_registry::TokenRegistry,
+    clock: &Clock,
+    donation: Coin<T>,
+    price_info_object: &pyth::price_info::PriceInfoObject,
+    expected_min_usd_micro: u64,
+    opt_max_age_ms: std::option::Option<u64>,
+    ctx: &mut sui::tx_context::TxContext,
+): u64 {
+    precheck<T>(campaign, registry, clock);
+
+    assert!(
+        campaign_stats::id(stats) == campaign::stats_id(campaign),
+        E_STATS_MISMATCH,
+    );
+
+    let donor = sui::tx_context::sender(ctx);
+    let raw_amount = coin::value(&donation);
+    let amount_usd_micro = quote_usd_micro<T>(
+        registry,
+        clock,
+        raw_amount,
+        price_info_object,
+        opt_max_age_ms,
+    );
+    assert!(amount_usd_micro >= expected_min_usd_micro, E_SLIPPAGE_EXCEEDED);
+
+    let platform_bps = campaign::payout_platform_bps(campaign);
+    let platform_amount_usd_micro =
+        (((amount_usd_micro as u128) * (platform_bps as u128)) / (BPS_DENOMINATOR as u128)) as u64;
+    let recipient_amount_usd_micro = amount_usd_micro - platform_amount_usd_micro;
+
+    let (platform_amount_raw, recipient_amount_raw) =
+        split_and_transfer<T>(campaign, donation, ctx);
+
+    campaign_stats::add_donation<T>(stats, raw_amount as u128, amount_usd_micro);
+
+    campaign::lock_parameters_if_unlocked(campaign, clock);
+
+    emit_donation_received_event<T>(
+        campaign,
+        registry,
+        donor,
+        raw_amount,
+        amount_usd_micro,
+        platform_amount_raw,
+        recipient_amount_raw,
+        platform_amount_usd_micro,
+        recipient_amount_usd_micro,
+        clock,
+    );
+
+    amount_usd_micro
 }
