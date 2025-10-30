@@ -111,7 +111,9 @@ Typed Funding Goal: funding_goal_usd_micro: u64 stored in Campaign; immutable af
 
 PayoutPolicy (per campaign): {platform_bps, platform_address, recipient_address}; validated at creation; locks on first donation.
 
-Parameter Locking: On first donation, set parameters_locked = true. After this, cannot change: start/end times, funding goal, payout policy; can change: name/description (emit events). Recipient address (via the payout policy) stays immutable.
+Parameter Locking: On first donation, set parameters_locked = true to signal that economic terms are live. Core fields (start/end dates, funding goal, payout policy) are immutable from creation; metadata and descriptive fields remain editable.
+
+Edit Re-Verification: Whenever an owner edits campaign basics or metadata, set is_verified = false and emit CampaignUnverified so admins must re-approve; publishing campaign updates via add_update does not affect verification.
 
 Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
 
