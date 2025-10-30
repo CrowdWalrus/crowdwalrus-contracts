@@ -144,7 +144,7 @@ public struct Campaign has key, store {
 **Use:** `clock::timestamp_ms(&clock)` (not `tx_context::epoch`)
 
 **Rationale:**
-- Consistency with existing edit functions (`update_campaign_basics`, etc.)
+- Consistency with existing edit functions (`crowd_walrus::update_campaign_basics`, etc.)
 - Network timestamp in milliseconds (Unix-like in practice) for cross-platform compatibility
 - Easier frontend date handling
 - Better precision for sorting and filtering
@@ -181,7 +181,7 @@ public struct Campaign has key, store {
 
 ### Verification Reset on Owner Edits
 
-- `update_campaign_basics` and `update_campaign_metadata` now emit the shared `CampaignUnverified` event when they mutate data while the campaign is verified. The `unverifier` address is the editing owner.
+- `crowd_walrus::update_campaign_basics` and `crowd_walrus::update_campaign_metadata` invoke the shared internal helpers in `campaign.move` to emit `CampaignUnverified` when they mutate data while the campaign is verified. The `unverifier` address is the editing owner, and the verified registry entry is removed so `CrowdWalrus.verified_maps` stays in sync with `Campaign.is_verified`.
 - `add_update` remains metadata-only and does **not** change verification; indexers can rely on the absence of `CampaignUnverified` during timeline updates.
 
 ### Parameter Lock Milestone
