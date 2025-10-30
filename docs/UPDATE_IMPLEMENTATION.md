@@ -179,6 +179,15 @@ public struct Campaign has key, store {
 
 ## Implementation Details
 
+### Verification Reset on Owner Edits
+
+- `update_campaign_basics` and `update_campaign_metadata` now emit the shared `CampaignUnverified` event when they mutate data while the campaign is verified. The `unverifier` address is the editing owner.
+- `add_update` remains metadata-only and does **not** change verification; indexers can rely on the absence of `CampaignUnverified` during timeline updates.
+
+### Parameter Lock Milestone
+
+- `parameters_locked` flips to true on the first successful donation and emits `CampaignParametersLocked` once. Campaign economic parameters (start/end dates, funding goal, payout policy) stay immutable from creation; the flag exists as an indexer/UI signal rather than an enforcement gate today.
+
 ### Entry Function: `add_update`
 
 ```move
