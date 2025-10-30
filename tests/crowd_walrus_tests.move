@@ -576,6 +576,184 @@ public fun test_verify_campaign_twice() {
 }
 
 #[test]
+public fun test_owner_edit_clears_verification_registry() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    // Grant verify cap to verifier
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Verified Campaign"),
+        string::utf8(b"Needs registry sync on edit"),
+        b"verified-edit",
+        vector::empty(),
+        vector::empty(),
+        500_000,
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    // Verify campaign
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 1);
+        assert!(campaign.is_verified());
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Owner edits campaign basics and clears verification
+    {
+        sc.next_tx(owner);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+        crowd_walrus::update_campaign_basics(
+            &mut crowd,
+            &mut campaign,
+            &campaign_owner_cap,
+            option::some(string::utf8(b"Edited Name")),
+            option::none(),
+            &clock,
+            ctx(&mut sc),
+        );
+        assert!(!campaign.is_verified());
+        assert!(!crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 0);
+        ts::return_shared(crowd);
+        ts::return_shared(campaign);
+        sc.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    // Re-verify after edits succeeds
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(campaign.is_verified());
+        assert!(crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 1);
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test]
+public fun test_owner_metadata_edit_clears_verification_registry() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    // Grant verify cap to verifier
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Verified Metadata Campaign"),
+        string::utf8(b"Needs metadata sync on edit"),
+        b"verified-meta-edit",
+        vector::empty(),
+        vector::empty(),
+        600_000,
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    // Verify campaign
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 1);
+        assert!(campaign.is_verified());
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Owner edits campaign metadata and clears verification
+    {
+        sc.next_tx(owner);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+        crowd_walrus::update_campaign_metadata(
+            &mut crowd,
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[string::utf8(b"category")],
+            vector[string::utf8(b"community")],
+            &clock,
+            ctx(&mut sc),
+        );
+        assert!(!campaign.is_verified());
+        assert!(!crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 0);
+        ts::return_shared(crowd);
+        ts::return_shared(campaign);
+        sc.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    // Re-verify after metadata edits succeeds
+    {
+        sc.next_tx(verifier);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(campaign.is_verified());
+        assert!(crowd.is_campaign_verified(campaign_id));
+        assert_eq!(crowd.get_verified_campaigns_list().length(), 1);
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test]
 public fun test_delete_campaign_tolerates_missing_subdomain() {
     let owner = USER1;
     let mut sc = test_init(ADMIN);
