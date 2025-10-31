@@ -50,7 +50,7 @@ When calling protected functions, modules check authorization via `assert_app_is
 
 ### Verification System
 
-- `CrowdWalrus` maintains a `verified_maps` table and `verified_campaigns_list` vector
+- `CrowdWalrus` emits verification events; campaigns keep their own `is_verified` flag
 - Only holders of `VerifyCap` can verify/unverify campaigns
 - Admin can create new `VerifyCap` tokens via `create_verify_cap()`
 - Verification status is stored both in the central registry and on the campaign object itself
