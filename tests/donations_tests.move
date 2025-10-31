@@ -2,6 +2,7 @@
 module crowd_walrus::donations_tests;
 
 use crowd_walrus::campaign::{Self as campaign};
+use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus};
 use crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::donations;
@@ -18,8 +19,10 @@ use std::unit_test::assert_eq;
 use sui::coin::{Self as coin};
 use sui::clock::{Self as clock, Clock};
 use sui::event;
+use sui::object::{Self as sui_object};
 use sui::test_scenario::{Self as ts};
 use sui::test_utils::{Self as tu};
+use sui::vec_map::{Self as vec_map};
 use wormhole::state::State as WormState;
 use wormhole::vaa::{Self as vaa, VAA};
 
@@ -608,6 +611,505 @@ fun donation_received_event_emits_expected_payload() {
 }
 
 #[test]
+fun donate_locks_parameters_and_emits_events() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(500, 9, 5_000);
+
+    let locked_count_before =
+        vector::length(&event::events_by_type<campaign::CampaignParametersLocked>());
+    let donation_count_before =
+        vector::length(&event::events_by_type<donations::DonationReceived>());
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(1_234_567_890, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+    let platform_bps = campaign::payout_platform_bps(&campaign_obj);
+    let platform_amount_raw = (((raw_amount as u128) * (platform_bps as u128)) / 10_000u128) as u64;
+    let recipient_amount_raw = raw_amount - platform_amount_raw;
+    let expected_platform_usd =
+        (((expected_usd as u128) * (platform_bps as u128)) / 10_000u128) as u64;
+    let expected_recipient_usd = expected_usd - expected_platform_usd;
+
+    let returned_usd = donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(returned_usd, expected_usd);
+
+    let locked_events_after = event::events_by_type<campaign::CampaignParametersLocked>();
+    let locked_count_after = vector::length(&locked_events_after);
+    assert_eq!(locked_count_after, locked_count_before + 1);
+    let new_locked_event = vector::borrow(&locked_events_after, locked_count_after - 1);
+    let (locked_campaign_id, _) =
+        campaign::unpack_parameters_locked_event(new_locked_event);
+    assert_eq!(locked_campaign_id, campaign_id);
+
+    let donation_events_after = event::events_by_type<donations::DonationReceived>();
+    let donation_count_after = vector::length(&donation_events_after);
+    assert_eq!(donation_count_after, donation_count_before + 1);
+    let recorded = vector::borrow(&donation_events_after, donation_count_after - 1);
+    let (
+        recorded_campaign_id,
+        recorded_donor,
+        _recorded_canonical,
+        _recorded_symbol,
+        recorded_amount_raw,
+        recorded_amount_usd,
+        recorded_platform_raw,
+        recorded_recipient_raw,
+        recorded_platform_usd,
+        recorded_recipient_usd,
+        recorded_platform_bps,
+        recorded_platform_address,
+        recorded_recipient_address,
+        _timestamp_ms,
+    ) = donations::unpack_donation_received(recorded);
+    assert_eq!(recorded_campaign_id, campaign_id);
+    assert_eq!(recorded_donor, DONOR);
+    assert_eq!(recorded_amount_raw, raw_amount);
+    assert_eq!(recorded_amount_usd, expected_usd);
+    assert_eq!(recorded_platform_raw, platform_amount_raw);
+    assert_eq!(recorded_recipient_raw, recipient_amount_raw);
+    assert_eq!(recorded_platform_usd, expected_platform_usd);
+    assert_eq!(recorded_recipient_usd, expected_recipient_usd);
+    assert_eq!(recorded_platform_bps, platform_bps);
+    assert_eq!(recorded_platform_address, ADMIN);
+    assert_eq!(recorded_recipient_address, OWNER);
+
+    assert!(campaign::parameters_locked(&campaign_obj));
+    assert_eq!(campaign_stats::total_usd_micro(&stats_obj), expected_usd);
+    assert_eq!(campaign_stats::total_donations_count(&stats_obj), 1);
+    let (per_coin_total, per_coin_count) =
+        campaign_stats::per_coin_totals_for_test<TestCoin>(&stats_obj);
+    assert_eq!(per_coin_total, raw_amount as u128);
+    assert_eq!(per_coin_count, 1);
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    assert_eq!(coin::value(&platform_coin), platform_amount_raw);
+    coin::burn_for_testing(platform_coin);
+
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    assert_eq!(coin::value(&recipient_coin), recipient_amount_raw);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
+fun donate_aborts_before_campaign_start() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario_with_offsets(100, 9, 5_000, 5_000, 1_000_000);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(10_000, ts::ctx(&mut scenario));
+    donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
+fun donate_succeeds_at_campaign_end_boundary() {
+    let (
+        mut scenario,
+        mut clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+) = setup_donation_scenario(250, 9, 1_500_000);
+
+scenario.next_tx(DONOR);
+let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+let mut stats_obj =
+    scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let end_time = campaign::end_date(&campaign_obj);
+    clock::set_for_testing(&mut clock_obj, end_time);
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(50_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    let usd = donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(usd, expected_usd);
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
+fun donate_succeeds_at_campaign_start_boundary() {
+    let (
+        mut scenario,
+        mut clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario_with_offsets(300, 9, 15_000, 10_000, 1_000_000);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let start_time = campaign::start_date(&campaign_obj);
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(60_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    clock::set_for_testing(&mut clock_obj, start_time);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    let usd = donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(usd, expected_usd);
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
+fun donate_aborts_after_campaign_end() {
+    let (
+        mut scenario,
+        mut clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(150, 9, 1_500_000);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let end_time = campaign::end_date(&campaign_obj);
+    clock::set_for_testing(&mut clock_obj, end_time + 1);
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(75_000, ts::ctx(&mut scenario));
+
+    donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
+fun donate_only_locks_once_across_multiple_donations() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(150, 9, 5_000);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let mut donation_coin = coin::mint_for_testing<TestCoin>(500_000, ts::ctx(&mut scenario));
+    let mut usd = donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+    assert!(usd > 0);
+
+    let lock_events_after_first = event::events_by_type<campaign::CampaignParametersLocked>();
+    assert_eq!(vector::length(&lock_events_after_first), 1);
+
+    donation_coin = coin::mint_for_testing<TestCoin>(700_000, ts::ctx(&mut scenario));
+    usd = donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+    assert!(usd > 0);
+
+    let lock_events_after_second = event::events_by_type<campaign::CampaignParametersLocked>();
+    assert_eq!(vector::length(&lock_events_after_second), 1);
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test, expected_failure(abort_code = donations::E_SLIPPAGE_EXCEEDED, location = 0x0::donations)]
+fun donate_aborts_when_slippage_exceeded() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(200, 9, 5_000);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(250_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let actual_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        actual_usd + 1,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test, expected_failure(abort_code = donations::E_STATS_MISMATCH, location = 0x0::donations)]
+fun donate_aborts_with_mismatched_stats() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(175, 9, 5_000);
+
+    scenario.next_tx(DONOR);
+    // Create a second campaign manually to get wrong stats
+    let crowd_walrus_obj = scenario.take_shared<crowd_walrus::CrowdWalrus>();
+    let app = crowd_walrus::get_app();
+    let current_time = clock::timestamp_ms(&clock_obj);
+    let other_payout = campaign::new_payout_policy(0, ADMIN, OWNER);
+    let other_metadata = vec_map::from_keys_values(vector::empty<String>(), vector::empty<String>());
+    let (mut other_campaign, other_owner_cap) = campaign::new(
+        &app,
+        sui_object::id(&crowd_walrus_obj),
+        string::utf8(b"Other Campaign"),
+        string::utf8(b"wrong stats"),
+        string::utf8(b"wrong-stats"),
+        other_metadata,
+        500_000,
+        other_payout,
+        current_time,
+        current_time + 1_000_000,
+        &clock_obj,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_shared(crowd_walrus_obj);
+
+    let other_stats_id = campaign_stats::create_for_campaign(
+        &mut other_campaign,
+        &clock_obj,
+        ts::ctx(&mut scenario),
+    );
+    campaign::share(other_campaign);
+    campaign::delete_owner_cap(other_owner_cap);
+
+    // Need to start a new transaction before taking the shared stats
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let mut wrong_stats =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(other_stats_id);
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(90_000, ts::ctx(&mut scenario));
+
+    donations::donate<TestCoin>(
+        &mut campaign_obj,
+        &mut wrong_stats,
+        &registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(wrong_stats);
+    ts::return_shared(stats_obj);
+    ts::return_shared(registry);
+    ts::return_shared(campaign_obj);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
 fun quote_usd_micro_uses_registry_metadata_and_override() {
     let max_age_ms = 4_000;
     let override_ms = 1_000;
@@ -848,6 +1350,96 @@ fun register_test_coin_with_feed(
 
     ts::return_shared(registry);
     scenario.return_to_sender(admin_cap);
+}
+
+fun setup_donation_scenario(
+    platform_bps: u16,
+    decimals: u8,
+    max_age_ms: u64,
+): (
+    ts::Scenario,
+    Clock,
+    PriceInfoObject,
+    vector<u8>,
+    coin::Coin<sui::sui::SUI>,
+    sui_object::ID,
+    sui_object::ID,
+) {
+    setup_donation_scenario_with_offsets(
+        platform_bps,
+        decimals,
+        max_age_ms,
+        0,
+        1_000_000,
+    )
+}
+
+fun setup_donation_scenario_with_offsets(
+    platform_bps: u16,
+    decimals: u8,
+    max_age_ms: u64,
+    start_offset_ms: u64,
+    duration_ms: u64,
+): (
+    ts::Scenario,
+    Clock,
+    PriceInfoObject,
+    vector<u8>,
+    coin::Coin<sui::sui::SUI>,
+    sui_object::ID,
+    sui_object::ID,
+) {
+    let (mut scenario, clock_obj, price_obj, feed_id, fee_coins) =
+        setup_verified_price_info();
+    register_test_coin_with_feed(
+        &mut scenario,
+        &clock_obj,
+        clone_bytes(&feed_id),
+        decimals,
+        max_age_ms,
+        true,
+    );
+
+    scenario.next_tx(OWNER);
+    let crowd = scenario.take_shared<crowd_walrus::CrowdWalrus>();
+    let app = crowd_walrus::get_app();
+    let metadata_keys = vector::empty<String>();
+    let metadata_values = vector::empty<String>();
+    let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
+    let now = clock::timestamp_ms(&clock_obj);
+    let start_time = now + start_offset_ms;
+    let end_time = start_time + duration_ms;
+    let payout_policy = campaign::new_payout_policy(platform_bps, ADMIN, OWNER);
+    let (mut campaign, owner_cap) = campaign::new(
+        &app,
+        sui_object::id(&crowd),
+        string::utf8(b"Donations Flow"),
+        string::utf8(b"Lock parameters"),
+        string::utf8(b"donate-flow"),
+        metadata,
+        1_000_000,
+        payout_policy,
+        start_time,
+        end_time,
+        &clock_obj,
+        ts::ctx(&mut scenario),
+    );
+    let campaign_id = sui_object::id(&campaign);
+    let stats_id =
+        campaign_stats::create_for_campaign(&mut campaign, &clock_obj, ts::ctx(&mut scenario));
+    campaign::share(campaign);
+    ts::return_shared(crowd);
+    campaign::delete_owner_cap(owner_cap);
+
+    (
+        scenario,
+        clock_obj,
+        price_obj,
+        feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    )
 }
 
 fun clone_bytes(bytes: &vector<u8>): vector<u8> {

@@ -12,7 +12,6 @@ use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field::{Self as df};
 use sui::event::{Self as event};
 use sui::object::{Self as sui_object};
-use sui::table::{Self as table};
 use sui::tx_context::{Self as sui_tx_context};
 use sui::vec_map::{Self as vec_map};
 use suins::suins::SuiNS;
@@ -50,8 +49,6 @@ public struct CampaignCreated has copy, drop {
 /// The crowd walrus object
 public struct CrowdWalrus has key, store {
     id: sui_object::UID,
-    verified_maps: table::Table<sui_object::ID, bool>,
-    verified_campaigns_list: vector<sui_object::ID>,
     /// Shared policy presets registry ObjectID created at publish time.
     policy_registry_id: sui_object::ID,
     /// Shared profiles registry ObjectID created at publish time.
@@ -81,11 +78,6 @@ public struct AdminCreated has copy, drop {
 public struct CampaignVerified has copy, drop {
     campaign_id: sui_object::ID,
     verifier: address,
-}
-
-public struct CampaignUnverified has copy, drop {
-    campaign_id: sui_object::ID,
-    unverifier: address,
 }
 
 public struct CampaignDeleted has copy, drop {
@@ -141,8 +133,6 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
 
     let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
-        verified_maps: table::new(ctx),
-        verified_campaigns_list: vector::empty(),
         policy_registry_id,
         profiles_registry_id,
     };
@@ -306,7 +296,7 @@ fun resolve_payout_policy(
 
 /// Verify a campaign
 entry fun verify_campaign(
-    crowd_walrus: &mut CrowdWalrus,
+    crowd_walrus: &CrowdWalrus,
     cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
     ctx: &sui_tx_context::TxContext,
@@ -314,11 +304,8 @@ entry fun verify_campaign(
     let campaign_id = sui_object::id(campaign);
 
     assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(!table::contains(&crowd_walrus.verified_maps, campaign_id), E_ALREADY_VERIFIED);
+    assert!(!campaign::is_verified(campaign), E_ALREADY_VERIFIED);
     campaign::assert_not_deleted(campaign);
-
-    table::add(&mut crowd_walrus.verified_maps, campaign_id, true);
-    vector::push_back(&mut crowd_walrus.verified_campaigns_list, campaign_id);
 
     campaign::set_verified(campaign, &CrowdWalrusApp {}, true);
 
@@ -330,50 +317,22 @@ entry fun verify_campaign(
 }
 
 entry fun unverify_campaign(
-    crowd_walrus: &mut CrowdWalrus,
+    crowd_walrus: &CrowdWalrus,
     cap: &VerifyCap,
     campaign: &mut campaign::Campaign,
     ctx: &sui_tx_context::TxContext,
 ) {
-    let campaign_id = sui_object::id(campaign);
 
     assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
-    assert!(table::contains(&crowd_walrus.verified_maps, campaign_id), E_NOT_VERIFIED);
+    assert!(campaign::is_verified(campaign), E_NOT_VERIFIED);
 
     campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
 
-    remove_verified_campaign(crowd_walrus, campaign_id);
-    event::emit(CampaignUnverified {
-        campaign_id,
-        unverifier: sui_tx_context::sender(ctx),
-    });
-}
-
-fun remove_verified_campaign(
-    crowd_walrus: &mut CrowdWalrus,
-    campaign_id: sui_object::ID,
-) {
-    if (!table::contains(&crowd_walrus.verified_maps, campaign_id)) {
-        return
-    };
-
-    table::remove(&mut crowd_walrus.verified_maps, campaign_id);
-
-    let mut i: u64 = 0;
-    let length = crowd_walrus.verified_campaigns_list.length();
-
-    while (i < length) {
-        if (crowd_walrus.verified_campaigns_list[i] == campaign_id) {
-            vector::remove(&mut crowd_walrus.verified_campaigns_list, i);
-            break
-        } else {
-            i = i + 1;
-        }
-    };
+    campaign::emit_campaign_unverified(campaign, sui_tx_context::sender(ctx));
 }
 
 entry fun delete_campaign(
-    crowd_walrus: &mut CrowdWalrus,
+    crowd_walrus: &CrowdWalrus,
     suins_manager: &SuiNSManager,
     suins: &mut SuiNS,
     campaign: &mut campaign::Campaign,
@@ -390,9 +349,9 @@ entry fun delete_campaign(
     let deleted_at_ms = clock::timestamp_ms(clock);
     let subdomain_name = campaign::subdomain_name(campaign);
 
-    if (table::contains(&crowd_walrus.verified_maps, campaign_id)) {
+    if (campaign::is_verified(campaign)) {
         campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
-        remove_verified_campaign(crowd_walrus, campaign_id);
+        campaign::emit_campaign_unverified(campaign, sui_tx_context::sender(ctx));
     };
 
     suins_manager::remove_subdomain_for_app<CrowdWalrusApp>(
@@ -498,13 +457,8 @@ public fun token_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
 }
 
 /// Check if a campaign is verified
-public fun is_campaign_verified(crowd_walrus: &CrowdWalrus, campaign_id: sui_object::ID): bool {
-    table::contains(&crowd_walrus.verified_maps, campaign_id)
-}
-
-/// Get the verified campaigns list
-public fun get_verified_campaigns_list(crowd_walrus: &CrowdWalrus): vector<sui_object::ID> {
-    crowd_walrus.verified_campaigns_list
+public fun is_campaign_verified(_crowd_walrus: &CrowdWalrus, campaign: &campaign::Campaign): bool {
+    campaign::is_verified(campaign)
 }
 
 #[test]
@@ -573,8 +527,6 @@ public fun test_migrate_token_registry_creates_when_missing() {
 
     let crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
-        verified_maps: table::new(ctx(&mut scenario)),
-        verified_campaigns_list: std::vector::empty(),
         policy_registry_id,
         profiles_registry_id,
     };
@@ -634,8 +586,6 @@ public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): s
 
     let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
-        verified_maps: table::new(ctx),
-        verified_campaigns_list: vector::empty(),
         policy_registry_id,
         profiles_registry_id,
     };

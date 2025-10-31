@@ -19,6 +19,7 @@ const E_CAMPAIGN_DELETED: u64 = 11;
 const E_INVALID_BPS: u64 = 12;
 const E_ZERO_ADDRESS: u64 = 13;
 const E_STATS_ALREADY_SET: u64 = 14;
+const E_PARAMETERS_LOCKED: u64 = 15;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
@@ -26,6 +27,7 @@ public fun e_invalid_bps(): u64 { E_INVALID_BPS }
 public fun e_zero_address(): u64 { E_ZERO_ADDRESS }
 public fun e_campaign_deleted(): u64 { E_CAMPAIGN_DELETED }
 public fun e_recipient_address_invalid(): u64 { E_RECIPIENT_ADDRESS_INVALID }
+public fun e_parameters_locked(): u64 { E_PARAMETERS_LOCKED }
 
 public struct PayoutPolicy has copy, drop, store {
     platform_bps: u16,
@@ -67,11 +69,11 @@ public struct Campaign has key {
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
-    funding_goal_usd_micro: u64,
-    payout_policy: PayoutPolicy,
+    funding_goal_usd_micro: u64, // Immutable: set at creation
+    payout_policy: PayoutPolicy, // Immutable: set at creation
     stats_id: object::ID,
-    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
-    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
+    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open; immutable
+    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close; immutable
     created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
@@ -131,6 +133,32 @@ public struct CampaignStatusChanged has copy, drop {
     editor: address,
     timestamp_ms: u64,
     new_status: bool,
+}
+
+public struct CampaignUnverified has copy, drop {
+    campaign_id: object::ID,
+    unverifier: address,
+}
+
+public(package) fun emit_campaign_unverified(
+    campaign: &Campaign,
+    actor: address,
+) {
+    event::emit(CampaignUnverified {
+        campaign_id: object::id(campaign),
+        unverifier: actor,
+    });
+}
+
+public struct CampaignParametersLocked has copy, drop {
+    campaign_id: object::ID,
+    timestamp_ms: u64,
+}
+
+public(package) fun unpack_parameters_locked_event(
+    event: &CampaignParametersLocked,
+): (object::ID, u64) {
+    (event.campaign_id, event.timestamp_ms)
 }
 
 // === App Auth ===
@@ -294,6 +322,26 @@ public fun parameters_locked(campaign: &Campaign): bool {
     campaign.parameters_locked
 }
 
+public fun assert_parameters_unlocked(campaign: &Campaign) {
+    assert!(!campaign.parameters_locked, E_PARAMETERS_LOCKED);
+}
+
+public(package) fun lock_parameters_if_unlocked(
+    campaign: &mut Campaign,
+    clock: &Clock,
+): bool {
+    if (campaign.parameters_locked) {
+        return false
+    };
+    campaign.parameters_locked = true;
+    let timestamp_ms = clock::timestamp_ms(clock);
+    event::emit(CampaignParametersLocked {
+        campaign_id: object::id(campaign),
+        timestamp_ms,
+    });
+    true
+}
+
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
     campaign_owner_cap.campaign_id
 }
@@ -441,17 +489,29 @@ entry fun update_campaign_basics(
 ) {
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
     let mut name_updated = false;
     let mut description_updated = false;
     if(std::option::is_some(&new_name)) {
         let new_name = std::option::destroy_some(new_name);
-        campaign.name = new_name;
-        name_updated = true;
+        let current_name = &campaign.name;
+        if (*current_name != new_name) {
+            campaign.name = new_name;
+            name_updated = true;
+        };
     };
     if(std::option::is_some(&new_description)) {
         let new_description = std::option::destroy_some(new_description);
-        campaign.short_description = new_description;
-        description_updated = true;
+        let current_description = &campaign.short_description;
+        if (*current_description != new_description) {
+            campaign.short_description = new_description;
+            description_updated = true;
+        };
+    };
+    if (name_updated || description_updated) {
+        if (was_verified) {
+            campaign.is_verified = false;
+        };
     };
     let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignBasicsUpdated {
@@ -461,6 +521,9 @@ entry fun update_campaign_basics(
         name_updated,
         description_updated,
     });
+    if (was_verified && !campaign.is_verified) {
+        emit_campaign_unverified(campaign, tx_context::sender(ctx));
+    };
 }
 
 /// Update campaign metadata (key-value pairs)
@@ -480,11 +543,13 @@ entry fun update_campaign_metadata(
     // Verify ownership
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
 
     // Verify keys and values have same length
     assert!(vector::length(&keys) == vector::length(&values), E_KEY_VALUE_MISMATCH);
 
     let mut i = 0;
+    let mut metadata_mutated = false;
     while(i < vector::length(&keys)) {
         let key = *vector::borrow(&keys, i);
 
@@ -498,13 +563,22 @@ entry fun update_campaign_metadata(
         // Use get_mut to preserve insertion order for existing keys
         if (vec_map::contains(&campaign.metadata, &key)) {
             let value_ref = vec_map::get_mut(&mut campaign.metadata, &key);
-            *value_ref = value;
+            if (*value_ref != value) {
+                *value_ref = value;
+                metadata_mutated = true;
+            };
         } else {
-            // New key - insert at end
             vec_map::insert(&mut campaign.metadata, key, value);
+            metadata_mutated = true;
         };
 
         i = i + 1;
+    };
+
+    if (metadata_mutated) {
+        if (was_verified) {
+            campaign.is_verified = false;
+        };
     };
 
     let timestamp_ms = clock::timestamp_ms(clock);
@@ -514,6 +588,9 @@ entry fun update_campaign_metadata(
         timestamp_ms,
         keys_updated: keys,
     });
+    if (was_verified && !campaign.is_verified) {
+        emit_campaign_unverified(campaign, tx_context::sender(ctx));
+    };
 }
 
 // === View Functions ===

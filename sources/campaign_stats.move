@@ -70,6 +70,10 @@ public fun per_coin_donation_count<T>(stats: &CampaignStats): u64 {
     }
 }
 
+public fun id(stats: &CampaignStats): sui_object::ID {
+    sui_object::id(stats)
+}
+
 fun per_coin_key<T>(): PerCoinKey<T> {
     PerCoinKey {}
 }

@@ -231,26 +231,19 @@ public fun test_verify_campaign() {
     // Test verify campaign
     {
         sc.next_tx(verifier);
-        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
         let mut campaign = sc.take_shared<Campaign>();
         let verify_cap = sc.take_from_sender<VerifyCap>();
 
         // Before verify
-        assert!(!crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
+        assert!(!crowd_walrus.is_campaign_verified(&campaign));
+        assert!(!campaign.is_verified());
 
         // Verify
         crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
         // After verify
-        assert!(crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 1);
-        assert!(
-            vector::contains<sui_object::ID>(
-                &crowd_walrus.get_verified_campaigns_list(),
-                &sui_object::id(&campaign),
-            ),
-        );
+        assert!(crowd_walrus.is_campaign_verified(&campaign));
         assert!(campaign.is_verified());
 
         // Clean up
@@ -264,11 +257,10 @@ public fun test_verify_campaign() {
         sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
         let verify_cap = sc.take_from_sender<VerifyCap>();
-        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
         crowd_walrus.unverify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
-        assert!(!crowd_walrus.is_campaign_verified(sui_object::id(&campaign)));
-        assert_eq!(crowd_walrus.get_verified_campaigns_list().length(), 0);
+        assert!(!crowd_walrus.is_campaign_verified(&campaign));
 
         assert!(!campaign.is_verified());
 
@@ -312,10 +304,10 @@ public fun test_delete_campaign_happy_path() {
 
     {
         sc.next_tx(verifier);
-        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let crowd = sc.take_shared<CrowdWalrus>();
         let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
         let verify_cap = sc.take_from_sender<VerifyCap>();
-        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
         ts::return_shared(campaign);
         sc.return_to_sender(verify_cap);
         ts::return_shared(crowd);
@@ -323,7 +315,7 @@ public fun test_delete_campaign_happy_path() {
 
     {
         sc.next_tx(owner);
-        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let crowd = sc.take_shared<CrowdWalrus>();
         let suins_manager = sc.take_shared<SuiNSManager>();
         let mut suins = sc.take_shared<SuiNS>();
         let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
@@ -332,7 +324,7 @@ public fun test_delete_campaign_happy_path() {
 
         let delete_time = sui::clock::timestamp_ms(&clock);
         crowd_walrus::delete_campaign(
-            &mut crowd,
+            &crowd,
             &suins_manager,
             &mut suins,
             &mut campaign,
@@ -348,8 +340,7 @@ public fun test_delete_campaign_happy_path() {
         assert!(option::is_some(&deleted_at));
         let deleted_at_ms = option::destroy_some(deleted_at);
         assert_eq!(deleted_at_ms, delete_time);
-        assert!(!crowd.is_campaign_verified(campaign_id));
-        assert_eq!(crowd.get_verified_campaigns_list().length(), 0);
+        assert!(!crowd.is_campaign_verified(&campaign));
 
         let subdomain_option = suins
             .registry<Registry>()
@@ -397,7 +388,7 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
 
     {
         sc.next_tx(owner);
-        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let crowd = sc.take_shared<CrowdWalrus>();
         let suins_manager = sc.take_shared<SuiNSManager>();
         let mut suins = sc.take_shared<SuiNS>();
         let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
@@ -405,7 +396,7 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
         let clock = sc.take_shared<Clock>();
 
         crowd_walrus::delete_campaign(
-            &mut crowd,
+            &crowd,
             &suins_manager,
             &mut suins,
             &mut campaign,
@@ -423,10 +414,10 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
 
     {
         sc.next_tx(verifier);
-        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let crowd = sc.take_shared<CrowdWalrus>();
         let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
         let verify_cap = sc.take_from_sender<VerifyCap>();
-        crowd_walrus::verify_campaign(&mut crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
         ts::return_shared(campaign);
         sc.return_to_sender(verify_cap);
         ts::return_shared(crowd);
@@ -474,7 +465,7 @@ public fun test_delete_campaign_requires_matching_cap() {
     );
 
     sc.next_tx(owner);
-    let mut crowd = sc.take_shared<CrowdWalrus>();
+    let crowd = sc.take_shared<CrowdWalrus>();
     let suins_manager = sc.take_shared<SuiNSManager>();
     let mut suins = sc.take_shared<SuiNS>();
     let mut campaign_a = sc.take_shared_by_id<Campaign>(campaign_a_id);
@@ -491,7 +482,7 @@ public fun test_delete_campaign_requires_matching_cap() {
     let clock = sc.take_shared<Clock>();
 
     crowd_walrus::delete_campaign(
-        &mut crowd,
+        &crowd,
         &suins_manager,
         &mut suins,
         &mut campaign_a,
@@ -548,7 +539,7 @@ public fun test_verify_campaign_twice() {
     {
         sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
-        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
         let verify_cap = sc.take_from_sender<VerifyCap>();
         crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
@@ -562,7 +553,7 @@ public fun test_verify_campaign_twice() {
     {
         sc.next_tx(verifier);
         let mut campaign = sc.take_shared<Campaign>();
-        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
         let verify_cap = sc.take_from_sender<VerifyCap>();
         crowd_walrus.verify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
 
@@ -570,6 +561,176 @@ public fun test_verify_campaign_twice() {
         ts::return_shared(campaign);
         sc.return_to_sender(verify_cap);
         ts::return_shared(crowd_walrus);
+    };
+
+    sc.end();
+}
+
+#[test]
+public fun test_owner_edit_clears_verification_registry() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    // Grant verify cap to verifier
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Verified Campaign"),
+        string::utf8(b"Needs registry sync on edit"),
+        b"verified-edit",
+        vector::empty(),
+        vector::empty(),
+        500_000,
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    // Verify campaign
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(crowd.is_campaign_verified(&campaign));
+        assert!(campaign.is_verified());
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Owner edits campaign basics and clears verification
+    {
+        sc.next_tx(owner);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+        campaign::update_campaign_basics(
+            &mut campaign,
+            &campaign_owner_cap,
+            option::some(string::utf8(b"Edited Name")),
+            option::none(),
+            &clock,
+            ctx(&mut sc),
+        );
+        assert!(!campaign.is_verified());
+        assert!(!crowd.is_campaign_verified(&campaign));
+        ts::return_shared(crowd);
+        ts::return_shared(campaign);
+        sc.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    // Re-verify after edits succeeds
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(campaign.is_verified());
+        assert!(crowd.is_campaign_verified(&campaign));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test]
+public fun test_owner_metadata_edit_clears_verification_registry() {
+    let owner = USER1;
+    let verifier = USER2;
+    let mut sc = test_init(ADMIN);
+
+    // Grant verify cap to verifier
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign
+    sc.next_tx(owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Verified Metadata Campaign"),
+        string::utf8(b"Needs metadata sync on edit"),
+        b"verified-meta-edit",
+        vector::empty(),
+        vector::empty(),
+        600_000,
+        owner,
+        0,
+        U64_MAX,
+    );
+
+    // Verify campaign
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(crowd.is_campaign_verified(&campaign));
+        assert!(campaign.is_verified());
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Owner edits campaign metadata and clears verification
+    {
+        sc.next_tx(owner);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = sc.take_from_sender<CampaignOwnerCap>();
+        let clock = sc.take_shared<Clock>();
+        campaign::update_campaign_metadata(
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[string::utf8(b"category")],
+            vector[string::utf8(b"community")],
+            &clock,
+            ctx(&mut sc),
+        );
+        assert!(!campaign.is_verified());
+        assert!(!crowd.is_campaign_verified(&campaign));
+        ts::return_shared(crowd);
+        ts::return_shared(campaign);
+        sc.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    // Re-verify after metadata edits succeeds
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        assert!(campaign.is_verified());
+        assert!(crowd.is_campaign_verified(&campaign));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
     };
 
     sc.end();
@@ -619,7 +780,7 @@ public fun test_delete_campaign_tolerates_missing_subdomain() {
 
     {
         sc.next_tx(owner);
-        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let crowd = sc.take_shared<CrowdWalrus>();
         let suins_manager = sc.take_shared<SuiNSManager>();
         let mut suins = sc.take_shared<SuiNS>();
         let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
@@ -627,7 +788,7 @@ public fun test_delete_campaign_tolerates_missing_subdomain() {
         let clock = sc.take_shared<Clock>();
 
         crowd_walrus::delete_campaign(
-            &mut crowd,
+            &crowd,
             &suins_manager,
             &mut suins,
             &mut campaign,
@@ -637,7 +798,7 @@ public fun test_delete_campaign_tolerates_missing_subdomain() {
         );
 
         assert!(campaign.is_deleted());
-        assert!(!crowd.is_campaign_verified(campaign_id));
+        assert!(!crowd.is_campaign_verified(&campaign));
 
         ts::return_shared(suins_manager);
         ts::return_shared(suins);
@@ -690,7 +851,7 @@ public fun test_unverify_invalid_campaign() {
         sc.next_tx(verifier);
         let verify_cap = sc.take_from_sender<VerifyCap>();
         let mut campaign = sc.take_shared<Campaign>();
-        let mut crowd_walrus = sc.take_shared<CrowdWalrus>();
+        let crowd_walrus = sc.take_shared<CrowdWalrus>();
         crowd_walrus.unverify_campaign(&verify_cap, &mut campaign, ctx(&mut sc));
         sc.return_to_sender(verify_cap);
         ts::return_shared(campaign);
