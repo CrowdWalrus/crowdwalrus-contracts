@@ -307,8 +307,8 @@ public fun test_update_campaign_basics_happy_path() {
         crowd_walrus::campaign::update_campaign_metadata(
             &mut campaign,
             &campaign_owner_cap,
-            vector::empty(),
-            vector::empty(),
+            vector[utf8(b"category")],
+            vector[utf8(b"education")],
             &clock,
             ts::ctx(&mut scenario),
         );
