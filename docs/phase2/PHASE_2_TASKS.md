@@ -645,6 +645,7 @@ Deps: F1, E2b.
 Err codes: E_BAD_BADGE_LEVEL.
 
 F3. Award logic with bitset & events
+✅ COMPLETED (Oct 31, 2025) — maybe_award_badges now emits BadgeMinted per level with exhaustive threshold tests.
 
 File/Module: sources/badge_rewards.move
 
