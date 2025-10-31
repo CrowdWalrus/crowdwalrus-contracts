@@ -113,7 +113,7 @@ PayoutPolicy (per campaign): {platform_bps, platform_address, recipient_address}
 
 Parameter Locking: On first donation, set parameters_locked = true to signal that economic terms are live. Core fields (start/end dates, funding goal, payout policy) are immutable from creation; metadata and descriptive fields remain editable.
 
-Edit Re-Verification: Whenever an owner edits campaign basics or metadata, route through `crowd_walrus::update_campaign_basics` / `crowd_walrus::update_campaign_metadata` so the canonical registry stays consistent: set is_verified = false, remove the entry from CrowdWalrus.verified_maps / verified_campaigns_list, and emit CampaignUnverified so admins must re-approve; publishing campaign updates via add_update does not affect verification.
+Edit Re-Verification: Whenever an owner edits campaign basics or metadata, call the `campaign::update_campaign_basics` / `campaign::update_campaign_metadata` entry functions. They clear `is_verified` on the campaign and emit `CampaignUnverified` so admins must re-approve; publishing campaign updates via add_update does not affect verification. Off-chain indexers should treat the event stream + on-campaign flag as canonical (the legacy CrowdWalrus.registry cache is deprecated and may contain stale entries until the next verification cycle).
 
 Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
 
