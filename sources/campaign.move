@@ -479,19 +479,19 @@ entry fun add_update(
 /// No string length validation - frontend handles input validation.
 /// This is intentional to maximize flexibility at the cost of potential
 /// storage overhead.
-public(package) fun update_campaign_basics_internal(
+entry fun update_campaign_basics(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
     new_name: Option<String>,
     new_description: Option<String>,
     clock: &Clock,
     ctx: &tx_context::TxContext,
-): bool {
+) {
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
     let mut name_updated = false;
     let mut description_updated = false;
-    let mut verification_cleared = false;
     if(std::option::is_some(&new_name)) {
         let new_name = std::option::destroy_some(new_name);
         campaign.name = new_name;
@@ -503,10 +503,9 @@ public(package) fun update_campaign_basics_internal(
         description_updated = true;
     };
     if (name_updated || description_updated) {
-        if (campaign.is_verified) {
-            verification_cleared = true;
+        if (was_verified) {
+            campaign.is_verified = false;
         };
-        campaign.is_verified = false;
     };
     let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignBasicsUpdated {
@@ -516,10 +515,9 @@ public(package) fun update_campaign_basics_internal(
         name_updated,
         description_updated,
     });
-    if (verification_cleared) {
+    if (was_verified && !campaign.is_verified) {
         emit_campaign_unverified(campaign, tx_context::sender(ctx));
     };
-    verification_cleared
 }
 
 /// Update campaign metadata (key-value pairs)
@@ -528,24 +526,24 @@ public(package) fun update_campaign_basics_internal(
 /// No limits on metadata size or number of keys - frontend handles validation.
 /// This is intentional to maximize flexibility. VecMap updates use get_mut()
 /// to preserve insertion order for existing keys.
-public(package) fun update_campaign_metadata_internal(
+entry fun update_campaign_metadata(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
     keys: vector<String>,
     values: vector<String>,
     clock: &Clock,
     ctx: &tx_context::TxContext,
-): bool {
+) {
     // Verify ownership
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
 
     // Verify keys and values have same length
     assert!(vector::length(&keys) == vector::length(&values), E_KEY_VALUE_MISMATCH);
 
     let mut i = 0;
     let mut metadata_mutated = false;
-    let mut verification_cleared = false;
     while(i < vector::length(&keys)) {
         let key = *vector::borrow(&keys, i);
 
@@ -570,10 +568,9 @@ public(package) fun update_campaign_metadata_internal(
     };
 
     if (metadata_mutated) {
-        if (campaign.is_verified) {
-            verification_cleared = true;
+        if (was_verified) {
+            campaign.is_verified = false;
         };
-        campaign.is_verified = false;
     };
 
     let timestamp_ms = clock::timestamp_ms(clock);
@@ -583,10 +580,9 @@ public(package) fun update_campaign_metadata_internal(
         timestamp_ms,
         keys_updated: keys,
     });
-    if (verification_cleared) {
+    if (was_verified && !campaign.is_verified) {
         emit_campaign_unverified(campaign, tx_context::sender(ctx));
     };
-    verification_cleared
 }
 
 // === View Functions ===
