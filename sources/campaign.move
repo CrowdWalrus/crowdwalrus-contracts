@@ -557,12 +557,14 @@ entry fun update_campaign_metadata(
         // Use get_mut to preserve insertion order for existing keys
         if (vec_map::contains(&campaign.metadata, &key)) {
             let value_ref = vec_map::get_mut(&mut campaign.metadata, &key);
-            *value_ref = value;
+            if (*value_ref != value) {
+                *value_ref = value;
+                metadata_mutated = true;
+            };
         } else {
-            // New key - insert at end
             vec_map::insert(&mut campaign.metadata, key, value);
+            metadata_mutated = true;
         };
-        metadata_mutated = true;
 
         i = i + 1;
     };
