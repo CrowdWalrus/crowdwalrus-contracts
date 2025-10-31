@@ -494,13 +494,19 @@ entry fun update_campaign_basics(
     let mut description_updated = false;
     if(std::option::is_some(&new_name)) {
         let new_name = std::option::destroy_some(new_name);
-        campaign.name = new_name;
-        name_updated = true;
+        let current_name = &campaign.name;
+        if (*current_name != new_name) {
+            campaign.name = new_name;
+            name_updated = true;
+        };
     };
     if(std::option::is_some(&new_description)) {
         let new_description = std::option::destroy_some(new_description);
-        campaign.short_description = new_description;
-        description_updated = true;
+        let current_description = &campaign.short_description;
+        if (*current_description != new_description) {
+            campaign.short_description = new_description;
+            description_updated = true;
+        };
     };
     if (name_updated || description_updated) {
         if (was_verified) {
