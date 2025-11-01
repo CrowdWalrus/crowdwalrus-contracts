@@ -6,6 +6,8 @@ use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus::{Self as crowd_walrus};
 use crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::donations;
+use crowd_walrus::badge_rewards;
+use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::price_oracle;
 use crowd_walrus::token_registry::{Self as token_registry};
 use pyth::price::{Self as pyth_price};
@@ -727,6 +729,363 @@ fun donate_locks_parameters_and_emits_events() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
+#[test]
+fun donate_and_award_first_time_creates_profile_and_mints_badge() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(250, 9, 5_000);
+
+    configure_badge_config_for_donation_test(
+        &mut scenario,
+        &clock_obj,
+        vector[1, 10, 100, 1_000, 10_000],
+        vector[1, 2, 3, 4, 5],
+        vector[
+            string::utf8(b"walrus://level1"),
+            string::utf8(b"walrus://level2"),
+            string::utf8(b"walrus://level3"),
+            string::utf8(b"walrus://level4"),
+            string::utf8(b"walrus://level5"),
+        ],
+    );
+
+    scenario.next_tx(DONOR);
+    let profile_events_before =
+        vector::length(&event::events_by_type<profiles::ProfileCreated>());
+    let badge_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+    let donation_events_before =
+        vector::length(&event::events_by_type<donations::DonationReceived>());
+
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let badge_config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let mut profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+
+    assert!(!profiles::exists(&profiles_registry, DONOR));
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(2_000_000_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    let outcome = donations::donate_and_award_first_time<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &badge_config,
+        &mut profiles_registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(donations::outcome_usd_micro(&outcome), expected_usd);
+    let minted_levels = donations::outcome_minted_levels(&outcome);
+    assert_eq!(vector::length(minted_levels), 1);
+    assert_eq!(*vector::borrow(minted_levels, 0), 1);
+
+    assert!(campaign::parameters_locked(&campaign_obj));
+    assert_eq!(campaign_stats::total_usd_micro(&stats_obj), expected_usd);
+    assert_eq!(campaign_stats::total_donations_count(&stats_obj), 1);
+    let (per_coin_total, per_coin_count) =
+        campaign_stats::per_coin_totals_for_test<TestCoin>(&stats_obj);
+    assert_eq!(per_coin_total, raw_amount as u128);
+    assert_eq!(per_coin_count, 1);
+
+    assert!(profiles::exists(&profiles_registry, DONOR));
+
+    let profile_events_after =
+        vector::length(&event::events_by_type<profiles::ProfileCreated>());
+    let badge_events_after =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+    let donation_events_after =
+        vector::length(&event::events_by_type<donations::DonationReceived>());
+    assert_eq!(profile_events_after, profile_events_before + 1);
+    assert_eq!(badge_events_after, badge_events_before + 1);
+    assert_eq!(donation_events_after, donation_events_before + 1);
+
+    ts::return_shared(profiles_registry);
+    ts::return_shared(badge_config);
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let profile = ts::take_from_address<profiles::Profile>(&scenario, DONOR);
+    assert_eq!(profiles::total_usd_micro(&profile), expected_usd);
+    assert_eq!(profiles::total_donations_count(&profile), 1);
+    assert!(profiles::has_badge_level(&profile, 1));
+    ts::return_to_address(DONOR, profile);
+
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test, expected_failure(abort_code = 6, location = 0x0::donations)]
+fun donate_and_award_first_time_aborts_when_profile_exists() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(250, 9, 5_000);
+
+    configure_badge_config_for_donation_test(
+        &mut scenario,
+        &clock_obj,
+        vector[100, 200, 300, 400, 500],
+        vector[1, 2, 3, 4, 5],
+        vector[
+            string::utf8(b"walrus://L1"),
+            string::utf8(b"walrus://L2"),
+            string::utf8(b"walrus://L3"),
+            string::utf8(b"walrus://L4"),
+            string::utf8(b"walrus://L5"),
+        ],
+    );
+
+    scenario.next_tx(DONOR);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_or_get_profile_for_sender(&mut registry, &clock_obj, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+
+    scenario.next_tx(DONOR);
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let badge_config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let mut profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let donation_coin = coin::mint_for_testing<TestCoin>(1_000_000, ts::ctx(&mut scenario));
+
+    donations::donate_and_award_first_time<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &badge_config,
+        &mut profiles_registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_shared(profiles_registry);
+    ts::return_shared(badge_config);
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
+fun donate_and_award_first_time_without_badge() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(200, 9, 5_000);
+
+    configure_badge_config_for_donation_test(
+        &mut scenario,
+        &clock_obj,
+        vector[5_000_000_000, 10_000_000_000, 15_000_000_000, 20_000_000_000, 25_000_000_000],
+        vector[1, 2, 3, 4, 5],
+        vector[
+            string::utf8(b"walrus://hi-1"),
+            string::utf8(b"walrus://hi-2"),
+            string::utf8(b"walrus://hi-3"),
+            string::utf8(b"walrus://hi-4"),
+            string::utf8(b"walrus://hi-5"),
+        ],
+    );
+
+    scenario.next_tx(DONOR);
+    let badge_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let badge_config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let mut profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(1_000_000_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    let outcome = donations::donate_and_award_first_time<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &badge_config,
+        &mut profiles_registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    assert_eq!(donations::outcome_usd_micro(&outcome), expected_usd);
+    assert_eq!(vector::length(donations::outcome_minted_levels(&outcome)), 0);
+
+    let badge_events_after =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+    assert_eq!(badge_events_after, badge_events_before);
+
+    ts::return_shared(profiles_registry);
+    ts::return_shared(badge_config);
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let profile = ts::take_from_address<profiles::Profile>(&scenario, DONOR);
+    assert!(!profiles::has_badge_level(&profile, 1));
+    assert_eq!(profiles::total_usd_micro(&profile), expected_usd);
+    assert_eq!(profiles::total_donations_count(&profile), 1);
+    ts::return_to_address(DONOR, profile);
+
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+#[test]
+fun donate_and_award_first_time_large_donation_awards_single_badge() {
+    let (
+        mut scenario,
+        clock_obj,
+        price_obj,
+        _feed_id,
+        fee_coins,
+        campaign_id,
+        stats_id,
+    ) = setup_donation_scenario(150, 9, 5_000);
+
+    configure_badge_config_for_donation_test(
+        &mut scenario,
+        &clock_obj,
+        vector[1_000, 2_000, 3_000, 4_000, 5_000],
+        vector[1, 2, 3, 4, 5],
+        vector[
+            string::utf8(b"walrus://stack-1"),
+            string::utf8(b"walrus://stack-2"),
+            string::utf8(b"walrus://stack-3"),
+            string::utf8(b"walrus://stack-4"),
+            string::utf8(b"walrus://stack-5"),
+        ],
+    );
+
+    scenario.next_tx(DONOR);
+    let badge_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+
+    let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
+    let mut stats_obj =
+        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    let registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let badge_config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let mut profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
+
+    let donation_coin = coin::mint_for_testing<TestCoin>(3_000_000_000, ts::ctx(&mut scenario));
+    let raw_amount = coin::value(&donation_coin);
+    let expected_usd = donations::quote_usd_micro<TestCoin>(
+        &registry,
+        &clock_obj,
+        raw_amount,
+        &price_obj,
+        std::option::none(),
+    );
+
+    let outcome = donations::donate_and_award_first_time<TestCoin>(
+        &mut campaign_obj,
+        &mut stats_obj,
+        &registry,
+        &badge_config,
+        &mut profiles_registry,
+        &clock_obj,
+        donation_coin,
+        &price_obj,
+        0,
+        std::option::none(),
+        ts::ctx(&mut scenario),
+    );
+
+    let minted_levels = donations::outcome_minted_levels(&outcome);
+    assert_eq!(vector::length(minted_levels), 1);
+    assert_eq!(*vector::borrow(minted_levels, 0), 1);
+
+    let badge_events_after =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+    assert_eq!(badge_events_after, badge_events_before + 1);
+
+    ts::return_shared(profiles_registry);
+    ts::return_shared(badge_config);
+    ts::return_shared(registry);
+    ts::return_shared(stats_obj);
+    ts::return_shared(campaign_obj);
+
+    let _ = ts::next_tx(&mut scenario, DONOR);
+    let profile = ts::take_from_address<profiles::Profile>(&scenario, DONOR);
+    assert!(profiles::has_badge_level(&profile, 1));
+    assert!(!profiles::has_badge_level(&profile, 2));
+    assert!(!profiles::has_badge_level(&profile, 3));
+    assert_eq!(profiles::total_usd_micro(&profile), expected_usd);
+    assert_eq!(profiles::total_donations_count(&profile), 1);
+    ts::return_to_address(DONOR, profile);
+
+    let platform_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, ADMIN);
+    coin::burn_for_testing(platform_coin);
+    let recipient_coin = ts::take_from_address<coin::Coin<TestCoin>>(&scenario, OWNER);
+    coin::burn_for_testing(recipient_coin);
+
+    cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
 #[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
 fun donate_aborts_before_campaign_start() {
     let (
@@ -1044,7 +1403,7 @@ fun donate_aborts_with_mismatched_stats() {
         _feed_id,
         fee_coins,
         campaign_id,
-        stats_id,
+        _stats_id,
     ) = setup_donation_scenario(175, 9, 5_000);
 
     scenario.next_tx(DONOR);
@@ -1081,8 +1440,6 @@ fun donate_aborts_with_mismatched_stats() {
     // Need to start a new transaction before taking the shared stats
     scenario.next_tx(DONOR);
     let mut campaign_obj = scenario.take_shared_by_id<campaign::Campaign>(campaign_id);
-    let mut stats_obj =
-        scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
     let registry = scenario.take_shared<token_registry::TokenRegistry>();
     let mut wrong_stats =
         scenario.take_shared_by_id<campaign_stats::CampaignStats>(other_stats_id);
@@ -1102,7 +1459,6 @@ fun donate_aborts_with_mismatched_stats() {
     );
 
     ts::return_shared(wrong_stats);
-    ts::return_shared(stats_obj);
     ts::return_shared(registry);
     ts::return_shared(campaign_obj);
 
@@ -1260,6 +1616,37 @@ fun quote_usd_micro_aborts_on_zero_amount() {
 
     ts::return_shared(registry);
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
+}
+
+fun configure_badge_config_for_donation_test(
+    scenario: &mut ts::Scenario,
+    clock_obj: &Clock,
+    amount_thresholds_micro: vector<u64>,
+    payment_thresholds: vector<u64>,
+    image_uris: vector<String>,
+) {
+    scenario.next_tx(ADMIN);
+    let crowd = scenario.take_shared<crowd_walrus::CrowdWalrus>();
+    let config = badge_rewards::create_config_for_tests(
+        sui_object::id(&crowd),
+        ts::ctx(scenario),
+    );
+    badge_rewards::share_config(config);
+    ts::return_shared(crowd);
+
+    scenario.next_tx(ADMIN);
+    let mut config_shared = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
+    crowd_walrus::update_badge_config_internal(
+        &mut config_shared,
+        &admin_cap,
+        amount_thresholds_micro,
+        payment_thresholds,
+        image_uris,
+        clock_obj,
+    );
+    ts::return_shared(config_shared);
+    scenario.return_to_sender(admin_cap);
 }
 
 fun add_enabled_token(
