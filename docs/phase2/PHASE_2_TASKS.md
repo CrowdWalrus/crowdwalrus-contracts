@@ -841,6 +841,8 @@ Err codes: Surface E_PROFILE_EXISTS if already mapped.
 
 G6b. donate_and_award<T> entry (requires &mut Profile)
 
+✅ COMPLETED (Nov 1, 2025) — Documented repeat donor entry; tests cover multi-level badge unlocks.
+
 File/Module: sources/donations.move
 
 Product intent: Efficient repeat donations with existing Profile.
