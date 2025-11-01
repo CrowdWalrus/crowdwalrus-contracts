@@ -1,5 +1,6 @@
 module crowd_walrus::badge_rewards;
 
+use crowd_walrus::profiles::{Self as profiles};
 use std::string::{Self as string, String};
 use sui::clock::{Self as clock, Clock};
 use sui::display;
@@ -15,6 +16,7 @@ const E_BAD_LENGTH: u64 = 1;
 const E_NOT_ASCENDING: u64 = 2;
 const E_EMPTY_URI: u64 = 3;
 const E_BAD_BADGE_LEVEL: u64 = 4;
+const E_INVALID_TOTALS: u64 = 5;
 
 public struct BadgeConfig has key {
     id: sui_object::UID,
@@ -41,6 +43,13 @@ public struct BadgeConfigUpdated has copy, drop {
     amount_thresholds_micro: vector<u64>,
     payment_thresholds: vector<u64>,
     image_uris: vector<String>,
+    timestamp_ms: u64,
+}
+
+public struct BadgeMinted has copy, drop {
+    owner: address,
+    level: u8,
+    profile_id: sui_object::ID,
     timestamp_ms: u64,
 }
 
@@ -152,6 +161,69 @@ public(package) fun mint_badge(
         issued_at_ms,
     };
     sui::transfer::transfer(badge, owner);
+}
+
+/// Evaluates badge thresholds against profile totals, awarding badges for levels that newly satisfy
+/// both the amount and donation-count requirements. This guards against “whale” spikes or spammy
+/// micro-donations earning badges on only one axis. Returns newly minted levels in ascending order
+/// so UIs can render them deterministically.
+public(package) fun maybe_award_badges(
+    profile: &mut profiles::Profile,
+    config: &BadgeConfig,
+    old_amount: u64,
+    old_count: u64,
+    new_amount: u64,
+    new_count: u64,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+): vector<u8> {
+    assert!(new_amount >= old_amount, E_INVALID_TOTALS);
+    assert!(new_count >= old_count, E_INVALID_TOTALS);
+
+    if (!is_configured(config)) {
+        return vector::empty<u8>()
+    };
+
+    let amount_thresholds = amount_thresholds_micro(config);
+    let payment_thresholds = payment_thresholds(config);
+    let image_uris = image_uris(config);
+    let owner = profiles::owner(profile);
+    let profile_id = sui_object::id(profile);
+    let timestamp_ms = clock::timestamp_ms(clock);
+
+    let mut minted_levels = vector::empty<u8>();
+
+    let mut idx = 0;
+    while (idx < LEVEL_COUNT) {
+        let level = (idx as u8) + 1;
+
+        if (!profiles::has_badge_level(profile, level)) {
+            let amount_threshold = *vector::borrow(amount_thresholds, idx);
+            let payment_threshold = *vector::borrow(payment_thresholds, idx);
+
+            let is_eligible_now =
+                new_amount >= amount_threshold && new_count >= payment_threshold;
+            let was_eligible_before =
+                old_amount >= amount_threshold && old_count >= payment_threshold;
+
+            if (is_eligible_now && !was_eligible_before) {
+                let image_uri = vector::borrow(image_uris, idx);
+                mint_badge(owner, level, image_uri, timestamp_ms, ctx);
+                event::emit(BadgeMinted {
+                    owner,
+                    level,
+                    profile_id,
+                    timestamp_ms,
+                });
+                profiles::grant_badge_level(profile, level);
+                vector::push_back(&mut minted_levels, level);
+            };
+        };
+
+        idx = idx + 1;
+    };
+
+    minted_levels
 }
 
 #[test_only]

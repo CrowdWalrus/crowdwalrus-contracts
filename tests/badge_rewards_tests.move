@@ -4,12 +4,14 @@ module crowd_walrus::badge_rewards_tests;
 use crowd_walrus::badge_rewards::{Self as badge_rewards};
 use crowd_walrus::crowd_walrus;
 use crowd_walrus::crowd_walrus_tests;
-use std::string::{Self as string};
+use crowd_walrus::profiles::{Self as profiles};
+use std::string::{Self as string, String};
 use std::unit_test::assert_eq;
 use sui::clock::Clock;
 use sui::display;
 use sui::object as sui_object;
 use sui::test_scenario::{Self as ts, Scenario, ctx};
+use sui::test_utils as tu;
 use sui::vec_map::{Self as vec_map};
 
 const ADMIN: address = @0xA;
@@ -329,6 +331,332 @@ fun test_setup_badge_display_registers_templates() {
     ts::end(scenario);
 }
 
+#[test]
+fun test_maybe_award_badges_require_both_thresholds() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile_amount_only = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    profiles::grant_badge_level(&mut profile_amount_only, 1);
+    profiles::grant_badge_level(&mut profile_amount_only, 2);
+    let clock_amount = scenario.take_shared<Clock>();
+    let config_amount = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let minted_amount = badge_rewards::maybe_award_badges(
+        &mut profile_amount_only,
+        &config_amount,
+        550_000,
+        3,
+        650_000,
+        4,
+        &clock_amount,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted_amount), 0);
+    assert!(!profiles::has_badge_level(&profile_amount_only, 3));
+    ts::return_shared(clock_amount);
+    ts::return_shared(config_amount);
+    tu::destroy(profile_amount_only);
+    let _ = ts::next_tx(&mut scenario, OTHER);
+
+    scenario.next_tx(OTHER);
+    let mut profile_payment_only = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    profiles::grant_badge_level(&mut profile_payment_only, 1);
+    profiles::grant_badge_level(&mut profile_payment_only, 2);
+    let clock_payment = scenario.take_shared<Clock>();
+    let config_payment = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let minted_payment = badge_rewards::maybe_award_badges(
+        &mut profile_payment_only,
+        &config_payment,
+        550_000,
+        4,
+        590_000,
+        5,
+        &clock_payment,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted_payment), 0);
+    assert!(!profiles::has_badge_level(&profile_payment_only, 3));
+    ts::return_shared(clock_payment);
+    ts::return_shared(config_payment);
+    tu::destroy(profile_payment_only);
+    let _ = ts::next_tx(&mut scenario, OTHER);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_awards_levels_and_is_idempotent() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        0,
+        0,
+        600_000,
+        5,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 3);
+    assert_eq!(*vector::borrow(&minted, 0), 1);
+    assert_eq!(*vector::borrow(&minted, 1), 2);
+    assert_eq!(*vector::borrow(&minted, 2), 3);
+    assert!(profiles::has_badge_level(&profile, 1));
+    assert!(profiles::has_badge_level(&profile, 2));
+    assert!(profiles::has_badge_level(&profile, 3));
+    assert!(!profiles::has_badge_level(&profile, 4));
+
+    let minted_again = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        600_000,
+        5,
+        600_000,
+        5,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted_again), 0);
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 3);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_awards_first_level() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        0,
+        0,
+        100_000,
+        1,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 1);
+    assert_eq!(*vector::borrow(&minted, 0), 1);
+    assert!(profiles::has_badge_level(&profile, 1));
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_large_amount_single_payment_only_level_one() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        0,
+        0,
+        600_000,
+        1,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 1);
+    assert_eq!(*vector::borrow(&minted, 0), 1);
+    assert!(profiles::has_badge_level(&profile, 1));
+    assert!(!profiles::has_badge_level(&profile, 2));
+    assert!(!profiles::has_badge_level(&profile, 3));
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_payment_only_no_award() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        0,
+        0,
+        90_000,
+        5,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 0);
+    assert!(!profiles::has_badge_level(&profile, 1));
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_boundary_equality_awards() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        90_000,
+        2,
+        100_000,
+        3,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 1);
+    assert_eq!(*vector::borrow(&minted, 0), 1);
+    assert!(profiles::has_badge_level(&profile, 1));
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_progression_from_level_one_to_three() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+    update_badge_config_for_tests(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    profiles::grant_badge_level(&mut profile, 1);
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        150_000,
+        3,
+        650_000,
+        5,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 2);
+    assert_eq!(*vector::borrow(&minted, 0), 2);
+    assert_eq!(*vector::borrow(&minted, 1), 3);
+    assert!(profiles::has_badge_level(&profile, 2));
+    assert!(profiles::has_badge_level(&profile, 3));
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 2);
+
+    ts::end(scenario);
+}
+
 fun bootstrap_badge_config(scenario: &mut Scenario) {
     scenario.next_tx(ADMIN);
     let crowd = scenario.take_shared<crowd_walrus::CrowdWalrus>();
@@ -338,4 +666,47 @@ fun bootstrap_badge_config(scenario: &mut Scenario) {
     );
     badge_rewards::share_config(config);
     ts::return_shared(crowd);
+}
+
+fun update_badge_config_for_tests(scenario: &mut Scenario) {
+    scenario.next_tx(ADMIN);
+    let mut config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
+    let clock = scenario.take_shared<Clock>();
+    let (amounts, payments, uris) = default_badge_thresholds();
+    crowd_walrus::update_badge_config_internal(
+        &mut config,
+        &admin_cap,
+        amounts,
+        payments,
+        uris,
+        &clock,
+    );
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    scenario.return_to_sender(admin_cap);
+}
+
+fun default_badge_thresholds(): (
+    vector<u64>,
+    vector<u64>,
+    vector<String>,
+) {
+    (
+        vector[
+            100_000,
+            300_000,
+            600_000,
+            1_200_000,
+            2_400_000,
+        ],
+        vector[1, 3, 5, 7, 9],
+        vector[
+            string::utf8(b"walrus://badge1"),
+            string::utf8(b"walrus://badge2"),
+            string::utf8(b"walrus://badge3"),
+            string::utf8(b"walrus://badge4"),
+            string::utf8(b"walrus://badge5"),
+        ],
+    )
 }
