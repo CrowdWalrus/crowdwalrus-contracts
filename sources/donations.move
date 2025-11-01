@@ -1,9 +1,11 @@
 module crowd_walrus::donations;
 
+use crowd_walrus::badge_rewards;
 use crowd_walrus::campaign::{Self as campaign};
 use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::price_oracle;
 use crowd_walrus::token_registry::{Self as token_registry};
+use crowd_walrus::profiles::{Self as profiles};
 use std::string::String;
 use std::u64;
 use sui::clock::{Self as clock, Clock};
@@ -37,6 +39,22 @@ public struct DonationReceived has copy, drop {
     platform_address: address,
     recipient_address: address,
     timestamp_ms: u64,
+}
+
+/// Return payload for donation flows that handle badge minting.
+public struct DonationAwardOutcome has copy, drop {
+    usd_micro: u64,
+    minted_levels: vector<u8>,
+}
+
+/// Returns the USD micro value recorded for the donation.
+public fun outcome_usd_micro(outcome: &DonationAwardOutcome): u64 {
+    outcome.usd_micro
+}
+
+/// Returns the badge levels minted during the donation, if any.
+public fun outcome_minted_levels(outcome: &DonationAwardOutcome): &vector<u8> {
+    &outcome.minted_levels
 }
 
 /// Helper returning all event fields for package-internal consumers and tests.
@@ -273,4 +291,89 @@ entry fun donate<T>(
     );
 
     amount_usd_micro
+}
+
+/// Processes a first-time donation by creating the donor's profile, executing the donation,
+/// updating profile totals, minting any newly earned badges, and transferring the profile to
+/// the sender. Aborts if the sender already has an existing profile registered.
+///
+/// # Flow
+/// 1. Assert the sender has no profile (aborts with `profiles::profile_exists_error_code()`).
+/// 2. Create and register a new profile for the sender via `profiles::create_for`.
+/// 3. Call `donate<T>` to run all standard donation checks, USD valuation, splitting, and stats updates.
+/// 4. Increment the newly created profile's totals with the USD value from the donation.
+/// 5. Invoke `badge_rewards::maybe_award_badges` to mint any badge levels newly satisfied.
+/// 6. Transfer the profile to the sender so they leave the PTB owning their profile object.
+///
+/// # Events Emitted
+/// - `profiles::ProfileCreated` (once, when the profile is minted).
+/// - `donations::DonationReceived` (once, via `donate<T>`).
+/// - `badge_rewards::BadgeMinted` (zero or more per badge level awarded).
+/// - `campaign::CampaignParametersLocked` (once if this is the first donation for the campaign).
+///
+/// # Returns
+/// A `DonationAwardOutcome` containing:
+/// - `usd_micro`: The floor-rounded USD micro-value of the donation.
+/// - `minted_levels`: A vector of badge levels minted during this call (may be empty).
+///
+/// # Aborts
+/// - `profiles::profile_exists_error_code()`: Sender already has a profile (use `donate_and_award` instead).
+/// - All other abort paths surfaced by `donate<T>` (time window, token disabled, slippage, stale price, etc.).
+entry fun donate_and_award_first_time<T>(
+    campaign: &mut campaign::Campaign,
+    stats: &mut campaign_stats::CampaignStats,
+    registry: &token_registry::TokenRegistry,
+    badge_config: &badge_rewards::BadgeConfig,
+    profiles_registry: &mut profiles::ProfilesRegistry,
+    clock: &Clock,
+    donation: Coin<T>,
+    price_info_object: &pyth::price_info::PriceInfoObject,
+    expected_min_usd_micro: u64,
+    opt_max_age_ms: std::option::Option<u64>,
+    ctx: &mut sui::tx_context::TxContext,
+): DonationAwardOutcome {
+    let sender = sui::tx_context::sender(ctx);
+    assert!(
+        !profiles::exists(profiles_registry, sender),
+        profiles::profile_exists_error_code(),
+    );
+
+    let mut profile = profiles::create_for(profiles_registry, sender, clock, ctx);
+    let old_amount = profiles::total_usd_micro(&profile);
+    let old_count = profiles::total_donations_count(&profile);
+
+    let usd_micro = donate<T>(
+        campaign,
+        stats,
+        registry,
+        clock,
+        donation,
+        price_info_object,
+        expected_min_usd_micro,
+        opt_max_age_ms,
+        ctx,
+    );
+
+    profiles::add_contribution(&mut profile, usd_micro);
+
+    let new_amount = profiles::total_usd_micro(&profile);
+    let new_count = profiles::total_donations_count(&profile);
+
+    let minted_levels = badge_rewards::maybe_award_badges(
+        &mut profile,
+        badge_config,
+        old_amount,
+        old_count,
+        new_amount,
+        new_count,
+        clock,
+        ctx,
+    );
+
+    profiles::transfer_to(profile, sender);
+
+    DonationAwardOutcome {
+        usd_micro,
+        minted_levels,
+    }
 }
