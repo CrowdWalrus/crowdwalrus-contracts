@@ -15,6 +15,10 @@ const E_INVALID_BADGE_LEVEL: u64 = 4;
 const E_INVALID_BADGE_MASK: u64 = 5;
 const E_PROFILE_EXISTS: u64 = 6;
 
+public(package) fun profile_exists_error_code(): u64 {
+    E_PROFILE_EXISTS
+}
+
 public struct ProfilesRegistry has key {
     id: sui_object::UID,
 }
@@ -191,6 +195,11 @@ public(package) fun grant_badge_level(profile: &mut Profile, level: u8) {
 public(package) fun grant_badge_levels(profile: &mut Profile, mask: u16) {
     assert!(mask <= BADGE_LEVEL_MASK, E_INVALID_BADGE_MASK);
     profile.badge_levels_earned = profile.badge_levels_earned | mask;
+}
+
+public(package) fun transfer_to(profile: Profile, recipient: address) {
+    assert!(profile.owner == recipient, E_NOT_PROFILE_OWNER);
+    sui::transfer::transfer(profile, recipient);
 }
 
 public(package) fun set_metadata(

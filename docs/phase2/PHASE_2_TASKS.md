@@ -810,6 +810,8 @@ Deps: A2–A4, B1–B2, C1, D1–D2, G1–G4.
 Err codes: E_SLIPPAGE_EXCEEDED.
 
 G6a. donate_and_award_first_time<T> entry (creates Profile internally)
+✅ COMPLETED (Nov 1, 2025) — Entry auto-mints profile, updates stats, mints badges, and returns outcome struct with tests for edge cases.
+
 
 File/Module: sources/donations.move
 
