@@ -99,6 +99,16 @@ public(package) fun create_or_get_profile_for_sender(
     }
 }
 
+entry fun create_profile(
+    registry: &mut ProfilesRegistry,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+) {
+    let sender = tx_ctx::sender(ctx);
+    let profile = create_for(registry, sender, clock, ctx);
+    transfer_to(profile, sender);
+}
+
 #[test_only]
 public fun create_registry_for_tests(ctx: &mut tx_ctx::TxContext): ProfilesRegistry {
     create_registry(ctx)
