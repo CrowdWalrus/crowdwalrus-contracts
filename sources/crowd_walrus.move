@@ -53,6 +53,9 @@ public struct CrowdWalrus has key, store {
     policy_registry_id: sui_object::ID,
     /// Shared profiles registry ObjectID created at publish time.
     profiles_registry_id: sui_object::ID,
+    /// Shared badge configuration ObjectID created at publish time.
+    /// Note: Created empty; platform admins must configure thresholds and URIs before badge minting.
+    badge_config_id: sui_object::ID,
 }
 
 /// Capability for admin operations
@@ -101,6 +104,11 @@ public struct TokenRegistryCreated has copy, drop {
     token_registry_id: sui_object::ID,
 }
 
+public struct BadgeConfigCreated has copy, drop {
+    crowd_walrus_id: sui_object::ID,
+    badge_config_id: sui_object::ID,
+}
+
 public struct TokenRegistryKey has copy, drop, store {}
 
 public struct TokenRegistrySlot has store {
@@ -130,11 +138,15 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
     let profiles_registry = profiles::create_registry(ctx);
     let profiles_registry_id = sui_object::id(&profiles_registry);
     profiles::share_registry(profiles_registry);
+    let badge_config = badge_rewards::create_config(crowd_walrus_id, ctx);
+    let badge_config_id = sui_object::id(&badge_config);
+    badge_rewards::share_config(badge_config);
 
     let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         policy_registry_id,
         profiles_registry_id,
+        badge_config_id,
     };
     record_token_registry_id(&mut crowd_walrus, token_registry_id);
 
@@ -162,6 +174,10 @@ fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
     event::emit(TokenRegistryCreated {
         crowd_walrus_id,
         token_registry_id,
+    });
+    event::emit(BadgeConfigCreated {
+        crowd_walrus_id,
+        badge_config_id,
     });
 
     // Transfer capability to creator
@@ -447,6 +463,11 @@ public fun profiles_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
     crowd_walrus.profiles_registry_id
 }
 
+/// Get the shared BadgeConfig sui_object::ID managed by this CrowdWalrus instance.
+public fun badge_config_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
+    crowd_walrus.badge_config_id
+}
+
 /// Get the shared TokenRegistry sui_object::ID managed by this CrowdWalrus instance.
 public fun token_registry_id(crowd_walrus: &CrowdWalrus): sui_object::ID {
     assert!(
@@ -478,10 +499,12 @@ public fun test_init_function() {
     let policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
     let profiles_registry = scenario.take_shared<profiles::ProfilesRegistry>();
     let token_registry = scenario.take_shared<token_registry::TokenRegistry>();
+    let badge_config = scenario.take_shared<badge_rewards::BadgeConfig>();
     // Ensure the stored registry sui_object::ID matches the shared object we just fetched.
     assert!(sui_object::id(&policy_registry) == policy_registry_id(&crowd_walrus));
     assert!(sui_object::id(&profiles_registry) == profiles_registry_id(&crowd_walrus));
     assert!(sui_object::id(&token_registry) == token_registry_id(&crowd_walrus));
+    assert!(sui_object::id(&badge_config) == badge_config_id(&crowd_walrus));
 
     let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
     let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
@@ -493,6 +516,7 @@ public fun test_init_function() {
     ts::return_shared(policy_registry);
     ts::return_shared(profiles_registry);
     ts::return_shared(token_registry);
+    ts::return_shared(badge_config);
     scenario.return_to_sender(suins_manager_cap);
     ts::return_shared(crowd_walrus);
     ts::return_shared(suins_manager);
@@ -524,11 +548,15 @@ public fun test_migrate_token_registry_creates_when_missing() {
     let profiles_registry = profiles::create_registry(ctx(&mut scenario));
     let profiles_registry_id = sui_object::id(&profiles_registry);
     profiles::share_registry(profiles_registry);
+    let badge_config = badge_rewards::create_config(crowd_walrus_id, ctx(&mut scenario));
+    let badge_config_id = sui_object::id(&badge_config);
+    badge_rewards::share_config(badge_config);
 
     let crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         policy_registry_id,
         profiles_registry_id,
+        badge_config_id,
     };
     transfer::share_object(crowd_walrus);
 
@@ -583,11 +611,15 @@ public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): s
     let profiles_registry = profiles::create_registry(ctx);
     let profiles_registry_id = sui_object::id(&profiles_registry);
     profiles::share_registry(profiles_registry);
+    let badge_config = badge_rewards::create_config(crowd_walrus_id, ctx);
+    let badge_config_id = sui_object::id(&badge_config);
+    badge_rewards::share_config(badge_config);
 
     let mut crowd_walrus = CrowdWalrus {
         id: crowd_walrus_uid,
         policy_registry_id,
         profiles_registry_id,
+        badge_config_id,
     };
     record_token_registry_id(&mut crowd_walrus, token_registry_id);
     transfer::share_object(crowd_walrus);
