@@ -496,6 +496,7 @@ Acceptance: Docs + callable entry present.
 Deps: F2.
 
 E3. Standalone create_profile entry function
+✅ COMPLETED (Nov 2, 2025) — Entry now accepts Clock for timestamped events; tests cover happy path and duplicate abort.
 
 File/Module: sources/profiles.move
 
@@ -503,7 +504,7 @@ Product intent: Users can create profiles before any other action (optional, imp
 
 Implement:
 
-Public entry fun create_profile(registry: &mut ProfilesRegistry, ctx: &mut TxContext).
+entry fun create_profile(registry: &mut ProfilesRegistry, clock: &Clock, ctx: &mut TxContext).
 
 Check ProfilesRegistry; if sender already has profile, abort with E_PROFILE_EXISTS.
 
