@@ -437,9 +437,8 @@ Deps: E2.
 
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
-✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
-
 E2. Profile object + bitset + metadata
+✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
 
 File/Module: sources/profiles.move
 
