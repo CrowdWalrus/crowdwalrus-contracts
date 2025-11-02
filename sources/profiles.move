@@ -19,6 +19,7 @@ const E_EMPTY_KEY: u64 = 7;
 const E_EMPTY_VALUE: u64 = 8;
 const E_KEY_TOO_LONG: u64 = 9;
 const E_VALUE_TOO_LONG: u64 = 10;
+const E_TOO_MANY_METADATA_ENTRIES: u64 = 11;
 
 public(package) fun profile_exists_error_code(): u64 {
     E_PROFILE_EXISTS
@@ -132,7 +133,7 @@ entry fun update_profile_metadata(
 ) {
     let sender = tx_ctx::sender(ctx);
     assert!(profile.owner == sender, E_NOT_PROFILE_OWNER);
-    assert_valid_metadata_entry(&key, &value);
+    assert_valid_metadata_entry(&profile.metadata, &key, &value);
 
     let key_for_event = clone_string(&key);
     let value_for_event = clone_string(&value);
@@ -157,6 +158,7 @@ const BADGE_LEVEL_MAX: u8 = 5;
 const BADGE_LEVEL_MASK: u16 = 0x001F;
 const MAX_METADATA_KEY_LENGTH: u64 = 64;
 const MAX_METADATA_VALUE_LENGTH: u64 = 2048;
+const MAX_METADATA_ENTRIES: u64 = 100;
 
 public struct Profile has key {
     id: sui_object::UID,
@@ -273,19 +275,26 @@ public(package) fun set_metadata(
     while (i < len) {
         let key = *std::vector::borrow(&metadata_keys, i);
         let value = *std::vector::borrow(&metadata_values, i);
-        assert_valid_metadata_entry(&key, &value);
+        assert_valid_metadata_entry(&profile.metadata, &key, &value);
         insert_or_update_metadata(&mut profile.metadata, key, value);
         i = i + 1;
     };
 }
 
-fun assert_valid_metadata_entry(key: &String, value: &String) {
+fun assert_valid_metadata_entry(
+    metadata: &VecMap<String, String>,
+    key: &String,
+    value: &String,
+) {
     let key_len = string::length(key);
     let value_len = string::length(value);
     assert!(key_len > 0, E_EMPTY_KEY);
     assert!(value_len > 0, E_EMPTY_VALUE);
     assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
     assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+    if (!vec_map::contains(metadata, key)) {
+        assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
 }
 
 fun insert_or_update_metadata(
