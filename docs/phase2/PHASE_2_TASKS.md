@@ -4,6 +4,7 @@ Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
 • Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
+• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
@@ -437,9 +438,8 @@ Deps: E2.
 
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
-✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
-
 E2. Profile object + bitset + metadata
+✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
 
 File/Module: sources/profiles.move
 
@@ -497,6 +497,7 @@ Acceptance: Docs + callable entry present.
 Deps: F2.
 
 E3. Standalone create_profile entry function
+✅ COMPLETED (Nov 2, 2025) — Entry now accepts Clock for timestamped events; tests cover happy path and duplicate abort.
 
 File/Module: sources/profiles.move
 
@@ -504,7 +505,7 @@ Product intent: Users can create profiles before any other action (optional, imp
 
 Implement:
 
-Public entry fun create_profile(registry: &mut ProfilesRegistry, ctx: &mut TxContext).
+entry fun create_profile(registry: &mut ProfilesRegistry, clock: &Clock, ctx: &mut TxContext).
 
 Check ProfilesRegistry; if sender already has profile, abort with E_PROFILE_EXISTS.
 
@@ -527,6 +528,7 @@ Deps: E1, E2.
 Err codes: E_PROFILE_EXISTS.
 
 E4. update_profile_metadata entry function
+✅ COMPLETED (Nov 2, 2025) — Entry enforces owner-only updates, 64/2048 length bounds, and emits ProfileMetadataUpdated.
 
 File/Module: sources/profiles.move
 
@@ -534,13 +536,13 @@ Product intent: Users can update their profile information (name, bio, avatar UR
 
 Implement:
 
-Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, ctx: &mut TxContext).
+Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, clock: &Clock, ctx: &mut TxContext).
 
 Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
 
 Update metadata VecMap with new key-value pair (insert_or_update).
 
-Guard against empty strings and overlong keys/values (define max lengths; abort when exceeded).
+Guard against empty strings and overlong keys/values (1–64 byte keys, 1–2048 byte values) and enforce a 100-entry cap when inserting new keys (E_TOO_MANY_METADATA_ENTRIES).
 
 Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
 
@@ -799,7 +801,7 @@ Patterns: Atomic orchestration.
 
 Security/Edges: Overflow checks; idempotent lock.
 
-Related invariants: Owner-driven campaign edit entry functions (e.g., `campaign::update_campaign_basics`, `campaign::update_campaign_metadata`) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do. Indexers should rely on the event + `Campaign` flag (the legacy CrowdWalrus registry cache is deprecated).
+Related invariants: Owner-driven campaign edit entry functions (e.g., `campaign::update_campaign_basics`, `campaign::update_campaign_metadata`) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do. Indexers should rely on the event + `Campaign` flag (the legacy CrowdWalrus registry cache is deprecated). Metadata guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, and a 100-entry cap for new keys (errors E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, E_VALUE_TOO_LONG, E_TOO_MANY_METADATA_ENTRIES).
 
 Tests: Happy/slippage/boundary times/remainder.
 

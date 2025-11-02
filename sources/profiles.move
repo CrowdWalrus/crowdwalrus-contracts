@@ -1,12 +1,13 @@
 module crowd_walrus::profiles;
 
-use std::string::String;
+use std::string::{Self as string, String};
+
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field as df;
 use sui::event;
 use sui::object::{Self as sui_object};
 use sui::tx_context::{Self as tx_ctx};
-use sui::vec_map::{Self as vec_map};
+use sui::vec_map::{Self as vec_map, VecMap};
 
 const E_NOT_PROFILE_OWNER: u64 = 1;
 const E_KEY_VALUE_MISMATCH: u64 = 2;
@@ -14,6 +15,11 @@ const E_OVERFLOW: u64 = 3;
 const E_INVALID_BADGE_LEVEL: u64 = 4;
 const E_INVALID_BADGE_MASK: u64 = 5;
 const E_PROFILE_EXISTS: u64 = 6;
+const E_EMPTY_KEY: u64 = 7;
+const E_EMPTY_VALUE: u64 = 8;
+const E_KEY_TOO_LONG: u64 = 9;
+const E_VALUE_TOO_LONG: u64 = 10;
+const E_TOO_MANY_METADATA_ENTRIES: u64 = 11;
 
 public(package) fun profile_exists_error_code(): u64 {
     E_PROFILE_EXISTS
@@ -30,6 +36,14 @@ public struct ProfilesRegistry has key {
 public struct ProfileCreated has copy, drop {
     owner: address,
     profile_id: sui_object::ID,
+    timestamp_ms: u64,
+}
+
+public struct ProfileMetadataUpdated has copy, drop {
+    profile_id: sui_object::ID,
+    owner: address,
+    key: String,
+    value: String,
     timestamp_ms: u64,
 }
 
@@ -99,6 +113,41 @@ public(package) fun create_or_get_profile_for_sender(
     }
 }
 
+entry fun create_profile(
+    registry: &mut ProfilesRegistry,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+) {
+    let sender = tx_ctx::sender(ctx);
+    let profile = create_for(registry, sender, clock, ctx);
+    transfer_to(profile, sender);
+}
+
+// Clock parameter ensures ProfileMetadataUpdated timestamps remain canonical for indexers.
+entry fun update_profile_metadata(
+    profile: &mut Profile,
+    key: String,
+    value: String,
+    clock: &Clock,
+    ctx: &tx_ctx::TxContext,
+) {
+    let sender = tx_ctx::sender(ctx);
+    assert!(profile.owner == sender, E_NOT_PROFILE_OWNER);
+    assert_valid_metadata_entry(&profile.metadata, &key, &value);
+
+    let key_for_event = clone_string(&key);
+    let value_for_event = clone_string(&value);
+    insert_or_update_metadata(&mut profile.metadata, key, value);
+
+    event::emit(ProfileMetadataUpdated {
+        profile_id: sui_object::id(profile),
+        owner: sender,
+        key: key_for_event,
+        value: value_for_event,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
 #[test_only]
 public fun create_registry_for_tests(ctx: &mut tx_ctx::TxContext): ProfilesRegistry {
     create_registry(ctx)
@@ -107,6 +156,9 @@ public fun create_registry_for_tests(ctx: &mut tx_ctx::TxContext): ProfilesRegis
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
 const BADGE_LEVEL_MAX: u8 = 5;
 const BADGE_LEVEL_MASK: u16 = 0x001F;
+const MAX_METADATA_KEY_LENGTH: u64 = 64;
+const MAX_METADATA_VALUE_LENGTH: u64 = 2048;
+const MAX_METADATA_ENTRIES: u64 = 100;
 
 public struct Profile has key {
     id: sui_object::UID,
@@ -114,7 +166,7 @@ public struct Profile has key {
     total_usd_micro: u64,
     total_donations_count: u64,
     badge_levels_earned: u16,
-    metadata: vec_map::VecMap<String, String>,
+    metadata: VecMap<String, String>,
 }
 
 public fun owner(profile: &Profile): address {
@@ -133,7 +185,7 @@ public fun badge_levels_earned(profile: &Profile): u16 {
     profile.badge_levels_earned
 }
 
-public fun metadata(profile: &Profile): &vec_map::VecMap<String, String> {
+public fun metadata(profile: &Profile): &VecMap<String, String> {
     &profile.metadata
 }
 
@@ -223,12 +275,64 @@ public(package) fun set_metadata(
     while (i < len) {
         let key = *std::vector::borrow(&metadata_keys, i);
         let value = *std::vector::borrow(&metadata_values, i);
-        if (vec_map::contains(&profile.metadata, &key)) {
-            let existing = vec_map::get_mut(&mut profile.metadata, &key);
-            *existing = value;
-        } else {
-            vec_map::insert(&mut profile.metadata, key, value);
-        };
+        assert_valid_metadata_entry(&profile.metadata, &key, &value);
+        insert_or_update_metadata(&mut profile.metadata, key, value);
         i = i + 1;
     };
+}
+
+fun assert_valid_metadata_entry(
+    metadata: &VecMap<String, String>,
+    key: &String,
+    value: &String,
+) {
+    let key_len = string::length(key);
+    let value_len = string::length(value);
+    assert!(key_len > 0, E_EMPTY_KEY);
+    assert!(value_len > 0, E_EMPTY_VALUE);
+    assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+    assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+    if (!vec_map::contains(metadata, key)) {
+        assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
+}
+
+fun insert_or_update_metadata(
+    metadata: &mut VecMap<String, String>,
+    key: String,
+    value: String,
+) {
+    if (vec_map::contains(metadata, &key)) {
+        let existing = vec_map::get_mut(metadata, &key);
+        *existing = value;
+    } else {
+        vec_map::insert(metadata, key, value);
+    };
+}
+
+// Clone string by taking a substring spanning the entire value.
+fun clone_string(value: &String): String {
+    string::substring(value, 0, string::length(value))
+}
+
+public fun profile_metadata_updated_owner(event: &ProfileMetadataUpdated): address {
+    event.owner
+}
+
+public fun profile_metadata_updated_profile_id(
+    event: &ProfileMetadataUpdated,
+): sui_object::ID {
+    event.profile_id
+}
+
+public fun profile_metadata_updated_key(event: &ProfileMetadataUpdated): String {
+    clone_string(&event.key)
+}
+
+public fun profile_metadata_updated_value(event: &ProfileMetadataUpdated): String {
+    clone_string(&event.value)
+}
+
+public fun profile_metadata_updated_timestamp_ms(event: &ProfileMetadataUpdated): u64 {
+    event.timestamp_ms
 }

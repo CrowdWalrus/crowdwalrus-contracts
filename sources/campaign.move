@@ -1,6 +1,6 @@
 module crowd_walrus::campaign;
 
-use std::string::String;
+use std::string::{Self as string, String};
 
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field as df;
@@ -20,6 +20,15 @@ const E_INVALID_BPS: u64 = 12;
 const E_ZERO_ADDRESS: u64 = 13;
 const E_STATS_ALREADY_SET: u64 = 14;
 const E_PARAMETERS_LOCKED: u64 = 15;
+const E_EMPTY_KEY: u64 = 16;
+const E_EMPTY_VALUE: u64 = 17;
+const E_KEY_TOO_LONG: u64 = 18;
+const E_VALUE_TOO_LONG: u64 = 19;
+const E_TOO_MANY_METADATA_ENTRIES: u64 = 20;
+
+const MAX_METADATA_KEY_LENGTH: u64 = 64;
+const MAX_METADATA_VALUE_LENGTH: u64 = 2048;
+const MAX_METADATA_ENTRIES: u64 = 100;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
@@ -28,6 +37,11 @@ public fun e_zero_address(): u64 { E_ZERO_ADDRESS }
 public fun e_campaign_deleted(): u64 { E_CAMPAIGN_DELETED }
 public fun e_recipient_address_invalid(): u64 { E_RECIPIENT_ADDRESS_INVALID }
 public fun e_parameters_locked(): u64 { E_PARAMETERS_LOCKED }
+public fun e_empty_key(): u64 { E_EMPTY_KEY }
+public fun e_empty_value(): u64 { E_EMPTY_VALUE }
+public fun e_key_too_long(): u64 { E_KEY_TOO_LONG }
+public fun e_value_too_long(): u64 { E_VALUE_TOO_LONG }
+public fun e_too_many_metadata_entries(): u64 { E_TOO_MANY_METADATA_ENTRIES }
 
 public struct PayoutPolicy has copy, drop, store {
     platform_bps: u16,
@@ -526,12 +540,28 @@ entry fun update_campaign_basics(
     };
 }
 
+fun assert_valid_metadata_entry(
+    metadata: &VecMap<String, String>,
+    key: &String,
+    value: &String,
+) {
+    let key_len = string::length(key);
+    let value_len = string::length(value);
+    assert!(key_len > 0, E_EMPTY_KEY);
+    assert!(value_len > 0, E_EMPTY_VALUE);
+    assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+    assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+    if (!vec_map::contains(metadata, key)) {
+        assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
+}
+
 /// Update campaign metadata (key-value pairs)
-/// Funding goal is immutable and cannot be changed
-///
-/// No limits on metadata size or number of keys - frontend handles validation.
-/// This is intentional to maximize flexibility. VecMap updates use get_mut()
-/// to preserve insertion order for existing keys.
+/// Funding goal and recipient address remain immutable.
+/// Keys and values must be non-empty UTF-8 strings with <= 64-byte keys,
+/// <= 2048-byte values, and metadata is limited to 100 entries (updates to
+/// existing keys are always allowed). VecMap updates use get_mut() to preserve
+/// insertion order for existing keys.
 entry fun update_campaign_metadata(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
@@ -552,12 +582,13 @@ entry fun update_campaign_metadata(
     let mut metadata_mutated = false;
     while(i < vector::length(&keys)) {
         let key = *vector::borrow(&keys, i);
+        let value = *vector::borrow(&values, i);
+
+        assert_valid_metadata_entry(&campaign.metadata, &key, &value);
 
         // Prevent funding_goal modification
         assert!(key != std::string::utf8(b"funding_goal"), E_FUNDING_GOAL_IMMUTABLE);
         assert!(key != std::string::utf8(b"recipient_address"), E_RECIPIENT_ADDRESS_IMMUTABLE);
-
-        let value = *vector::borrow(&values, i);
 
         // Update existing key or insert new key
         // Use get_mut to preserve insertion order for existing keys
