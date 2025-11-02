@@ -385,6 +385,276 @@ fun test_create_or_get_profile_returns_existing_id() {
 }
 
 #[test]
+fun test_update_profile_metadata_updates_value_and_emits_event() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let metadata_events_before =
+        vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        string::utf8(b"name"),
+        string::utf8(b"Walrus"),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    let metadata_view = profiles::metadata(&profile);
+    let key_lookup = string::utf8(b"name");
+    assert_eq!(metadata_view.length(), 1);
+    assert_eq!(
+        *metadata_view.get(&key_lookup),
+        string::utf8(b"Walrus"),
+    );
+
+    let metadata_events_after =
+        event::events_by_type<profiles::ProfileMetadataUpdated>();
+    assert_eq!(
+        vector::length(&metadata_events_after),
+        metadata_events_before + 1,
+    );
+    let last_event = *vector::borrow(&metadata_events_after, metadata_events_before);
+    assert_eq!(profiles::profile_metadata_updated_owner(&last_event), OWNER);
+    assert_eq!(
+        profiles::profile_metadata_updated_profile_id(&last_event),
+        sui_object::id(&profile),
+    );
+    assert_eq!(profiles::profile_metadata_updated_key(&last_event), key_lookup);
+    assert_eq!(
+        profiles::profile_metadata_updated_value(&last_event),
+        string::utf8(b"Walrus"),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_update_profile_metadata_max_length_succeeds() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let metadata_events_before =
+        vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        make_ascii_string(64),
+        make_ascii_string(2048),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    let metadata_view = profiles::metadata(&profile);
+    let key_lookup = make_ascii_string(64);
+    assert_eq!(metadata_view.length(), 1);
+    assert_eq!(
+        *metadata_view.get(&key_lookup),
+        make_ascii_string(2048),
+    );
+
+    let metadata_events_after =
+        event::events_by_type<profiles::ProfileMetadataUpdated>();
+    assert_eq!(
+        vector::length(&metadata_events_after),
+        metadata_events_before + 1,
+    );
+    let last_event = *vector::borrow(&metadata_events_after, metadata_events_before);
+    assert_eq!(profiles::profile_metadata_updated_owner(&last_event), OWNER);
+    assert_eq!(
+        profiles::profile_metadata_updated_profile_id(&last_event),
+        sui_object::id(&profile),
+    );
+    assert_eq!(
+        profiles::profile_metadata_updated_key(&last_event),
+        key_lookup,
+    );
+    assert_eq!(
+        profiles::profile_metadata_updated_value(&last_event),
+        make_ascii_string(2048),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER)]
+fun test_update_profile_metadata_non_owner_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OTHER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        string::utf8(b"name"),
+        string::utf8(b"Attacker"),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_EMPTY_KEY)]
+fun test_update_profile_metadata_empty_key_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        string::utf8(b""),
+        string::utf8(b"value"),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_EMPTY_VALUE)]
+fun test_update_profile_metadata_empty_value_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        string::utf8(b"name"),
+        string::utf8(b""),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_KEY_TOO_LONG)]
+fun test_update_profile_metadata_key_too_long_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        make_ascii_string(65),
+        string::utf8(b"value"),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = profiles::E_VALUE_TOO_LONG)]
+fun test_update_profile_metadata_value_too_long_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        string::utf8(b"name"),
+        make_ascii_string(2049),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
+#[test]
 fun test_grant_badge_level_monotonic() {
     let mut scenario = ts::begin(OWNER);
     let mut profile = profiles::create(
@@ -451,4 +721,14 @@ fun test_grant_badge_levels_invalid_mask_aborts() {
     profiles::grant_badge_levels(&mut profile, 0x0020);
     test_utils::destroy(profile);
     ts::end(scenario);
+}
+
+fun make_ascii_string(length: u64): string::String {
+    let mut bytes = vector::empty<u8>();
+    let mut idx = 0;
+    while (idx < length) {
+        vector::push_back(&mut bytes, 0x61);
+        idx = idx + 1;
+    };
+    string::utf8(bytes)
 }
