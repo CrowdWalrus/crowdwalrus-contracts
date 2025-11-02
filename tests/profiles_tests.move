@@ -654,6 +654,47 @@ fun test_update_profile_metadata_value_too_long_aborts() {
     ts::end(scenario);
 }
 
+#[test, expected_failure(abort_code = profiles::E_TOO_MANY_METADATA_ENTRIES)]
+fun test_update_profile_metadata_too_many_entries_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_init = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock_init, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock_init);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let clock = scenario.take_shared<Clock>();
+
+    let mut idx = 0;
+    while (idx < 100) {
+        profiles::update_profile_metadata(
+            &mut profile,
+            unique_metadata_key(idx),
+            string::utf8(b"value"),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        idx = idx + 1;
+    };
+
+    profiles::update_profile_metadata(
+        &mut profile,
+        unique_metadata_key(100),
+        string::utf8(b"value"),
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    ts::return_to_address(OWNER, profile);
+    ts::return_shared(clock);
+    ts::end(scenario);
+}
+
 #[test]
 fun test_grant_badge_level_monotonic() {
     let mut scenario = ts::begin(OWNER);
@@ -721,6 +762,21 @@ fun test_grant_badge_levels_invalid_mask_aborts() {
     profiles::grant_badge_levels(&mut profile, 0x0020);
     test_utils::destroy(profile);
     ts::end(scenario);
+}
+
+fun unique_metadata_key(index: u64): string::String {
+    if (index < 64) {
+        make_ascii_string(index + 1)
+    } else {
+        let mut bytes = vector::empty<u8>();
+        vector::push_back(&mut bytes, 0x62);
+        let mut remaining = index - 64 + 1;
+        while (remaining > 0) {
+            vector::push_back(&mut bytes, 0x61);
+            remaining = remaining - 1;
+        };
+        string::utf8(bytes)
+    }
 }
 
 fun make_ascii_string(length: u64): string::String {
