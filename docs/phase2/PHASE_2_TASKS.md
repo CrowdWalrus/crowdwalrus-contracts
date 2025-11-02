@@ -4,6 +4,7 @@ Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
 • Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
+• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
@@ -541,7 +542,7 @@ Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
 
 Update metadata VecMap with new key-value pair (insert_or_update).
 
-Guard against empty strings and overlong keys/values (64-byte keys, 2048-byte values; abort when exceeded).
+Guard against empty strings and overlong keys/values (1–64 byte keys, 1–2048 byte values) and enforce a 100-entry cap when inserting new keys (E_TOO_MANY_METADATA_ENTRIES).
 
 Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
 
@@ -800,7 +801,7 @@ Patterns: Atomic orchestration.
 
 Security/Edges: Overflow checks; idempotent lock.
 
-Related invariants: Owner-driven campaign edit entry functions (e.g., `campaign::update_campaign_basics`, `campaign::update_campaign_metadata`) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do. Indexers should rely on the event + `Campaign` flag (the legacy CrowdWalrus registry cache is deprecated).
+Related invariants: Owner-driven campaign edit entry functions (e.g., `campaign::update_campaign_basics`, `campaign::update_campaign_metadata`) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do. Indexers should rely on the event + `Campaign` flag (the legacy CrowdWalrus registry cache is deprecated). Metadata guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, and a 100-entry cap for new keys (errors E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, E_VALUE_TOO_LONG, E_TOO_MANY_METADATA_ENTRIES).
 
 Tests: Happy/slippage/boundary times/remainder.
 
