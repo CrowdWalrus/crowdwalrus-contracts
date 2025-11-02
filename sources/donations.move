@@ -377,3 +377,84 @@ entry fun donate_and_award_first_time<T>(
         minted_levels,
     }
 }
+
+/// Processes a repeat donation for an existing profile holder. Requires callers to pass their
+/// owned Profile by mutable reference so we can update cumulative contribution totals and evaluate
+/// badge thresholds without another registry lookup.
+///
+/// # Flow
+/// 1. Verify the sender owns the provided Profile (aborts with `profiles::E_NOT_PROFILE_OWNER` if not).
+/// 2. Capture the profile's pre-donation USD total and donation count.
+/// 3. Call `donate<T>` to perform all standard donation processing (prechecks, valuation, split, stats).
+/// 4. Increment the profile's totals with the donation's USD value.
+/// 5. Invoke `badge_rewards::maybe_award_badges` so newly satisfied badge levels are minted.
+/// 6. Return the donation outcome, including the USD value and any minted badge levels.
+///
+/// # Events Emitted
+/// - `donations::DonationReceived` (once, via `donate<T>`).
+/// - `badge_rewards::BadgeMinted` (zero or more per new badge level).
+/// - `campaign::CampaignParametersLocked` (once if this is the campaign's first donation).
+///
+/// # Returns
+/// A `DonationAwardOutcome` containing:
+/// - `usd_micro`: Floor-rounded USD micro-value of the donation.
+/// - `minted_levels`: Vector of badge levels minted during this call (may be empty).
+///
+/// # Aborts
+/// - `profiles::E_NOT_PROFILE_OWNER`: Sender does not own the provided profile.
+/// - Any abort surfaced by `donate<T>` (campaign inactive/closed, token disabled, slippage, stale price, etc.).
+entry fun donate_and_award<T>(
+    campaign: &mut campaign::Campaign,
+    stats: &mut campaign_stats::CampaignStats,
+    registry: &token_registry::TokenRegistry,
+    badge_config: &badge_rewards::BadgeConfig,
+    clock: &Clock,
+    profile: &mut profiles::Profile,
+    donation: Coin<T>,
+    price_info_object: &pyth::price_info::PriceInfoObject,
+    expected_min_usd_micro: u64,
+    opt_max_age_ms: std::option::Option<u64>,
+    ctx: &mut sui::tx_context::TxContext,
+): DonationAwardOutcome {
+    let sender = sui::tx_context::sender(ctx);
+    assert!(
+        profiles::owner(profile) == sender,
+        profiles::not_profile_owner_error_code(),
+    );
+
+    let old_amount = profiles::total_usd_micro(profile);
+    let old_count = profiles::total_donations_count(profile);
+
+    let usd_micro = donate<T>(
+        campaign,
+        stats,
+        registry,
+        clock,
+        donation,
+        price_info_object,
+        expected_min_usd_micro,
+        opt_max_age_ms,
+        ctx,
+    );
+
+    profiles::add_contribution(profile, usd_micro);
+
+    let new_amount = profiles::total_usd_micro(profile);
+    let new_count = profiles::total_donations_count(profile);
+
+    let minted_levels = badge_rewards::maybe_award_badges(
+        profile,
+        badge_config,
+        old_amount,
+        old_count,
+        new_amount,
+        new_count,
+        clock,
+        ctx,
+    );
+
+    DonationAwardOutcome {
+        usd_micro,
+        minted_levels,
+    }
+}

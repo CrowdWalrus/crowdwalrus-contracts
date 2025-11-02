@@ -19,6 +19,10 @@ public(package) fun profile_exists_error_code(): u64 {
     E_PROFILE_EXISTS
 }
 
+public(package) fun not_profile_owner_error_code(): u64 {
+    E_NOT_PROFILE_OWNER
+}
+
 public struct ProfilesRegistry has key {
     id: sui_object::UID,
 }
