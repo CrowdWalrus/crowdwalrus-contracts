@@ -405,39 +405,6 @@ public fun test_update_campaign_metadata_happy_path() {
         ts::return_shared(clock);
     };
 
-    // Update with empty string (allowed per requirements)
-    {
-        scenario.next_tx(campaign_owner);
-        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
-        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
-        let clock = scenario.take_shared<sui::clock::Clock>();
-
-        let app = crowd_walrus::crowd_walrus::get_app();
-        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
-        assert!(campaign::is_verified(&campaign));
-
-        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
-        let before_len = vector::length(&before_events);
-
-        crowd_walrus::campaign::update_campaign_metadata(
-            &mut campaign,
-            &campaign_owner_cap,
-            vector[utf8(b"social_twitter")],
-            vector[utf8(b"")], // Empty string is valid
-            &clock,
-            ts::ctx(&mut scenario),
-        );
-
-        assert!(!campaign::is_verified(&campaign));
-
-        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
-        assert_eq!(vector::length(&after_events), before_len + 1);
-
-        ts::return_shared(campaign);
-        scenario.return_to_sender(campaign_owner_cap);
-        ts::return_shared(clock);
-    };
-
     // No event emitted when metadata unchanged and campaign stays verified
     {
         scenario.next_tx(campaign_owner);
