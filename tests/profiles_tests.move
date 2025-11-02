@@ -237,25 +237,24 @@ fun test_profiles_registry_create_for_and_lookup() {
 fun test_create_profile_entry_creates_profile() {
     let mut scenario = crowd_walrus_tests::test_init(OWNER);
 
+    scenario.next_tx(OWNER);
     let events_before =
         vector::length(&event::events_by_type<profiles::ProfileCreated>());
-
-    scenario.next_tx(OWNER);
     let clock = scenario.take_shared<Clock>();
     let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
     assert!(!profiles::exists(&registry, OWNER));
 
     profiles::create_profile(&mut registry, &clock, ts::ctx(&mut scenario));
 
+    let events_after =
+        vector::length(&event::events_by_type<profiles::ProfileCreated>());
+    assert_eq!(events_after, events_before + 1);
+
     ts::return_shared(registry);
     ts::return_shared(clock);
 
     let effects = ts::next_tx(&mut scenario, OWNER);
     assert_eq!(ts::num_user_events(&effects), 1);
-
-    let events_after =
-        vector::length(&event::events_by_type<profiles::ProfileCreated>());
-    assert_eq!(events_after, events_before + 1);
 
     scenario.next_tx(OWNER);
     let registry_after = scenario.take_shared<profiles::ProfilesRegistry>();
