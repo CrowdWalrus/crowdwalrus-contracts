@@ -527,6 +527,7 @@ Deps: E1, E2.
 Err codes: E_PROFILE_EXISTS.
 
 E4. update_profile_metadata entry function
+✅ COMPLETED (Nov 2, 2025) — Entry enforces owner-only updates, 64/2048 length bounds, and emits ProfileMetadataUpdated.
 
 File/Module: sources/profiles.move
 
@@ -534,13 +535,13 @@ Product intent: Users can update their profile information (name, bio, avatar UR
 
 Implement:
 
-Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, ctx: &mut TxContext).
+Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, clock: &Clock, ctx: &mut TxContext).
 
 Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
 
 Update metadata VecMap with new key-value pair (insert_or_update).
 
-Guard against empty strings and overlong keys/values (define max lengths; abort when exceeded).
+Guard against empty strings and overlong keys/values (64-byte keys, 2048-byte values; abort when exceeded).
 
 Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
 
