@@ -6,6 +6,7 @@ use crowd_walrus::profiles::{Self as profiles};
 use std::string::{Self as string};
 use std::unit_test::assert_eq;
 use sui::clock::Clock;
+use sui::event;
 use sui::object::{Self as sui_object};
 use sui::test_scenario::{Self as ts};
 use sui::test_utils;
@@ -229,6 +230,72 @@ fun test_profiles_registry_create_for_and_lookup() {
     let effects = ts::next_tx(&mut scenario, OWNER);
     assert_eq!(ts::num_user_events(&effects), 1);
 
+    ts::end(scenario);
+}
+
+#[test]
+fun test_create_profile_entry_creates_profile() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    let events_before =
+        vector::length(&event::events_by_type<profiles::ProfileCreated>());
+
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    assert!(!profiles::exists(&registry, OWNER));
+
+    profiles::create_profile(&mut registry, &clock, ts::ctx(&mut scenario));
+
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+
+    let effects = ts::next_tx(&mut scenario, OWNER);
+    assert_eq!(ts::num_user_events(&effects), 1);
+
+    let events_after =
+        vector::length(&event::events_by_type<profiles::ProfileCreated>());
+    assert_eq!(events_after, events_before + 1);
+
+    scenario.next_tx(OWNER);
+    let registry_after = scenario.take_shared<profiles::ProfilesRegistry>();
+    assert!(profiles::exists(&registry_after, OWNER));
+    let profile_id = profiles::id_of(&registry_after, OWNER);
+    ts::return_shared(registry_after);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    let profile = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    assert_eq!(profiles::owner(&profile), OWNER);
+    assert_eq!(profiles::total_usd_micro(&profile), 0);
+    assert_eq!(profiles::total_donations_count(&profile), 0);
+    assert_eq!(sui_object::id(&profile), profile_id);
+    ts::return_to_address(OWNER, profile);
+
+    ts::end(scenario);
+}
+
+#[test, expected_failure(
+    abort_code = profiles::E_PROFILE_EXISTS,
+    location = 0x0::profiles
+)]
+fun test_create_profile_entry_duplicate_aborts() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock = scenario.take_shared<Clock>();
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry, &clock, ts::ctx(&mut scenario));
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_again = scenario.take_shared<Clock>();
+    let mut registry_again = scenario.take_shared<profiles::ProfilesRegistry>();
+    profiles::create_profile(&mut registry_again, &clock_again, ts::ctx(&mut scenario));
+    ts::return_shared(registry_again);
+    ts::return_shared(clock_again);
+    let _ = ts::next_tx(&mut scenario, OWNER);
     ts::end(scenario);
 }
 
