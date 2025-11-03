@@ -47,6 +47,8 @@ Err codes: N/A.
 
 B0a. Publish-time shared object bootstrap
 
+✅ COMPLETED (Nov 3, 2025) — `init` now provisions TokenRegistry, ProfilesRegistry, PlatformPolicy, and BadgeConfig with events + stored IDs; tests cover bootstrap wiring.
+
 File/Module: sources/crowd_walrus.move (init) + respective module inits
 
 Product intent: Ensure TokenRegistry, ProfilesRegistry, PlatformPolicy registry, and BadgeConfig exist immediately after publish with the correct AdminCap wiring.
@@ -984,7 +986,9 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; Documentation/UPDATE_IMPLEMENTATION.md
+✅ COMPLETED (Nov 3, 2025) — Canonical event schemas documented in docs/phase2/EVENT_SCHEMAS.md and linked from PHASE_2_DEV_DOCUMENT.md (stub to be expanded during L1 for full workflow guidance).
+
+File/Module: All relevant modules; docs/phase2/EVENT_SCHEMAS.md (referenced via PHASE_2_DEV_DOCUMENT.md)
 
 Product intent: Indexer has a single, authoritative reference.
 
@@ -1072,9 +1076,9 @@ Slippage floor: success when met; abort when not.
 Acceptance: All scenarios pass with correct events and state.
 
 L) Documentation & DevEx
-L1. Update UPDATE_IMPLEMENTATION.md (developer‑facing)
+L1. Update PHASE_2_DEV_DOCUMENT.md (developer‑facing)
 
-File: Documentation/UPDATE_IMPLEMENTATION.md
+File: PHASE_2_DEV_DOCUMENT.md
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
