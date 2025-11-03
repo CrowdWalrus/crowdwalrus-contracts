@@ -986,7 +986,7 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; Documentation/UPDATE_IMPLEMENTATION.md
+File/Module: All relevant modules; PHASE_2_DEV_DOCUMENT.md
 
 Product intent: Indexer has a single, authoritative reference.
 
@@ -1074,9 +1074,9 @@ Slippage floor: success when met; abort when not.
 Acceptance: All scenarios pass with correct events and state.
 
 L) Documentation & DevEx
-L1. Update UPDATE_IMPLEMENTATION.md (developer‑facing)
+L1. Update PHASE_2_DEV_DOCUMENT.md (developer‑facing)
 
-File: Documentation/UPDATE_IMPLEMENTATION.md
+File: PHASE_2_DEV_DOCUMENT.md
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
