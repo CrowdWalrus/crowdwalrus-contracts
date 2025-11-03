@@ -42,6 +42,18 @@ public struct CampaignStatsCreated has copy, drop {
     timestamp_ms: u64,
 }
 
+public fun campaign_stats_created_campaign_id(event: &CampaignStatsCreated): sui_object::ID {
+    event.campaign_id
+}
+
+public fun campaign_stats_created_stats_id(event: &CampaignStatsCreated): sui_object::ID {
+    event.stats_id
+}
+
+public fun campaign_stats_created_timestamp_ms(event: &CampaignStatsCreated): u64 {
+    event.timestamp_ms
+}
+
 public fun total_usd_micro(stats: &CampaignStats): u64 {
     stats.total_usd_micro
 }
