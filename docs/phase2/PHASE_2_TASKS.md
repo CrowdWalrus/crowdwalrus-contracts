@@ -107,8 +107,8 @@ Acceptance: Field set/read; no mutation path.
 
 Deps: A5.
 
-✅ COMPLETED (Oct 23, 2025)
 A2. Typed PayoutPolicy on Campaign
+✅ COMPLETED (Oct 23, 2025)
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
@@ -590,8 +590,8 @@ Acceptance: Pass; works as helper for both flows.
 Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
-✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 F1. BadgeConfig (thresholds + URIs)
+✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 
 File/Module: sources/badge_rewards.move
 
