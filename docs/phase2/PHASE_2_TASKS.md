@@ -1014,6 +1014,7 @@ Deps: All event producers.
 
 K) Tests
 K1. Unit tests per module
+✅ COMPLETED (Nov 3, 2025) — Module suites now assert event payloads, auth guards, and multi-coin scenarios; full test run green.
 
 Files:
 
@@ -1046,6 +1047,7 @@ Security/Edges: Boundary timestamps; dust; double‑mint; double profile; disabl
 Acceptance: All pass.
 
 K2. Integration scenarios (targeted)
+✅ COMPLETED (Nov 3, 2025) — End-to-end scenarios now covered by targeted integration tests; badge progression, multi-coin stats, and slippage guards verified.
 
 File: tests/integration_phase2_tests.move
 

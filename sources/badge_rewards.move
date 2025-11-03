@@ -53,6 +53,38 @@ public struct BadgeMinted has copy, drop {
     timestamp_ms: u64,
 }
 
+public fun badge_config_updated_amount_thresholds(event: &BadgeConfigUpdated): vector<u64> {
+    clone_u64_vector(&event.amount_thresholds_micro)
+}
+
+public fun badge_config_updated_payment_thresholds(event: &BadgeConfigUpdated): vector<u64> {
+    clone_u64_vector(&event.payment_thresholds)
+}
+
+public fun badge_config_updated_image_uris(event: &BadgeConfigUpdated): vector<String> {
+    clone_string_vector(&event.image_uris)
+}
+
+public fun badge_config_updated_timestamp_ms(event: &BadgeConfigUpdated): u64 {
+    event.timestamp_ms
+}
+
+public fun badge_minted_owner(event: &BadgeMinted): address {
+    event.owner
+}
+
+public fun badge_minted_level(event: &BadgeMinted): u8 {
+    event.level
+}
+
+public fun badge_minted_profile_id(event: &BadgeMinted): sui_object::ID {
+    event.profile_id
+}
+
+public fun badge_minted_timestamp_ms(event: &BadgeMinted): u64 {
+    event.timestamp_ms
+}
+
 public(package) fun create_config(
     crowd_walrus_id: sui_object::ID,
     ctx: &mut tx_ctx::TxContext,

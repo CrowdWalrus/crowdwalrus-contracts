@@ -7,8 +7,9 @@ use crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::profiles::{Self as profiles};
 use std::string::{Self as string, String};
 use std::unit_test::assert_eq;
-use sui::clock::Clock;
+use sui::clock::{Self as clock, Clock};
 use sui::display;
+use sui::event;
 use sui::object as sui_object;
 use sui::test_scenario::{Self as ts, Scenario, ctx};
 use sui::test_utils as tu;
@@ -25,8 +26,10 @@ fun test_update_badge_config_sets_fields_and_emits_event() {
     scenario.next_tx(ADMIN);
     let mut config = scenario.take_shared<badge_rewards::BadgeConfig>();
     let admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
-    let clock = scenario.take_shared<Clock>();
-
+    let mut clock = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock, 10_000);
+    let events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeConfigUpdated>());
     crowd_walrus::update_badge_config_internal(
         &mut config,
         &admin_cap,
@@ -61,6 +64,35 @@ fun test_update_badge_config_sets_fields_and_emits_event() {
     let uris = badge_rewards::image_uris(&config);
     assert_eq!(vector::length(uris), badge_rewards::level_count());
     assert_eq!(*vector::borrow(uris, 2), string::utf8(b"walrus://badge3"));
+
+    let events_after = event::events_by_type<badge_rewards::BadgeConfigUpdated>();
+    assert_eq!(vector::length(&events_after), events_before + 1);
+    let recorded = vector::borrow(&events_after, events_before);
+    assert_eq!(
+        badge_rewards::badge_config_updated_amount_thresholds(recorded),
+        vector[
+            100_000,
+            250_000,
+            500_000,
+            1_000_000,
+            2_000_000,
+        ],
+    );
+    assert_eq!(
+        badge_rewards::badge_config_updated_payment_thresholds(recorded),
+        vector[1, 5, 10, 20, 40],
+    );
+    assert_eq!(
+        badge_rewards::badge_config_updated_image_uris(recorded),
+        vector[
+            string::utf8(b"walrus://badge1"),
+            string::utf8(b"walrus://badge2"),
+            string::utf8(b"walrus://badge3"),
+            string::utf8(b"walrus://badge4"),
+            string::utf8(b"walrus://badge5"),
+        ],
+    );
+    assert_eq!(badge_rewards::badge_config_updated_timestamp_ms(recorded), 10_000);
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -217,6 +249,9 @@ fun test_update_badge_config_requires_non_empty_uris() {
 fun test_update_badge_config_requires_matching_admin_cap() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     bootstrap_badge_config(&mut scenario);
+    let config_id_opt = ts::most_recent_id_shared<badge_rewards::BadgeConfig>();
+    assert!(option::is_some(&config_id_opt));
+    let config_id = option::destroy_some(config_id_opt);
 
     // Create a separate CrowdWalrus deployment and admin cap for OTHER.
     scenario.next_tx(OTHER);
@@ -224,7 +259,8 @@ fun test_update_badge_config_requires_matching_admin_cap() {
     crowd_walrus::create_admin_cap_for_user(other_crowd_id, OTHER, ctx(&mut scenario));
 
     scenario.next_tx(OTHER);
-    let mut config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let mut config =
+        scenario.take_shared_by_id<badge_rewards::BadgeConfig>(config_id);
     let wrong_admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
     let clock = scenario.take_shared<Clock>();
 
@@ -409,8 +445,11 @@ fun test_maybe_award_badges_awards_levels_and_is_idempotent() {
         vector::empty(),
         ctx(&mut scenario),
     );
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 12_000);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -431,6 +470,27 @@ fun test_maybe_award_badges_awards_levels_and_is_idempotent() {
     assert!(profiles::has_badge_level(&profile, 3));
     assert!(!profiles::has_badge_level(&profile, 4));
 
+    let profile_id = sui_object::id(&profile);
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before + 3);
+    let event_first = vector::borrow(&minted_events, minted_events_before);
+    assert_eq!(badge_rewards::badge_minted_owner(event_first), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(event_first), 1);
+    assert_eq!(badge_rewards::badge_minted_profile_id(event_first), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(event_first), 12_000);
+
+    let event_second = vector::borrow(&minted_events, minted_events_before + 1);
+    assert_eq!(badge_rewards::badge_minted_owner(event_second), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(event_second), 2);
+    assert_eq!(badge_rewards::badge_minted_profile_id(event_second), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(event_second), 12_000);
+
+    let event_third = vector::borrow(&minted_events, minted_events_before + 2);
+    assert_eq!(badge_rewards::badge_minted_owner(event_third), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(event_third), 3);
+    assert_eq!(badge_rewards::badge_minted_profile_id(event_third), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(event_third), 12_000);
+
     let minted_again = badge_rewards::maybe_award_badges(
         &mut profile,
         &config,
@@ -442,6 +502,13 @@ fun test_maybe_award_badges_awards_levels_and_is_idempotent() {
         ctx(&mut scenario),
     );
     assert_eq!(vector::length(&minted_again), 0);
+
+    let minted_events_after_second =
+        event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(
+        vector::length(&minted_events_after_second),
+        minted_events_before + 3,
+    );
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -466,8 +533,11 @@ fun test_maybe_award_badges_awards_first_level() {
         vector::empty(),
         ctx(&mut scenario),
     );
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 13_000);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -482,6 +552,15 @@ fun test_maybe_award_badges_awards_first_level() {
     assert_eq!(vector::length(&minted), 1);
     assert_eq!(*vector::borrow(&minted, 0), 1);
     assert!(profiles::has_badge_level(&profile, 1));
+
+    let profile_id = sui_object::id(&profile);
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before + 1);
+    let recorded = vector::borrow(&minted_events, minted_events_before);
+    assert_eq!(badge_rewards::badge_minted_owner(recorded), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(recorded), 1);
+    assert_eq!(badge_rewards::badge_minted_profile_id(recorded), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(recorded), 13_000);
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -506,8 +585,11 @@ fun test_maybe_award_badges_large_amount_single_payment_only_level_one() {
         vector::empty(),
         ctx(&mut scenario),
     );
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 14_000);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -524,6 +606,15 @@ fun test_maybe_award_badges_large_amount_single_payment_only_level_one() {
     assert!(profiles::has_badge_level(&profile, 1));
     assert!(!profiles::has_badge_level(&profile, 2));
     assert!(!profiles::has_badge_level(&profile, 3));
+
+    let profile_id = sui_object::id(&profile);
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before + 1);
+    let recorded = vector::borrow(&minted_events, minted_events_before);
+    assert_eq!(badge_rewards::badge_minted_owner(recorded), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(recorded), 1);
+    assert_eq!(badge_rewards::badge_minted_profile_id(recorded), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(recorded), 14_000);
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -548,8 +639,11 @@ fun test_maybe_award_badges_payment_only_no_award() {
         vector::empty(),
         ctx(&mut scenario),
     );
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 14_500);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -563,6 +657,53 @@ fun test_maybe_award_badges_payment_only_no_award() {
     );
     assert_eq!(vector::length(&minted), 0);
     assert!(!profiles::has_badge_level(&profile, 1));
+
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before);
+
+    ts::return_shared(clock);
+    ts::return_shared(config);
+    tu::destroy(profile);
+
+    let effects = ts::next_tx(&mut scenario, OTHER);
+    assert_eq!(ts::num_user_events(&effects), 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_maybe_award_badges_unconfigured_returns_empty() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    bootstrap_badge_config(&mut scenario);
+
+    scenario.next_tx(OTHER);
+    let mut profile = profiles::create(
+        OTHER,
+        vector::empty(),
+        vector::empty(),
+        ctx(&mut scenario),
+    );
+    let clock = scenario.take_shared<Clock>();
+    let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+
+    let minted = badge_rewards::maybe_award_badges(
+        &mut profile,
+        &config,
+        0,
+        0,
+        500_000,
+        5,
+        &clock,
+        ctx(&mut scenario),
+    );
+    assert_eq!(vector::length(&minted), 0);
+    assert!(!profiles::has_badge_level(&profile, 1));
+
+    let minted_events_after =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
+    assert_eq!(minted_events_after, minted_events_before);
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -587,8 +728,11 @@ fun test_maybe_award_badges_boundary_equality_awards() {
         vector::empty(),
         ctx(&mut scenario),
     );
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 14_500);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -603,6 +747,15 @@ fun test_maybe_award_badges_boundary_equality_awards() {
     assert_eq!(vector::length(&minted), 1);
     assert_eq!(*vector::borrow(&minted, 0), 1);
     assert!(profiles::has_badge_level(&profile, 1));
+
+    let profile_id = sui_object::id(&profile);
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before + 1);
+    let recorded = vector::borrow(&minted_events, minted_events_before);
+    assert_eq!(badge_rewards::badge_minted_owner(recorded), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(recorded), 1);
+    assert_eq!(badge_rewards::badge_minted_profile_id(recorded), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(recorded), 14_500);
 
     ts::return_shared(clock);
     ts::return_shared(config);
@@ -628,8 +781,11 @@ fun test_maybe_award_badges_progression_from_level_one_to_three() {
         ctx(&mut scenario),
     );
     profiles::grant_badge_level(&mut profile, 1);
-    let clock = scenario.take_shared<Clock>();
+    let mut clock = scenario.take_shared<Clock>();
     let config = scenario.take_shared<badge_rewards::BadgeConfig>();
+    clock::set_for_testing(&mut clock, 15_000);
+    let minted_events_before =
+        vector::length(&event::events_by_type<badge_rewards::BadgeMinted>());
 
     let minted = badge_rewards::maybe_award_badges(
         &mut profile,
@@ -646,6 +802,24 @@ fun test_maybe_award_badges_progression_from_level_one_to_three() {
     assert_eq!(*vector::borrow(&minted, 1), 3);
     assert!(profiles::has_badge_level(&profile, 2));
     assert!(profiles::has_badge_level(&profile, 3));
+
+    let profile_id = sui_object::id(&profile);
+    let minted_events = event::events_by_type<badge_rewards::BadgeMinted>();
+    assert_eq!(vector::length(&minted_events), minted_events_before + 2);
+    let level_two_event = vector::borrow(&minted_events, minted_events_before);
+    assert_eq!(badge_rewards::badge_minted_owner(level_two_event), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(level_two_event), 2);
+    assert_eq!(badge_rewards::badge_minted_profile_id(level_two_event), profile_id);
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(level_two_event), 15_000);
+
+    let level_three_event = vector::borrow(&minted_events, minted_events_before + 1);
+    assert_eq!(badge_rewards::badge_minted_owner(level_three_event), OTHER);
+    assert_eq!(badge_rewards::badge_minted_level(level_three_event), 3);
+    assert_eq!(
+        badge_rewards::badge_minted_profile_id(level_three_event),
+        profile_id,
+    );
+    assert_eq!(badge_rewards::badge_minted_timestamp_ms(level_three_event), 15_000);
 
     ts::return_shared(clock);
     ts::return_shared(config);

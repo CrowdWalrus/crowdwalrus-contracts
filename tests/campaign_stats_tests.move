@@ -7,7 +7,8 @@ use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus_tests;
 use std::string::utf8;
 use std::unit_test::assert_eq;
-use sui::clock::Clock;
+use sui::clock::{Self as clock, Clock};
+use sui::event;
 use sui::object::{Self as sui_object};
 use sui::test_scenario::{Self as ts, ctx};
 
@@ -20,13 +21,15 @@ const DEFAULT_PLATFORM_BPS: u16 = 0;
 public struct CoinA has drop, store {}
 public struct CoinB has drop, store {}
 public struct CoinC has drop, store {}
+public struct CoinD has drop, store {}
+public struct CoinE has drop, store {}
 
 #[test]
 public fun test_create_for_campaign_happy_path() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
-    let (mut campaign_obj, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+    let (mut campaign_obj, owner_cap, mut clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Ready"),
         utf8(b"Campaign stats creation"),
@@ -40,13 +43,32 @@ public fun test_create_for_campaign_happy_path() {
         0,
         U64_MAX,
     );
+    let expected_campaign_id = sui_object::id(&campaign_obj);
     assert_eq!(sui_object::id_to_address(&campaign::stats_id(&campaign_obj)), @0x0);
+    clock::set_for_testing(&mut clock, 9_001);
+    let events_before =
+        vector::length(&event::events_by_type<campaign_stats::CampaignStatsCreated>());
     let stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
         ctx(&mut scenario),
     );
-    assert_eq!(campaign::stats_id(&campaign_obj), stats_id);
+    let events_after = event::events_by_type<campaign_stats::CampaignStatsCreated>();
+    assert_eq!(vector::length(&events_after), events_before + 1);
+    let recorded = vector::borrow(&events_after, events_before);
+    assert_eq!(
+        campaign_stats::campaign_stats_created_campaign_id(recorded),
+        expected_campaign_id,
+    );
+    assert_eq!(
+        campaign_stats::campaign_stats_created_stats_id(recorded),
+        stats_id,
+    );
+    assert_eq!(
+        campaign_stats::campaign_stats_created_timestamp_ms(recorded),
+        9_001,
+    );
+
     ts::return_shared(clock);
     campaign::share(campaign_obj);
     campaign::delete_owner_cap(owner_cap);
@@ -112,6 +134,63 @@ public fun test_add_donation_tracks_per_coin_totals() {
     // Views should gracefully return zero for coin types that never received donations.
     assert_eq!(campaign_stats::per_coin_total_raw<CoinC>(&stats), 0);
     assert_eq!(campaign_stats::per_coin_donation_count<CoinC>(&stats), 0);
+
+    ts::return_shared(stats);
+    ts::end(scenario);
+}
+
+#[test]
+public fun test_add_donation_handles_many_coin_types() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(USER1);
+    let (mut campaign_obj, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        utf8(b"Multi Coin Totals"),
+        utf8(b"Track many coin aggregates"),
+        b"multi-coin",
+        vector::empty(),
+        vector::empty(),
+        750,
+        USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+    );
+    let stats_id = campaign_stats::create_for_campaign(
+        &mut campaign_obj,
+        &clock,
+        ctx(&mut scenario),
+    );
+    ts::return_shared(clock);
+    campaign::share(campaign_obj);
+    campaign::delete_owner_cap(owner_cap);
+
+    scenario.next_tx(USER1);
+    let mut stats = scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
+    campaign_stats::add_donation<CoinA>(&mut stats, 100, 10);
+    campaign_stats::add_donation<CoinB>(&mut stats, 200, 20);
+    campaign_stats::add_donation<CoinC>(&mut stats, 300, 30);
+    campaign_stats::add_donation<CoinD>(&mut stats, 400, 40);
+    campaign_stats::add_donation<CoinE>(&mut stats, 500, 50);
+
+    assert_eq!(campaign_stats::total_usd_micro(&stats), 150);
+    assert_eq!(campaign_stats::total_donations_count(&stats), 5);
+
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinA>(&stats), 100);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinA>(&stats), 1);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinB>(&stats), 200);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinB>(&stats), 1);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinC>(&stats), 300);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinC>(&stats), 1);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinD>(&stats), 400);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinD>(&stats), 1);
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinE>(&stats), 500);
+    assert_eq!(campaign_stats::per_coin_donation_count<CoinE>(&stats), 1);
+
+    // Ensure previously unused coin types still report zero.
+    assert_eq!(campaign_stats::per_coin_total_raw<CoinC>(&stats), 300);
 
     ts::return_shared(stats);
     ts::end(scenario);
