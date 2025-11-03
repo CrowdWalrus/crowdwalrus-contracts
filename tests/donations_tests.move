@@ -842,7 +842,10 @@ fun donate_and_award_first_time_creates_profile_and_mints_badge() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = 6, location = 0x0::donations)]
+#[test, expected_failure(
+    abort_code = profiles::E_PROFILE_EXISTS,
+    location = 0x0::donations
+)]
 fun donate_and_award_first_time_aborts_when_profile_exists() {
     let (
         mut scenario,
@@ -2055,7 +2058,7 @@ fun quote_usd_micro_aborts_on_zero_amount() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-fun configure_badge_config_for_donation_test(
+public(package) fun configure_badge_config_for_donation_test(
     scenario: &mut ts::Scenario,
     clock_obj: &Clock,
     amount_thresholds_micro: vector<u64>,
@@ -2176,7 +2179,7 @@ fun register_test_coin_with_feed(
     scenario.return_to_sender(admin_cap);
 }
 
-fun setup_donation_scenario(
+public(package) fun setup_donation_scenario(
     platform_bps: u16,
     decimals: u8,
     max_age_ms: u64,
@@ -2198,7 +2201,7 @@ fun setup_donation_scenario(
     )
 }
 
-fun setup_donation_scenario_with_offsets(
+public(package) fun setup_donation_scenario_with_offsets(
     platform_bps: u16,
     decimals: u8,
     max_age_ms: u64,
@@ -2277,7 +2280,7 @@ fun clone_bytes(bytes: &vector<u8>): vector<u8> {
     out
 }
 
-fun cleanup_quote_scenario(
+public(package) fun cleanup_quote_scenario(
     scenario: ts::Scenario,
     clock_obj: Clock,
     price_obj: PriceInfoObject,
