@@ -65,6 +65,90 @@ public struct TokenDisabled has copy, drop {
     timestamp_ms: u64,
 }
 
+public fun token_added_coin_type(event: &TokenAdded): String {
+    copy event.coin_type
+}
+
+public fun token_added_symbol(event: &TokenAdded): String {
+    copy event.symbol
+}
+
+public fun token_added_name(event: &TokenAdded): String {
+    copy event.name
+}
+
+public fun token_added_decimals(event: &TokenAdded): u8 {
+    event.decimals
+}
+
+public fun token_added_pyth_feed_id(event: &TokenAdded): vector<u8> {
+    clone_bytes(&event.pyth_feed_id)
+}
+
+public fun token_added_max_age_ms(event: &TokenAdded): u64 {
+    event.max_age_ms
+}
+
+public fun token_added_enabled(event: &TokenAdded): bool {
+    event.enabled
+}
+
+public fun token_added_timestamp_ms(event: &TokenAdded): u64 {
+    event.timestamp_ms
+}
+
+public fun token_updated_coin_type(event: &TokenUpdated): String {
+    copy event.coin_type
+}
+
+public fun token_updated_symbol(event: &TokenUpdated): String {
+    copy event.symbol
+}
+
+public fun token_updated_name(event: &TokenUpdated): String {
+    copy event.name
+}
+
+public fun token_updated_decimals(event: &TokenUpdated): u8 {
+    event.decimals
+}
+
+public fun token_updated_pyth_feed_id(event: &TokenUpdated): vector<u8> {
+    clone_bytes(&event.pyth_feed_id)
+}
+
+public fun token_updated_max_age_ms(event: &TokenUpdated): u64 {
+    event.max_age_ms
+}
+
+public fun token_updated_timestamp_ms(event: &TokenUpdated): u64 {
+    event.timestamp_ms
+}
+
+public fun token_enabled_coin_type(event: &TokenEnabled): String {
+    copy event.coin_type
+}
+
+public fun token_enabled_symbol(event: &TokenEnabled): String {
+    copy event.symbol
+}
+
+public fun token_enabled_timestamp_ms(event: &TokenEnabled): u64 {
+    event.timestamp_ms
+}
+
+public fun token_disabled_coin_type(event: &TokenDisabled): String {
+    copy event.coin_type
+}
+
+public fun token_disabled_symbol(event: &TokenDisabled): String {
+    copy event.symbol
+}
+
+public fun token_disabled_timestamp_ms(event: &TokenDisabled): u64 {
+    event.timestamp_ms
+}
+
 public(package) fun create_registry(
     crowd_walrus_id: sui_object::ID,
     ctx: &mut tx_ctx::TxContext,
