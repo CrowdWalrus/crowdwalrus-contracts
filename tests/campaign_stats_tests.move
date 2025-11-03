@@ -7,7 +7,8 @@ use crowd_walrus::campaign_stats::{Self as campaign_stats};
 use crowd_walrus::crowd_walrus_tests;
 use std::string::utf8;
 use std::unit_test::assert_eq;
-use sui::clock::Clock;
+use sui::clock::{Self as clock, Clock};
+use sui::event;
 use sui::object::{Self as sui_object};
 use sui::test_scenario::{Self as ts, ctx};
 
@@ -26,7 +27,7 @@ public fun test_create_for_campaign_happy_path() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
-    let (mut campaign_obj, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+    let (mut campaign_obj, owner_cap, mut clock) = crowd_walrus_tests::create_unshared_campaign(
         &mut scenario,
         utf8(b"Stats Ready"),
         utf8(b"Campaign stats creation"),
@@ -40,7 +41,11 @@ public fun test_create_for_campaign_happy_path() {
         0,
         U64_MAX,
     );
+    let expected_campaign_id = sui_object::id(&campaign_obj);
     assert_eq!(sui_object::id_to_address(&campaign::stats_id(&campaign_obj)), @0x0);
+    clock::set_for_testing(&mut clock, 9_001);
+    let events_before =
+        vector::length(&event::events_by_type<campaign_stats::CampaignStatsCreated>());
     let stats_id = campaign_stats::create_for_campaign(
         &mut campaign_obj,
         &clock,
@@ -53,6 +58,22 @@ public fun test_create_for_campaign_happy_path() {
 
     let effects = ts::next_tx(&mut scenario, USER1);
     assert_eq!(ts::num_user_events(&effects), 1);
+
+    let events_after = event::events_by_type<campaign_stats::CampaignStatsCreated>();
+    assert_eq!(vector::length(&events_after), events_before + 1);
+    let recorded = vector::borrow(&events_after, events_before);
+    assert_eq!(
+        campaign_stats::campaign_stats_created_campaign_id(recorded),
+        expected_campaign_id,
+    );
+    assert_eq!(
+        campaign_stats::campaign_stats_created_stats_id(recorded),
+        stats_id,
+    );
+    assert_eq!(
+        campaign_stats::campaign_stats_created_timestamp_ms(recorded),
+        9_001,
+    );
 
     let stats = scenario.take_shared_by_id<campaign_stats::CampaignStats>(stats_id);
     assert_eq!(campaign_stats::total_usd_micro(&stats), 0);
