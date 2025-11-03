@@ -1101,6 +1101,8 @@ Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for b
 
 L2. Update README.md (product overview)
 
+✅ COMPLETED (Nov 3, 2025) — README now highlights Phase 2 feature set, user flows, admin controls, a post-deploy checklist, and links to supporting docs.
+
 File: Documentation/README.md
 
 Product intent: Stakeholder‑friendly summary.
