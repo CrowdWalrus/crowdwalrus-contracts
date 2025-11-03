@@ -986,7 +986,9 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; PHASE_2_DEV_DOCUMENT.md
+✅ COMPLETED (Nov 3, 2025) — Canonical event schemas documented in docs/phase2/EVENT_SCHEMAS.md and linked from PHASE_2_DEV_DOCUMENT.md (stub to be expanded during L1 for full workflow guidance).
+
+File/Module: All relevant modules; docs/phase2/EVENT_SCHEMAS.md (referenced via PHASE_2_DEV_DOCUMENT.md)
 
 Product intent: Indexer has a single, authoritative reference.
 
