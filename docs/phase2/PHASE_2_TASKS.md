@@ -1078,9 +1078,12 @@ Slippage floor: success when met; abort when not.
 Acceptance: All scenarios pass with correct events and state.
 
 L) Documentation & DevEx
-L1. Update PHASE_2_DEV_DOCUMENT.md (developer‑facing)
+L1. Update PHASE_2_DEV_DOCUMENT.md (developer-facing)
+✅ COMPLETED (Nov 3, 2025) — Guide now covers PTB recipes, admin setup, Pyth integration, and profile auto-creation touchpoints.
 
 File: PHASE_2_DEV_DOCUMENT.md
+
+Notes: Added short admin ops section per post-review feedback; no code changes required.
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
