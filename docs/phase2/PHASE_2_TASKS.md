@@ -108,7 +108,7 @@ Acceptance: Field set/read; no mutation path.
 Deps: A5.
 
 A2. Typed PayoutPolicy on Campaign
-✅ COMPLETED (Oct 23, 2025)
+✅ COMPLETED (Oct 23, 2025) — PayoutPolicy struct stored immutably with validation + getters for platform split fields.
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
@@ -934,6 +934,7 @@ Deps: H1 (platform_policy registry); Extends: A5 (this is part of A5 implementat
 
 I) Admin surfaces
 I1. Cap‑gate TokenRegistry & PlatformPolicy
+✅ COMPLETED (Nov 3, 2025) — All token/policy mutators now funnel through crowd_walrus AdminCap guards with positive/negative tests.
 
 File/Module: sources/token_registry.move, sources/platform_policy.move
 
@@ -960,6 +961,7 @@ Deps: Existing AdminCap.
 Err codes: Reuse E_NOT_AUTHORIZED.
 
 I2. Cap‑gate BadgeConfig updates
+✅ COMPLETED (Nov 3, 2025) — BadgeConfig setters gated by AdminCap wrapper in crowd_walrus; tests assert unauthorized caps abort.
 
 File/Module: sources/badge_rewards.move
 
