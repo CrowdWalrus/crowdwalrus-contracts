@@ -1014,6 +1014,7 @@ Deps: All event producers.
 
 K) Tests
 K1. Unit tests per module
+✅ COMPLETED (Nov 3, 2025) — Module suites now assert event payloads, auth guards, and multi-coin scenarios; full test run green.
 
 Files:
 
