@@ -47,6 +47,8 @@ Err codes: N/A.
 
 B0a. Publish-time shared object bootstrap
 
+✅ COMPLETED (Nov 3, 2025) — `init` now provisions TokenRegistry, ProfilesRegistry, PlatformPolicy, and BadgeConfig with events + stored IDs; tests cover bootstrap wiring.
+
 File/Module: sources/crowd_walrus.move (init) + respective module inits
 
 Product intent: Ensure TokenRegistry, ProfilesRegistry, PlatformPolicy registry, and BadgeConfig exist immediately after publish with the correct AdminCap wiring.
