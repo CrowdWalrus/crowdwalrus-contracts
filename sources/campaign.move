@@ -213,11 +213,10 @@ public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
 
 /// Create a new campaign
 ///
-/// Validation: Only enforces date range (start < end). No validation for:
-/// - String lengths (name, short_description) - frontend handles
-/// - Metadata size limits - frontend handles
-///
-/// This is intentional to maximize flexibility.
+/// Validation:
+/// - Enforces date range (start < end) and start not in past
+/// - Validates payout policy fields
+/// - Enforces metadata key/value size limits consistent with updates
 public(package) fun new<App: drop>(
     _: &App,
     admin_id: object::ID,
@@ -237,6 +236,7 @@ public(package) fun new<App: drop>(
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
     assert!(start_date >= creation_time_ms, E_START_DATE_IN_PAST);
     assert_valid_payout_policy(&payout_policy);
+    assert_valid_metadata(&metadata);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -553,6 +553,22 @@ fun assert_valid_metadata_entry(
     assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
     if (!vec_map::contains(metadata, key)) {
         assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
+}
+
+fun assert_valid_metadata(metadata: &VecMap<String, String>) {
+    let len = vec_map::length(metadata);
+    assert!(len <= MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    let mut i = 0;
+    while (i < len) {
+        let (key_ref, value_ref) = vec_map::get_entry_by_idx(metadata, i);
+        let key_len = string::length(key_ref);
+        let value_len = string::length(value_ref);
+        assert!(key_len > 0, E_EMPTY_KEY);
+        assert!(value_len > 0, E_EMPTY_VALUE);
+        assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+        assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+        i = i + 1;
     };
 }
 
