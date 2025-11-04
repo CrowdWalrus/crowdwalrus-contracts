@@ -64,7 +64,7 @@ G4 DonationReceived event shape
 
 ★ Checkpoint β — Stats & badges ready; donation building blocks in place.
 
-G5 — donate<T> core (includes A4 locking logic here)
+G5 — donate<T> core helper (internal; includes A4 locking logic here)
 
 slippage guard, split, stats update, toggle parameters_locked on first donation, emit event, return USD
 

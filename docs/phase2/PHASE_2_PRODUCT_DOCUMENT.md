@@ -172,7 +172,7 @@ precheck: campaign active, not deleted, within dates; token enabled.
 
 split_and_send: basis‑points split; recipient gets remainder; immediate transfers to addresses.
 
-donate<T>: precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms.
+donate<T> (internal helper): precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms. This function is `public(package)`; external callers must use one of the award entry points below so every donation is profile-aware.
 
 **Two donation + award entry points:**
 

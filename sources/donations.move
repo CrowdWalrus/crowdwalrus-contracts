@@ -236,7 +236,7 @@ public(package) fun emit_donation_received_event<T>(
     });
 }
 
-entry fun donate<T>(
+public(package) fun donate<T>(
     campaign: &mut campaign::Campaign,
     stats: &mut campaign_stats::CampaignStats,
     registry: &token_registry::TokenRegistry,
