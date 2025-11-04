@@ -114,7 +114,7 @@ PayoutPolicy (per campaign): {platform_bps, platform_address, recipient_address}
 Parameter Locking: On first donation, set parameters_locked = true to signal that economic terms are live. Core fields (start/end dates, funding goal, payout policy) are immutable from creation; metadata and descriptive fields remain editable.
 
 Edit Re-Verification: Whenever an owner edits campaign basics or metadata, call the `campaign::update_campaign_basics` / `campaign::update_campaign_metadata` entry functions. They clear `is_verified` on the campaign and emit `CampaignUnverified` so admins must re-approve; publishing campaign updates via add_update does not affect verification. Off-chain indexers should treat the event stream + on-campaign flag as canonical (the legacy CrowdWalrus.registry cache is deprecated and may contain stale entries until the next verification cycle).
-Metadata Guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, a 100-entry cap for new keys, and continues to protect `funding_goal` and `recipient_address`. Violations abort with E_EMPTY_KEY (16), E_EMPTY_VALUE (17), E_KEY_TOO_LONG (18), E_VALUE_TOO_LONG (19), or E_TOO_MANY_METADATA_ENTRIES (20).
+Metadata Guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, a 100-entry cap for new keys, and continues to protect `funding_goal` and `recipient_address`. Campaign creation (`campaign::new`) now invokes the same validation so oversized metadata aborts before storing. Violations abort with E_EMPTY_KEY (16), E_EMPTY_VALUE (17), E_KEY_TOO_LONG (18), E_VALUE_TOO_LONG (19), or E_TOO_MANY_METADATA_ENTRIES (20).
 
 Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
 
@@ -217,7 +217,7 @@ Profile is auto-created on campaign creation if owner doesn't have one.
 
 Only owner can update profile metadata (enforced via ownership checks).
 
-Profile metadata guardrails: keys must be 1–64 bytes, values 1–2048 bytes, and inserting a new key past 100 entries aborts with E_TOO_MANY_METADATA_ENTRIES; empty or oversized inputs reuse E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, and E_VALUE_TOO_LONG.
+Profile metadata guardrails: keys must be 1–64 bytes, values 1–2048 bytes, and inserting a new key past 100 entries aborts with E_TOO_MANY_METADATA_ENTRIES; empty or oversized inputs reuse E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, and E_VALUE_TOO_LONG. Profile creation helpers call the same validation so invalid metadata never lands on-chain.
 
 Totals increment and persist across donations.
 

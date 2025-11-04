@@ -4,7 +4,7 @@ Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
 • Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
-• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap.
+• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap. Creation helpers (`campaign::new`, `profiles::create`) now run the same guardrails so oversized metadata aborts at creation time instead of relying on frontend filtering.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
@@ -107,8 +107,8 @@ Acceptance: Field set/read; no mutation path.
 
 Deps: A5.
 
-✅ COMPLETED (Oct 23, 2025)
 A2. Typed PayoutPolicy on Campaign
+✅ COMPLETED (Oct 23, 2025) — PayoutPolicy struct stored immutably with validation + getters for platform split fields.
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
@@ -590,8 +590,8 @@ Acceptance: Pass; works as helper for both flows.
 Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
-✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 F1. BadgeConfig (thresholds + URIs)
+✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 
 File/Module: sources/badge_rewards.move
 
@@ -934,6 +934,7 @@ Deps: H1 (platform_policy registry); Extends: A5 (this is part of A5 implementat
 
 I) Admin surfaces
 I1. Cap‑gate TokenRegistry & PlatformPolicy
+✅ COMPLETED (Nov 3, 2025) — All token/policy mutators now funnel through crowd_walrus AdminCap guards with positive/negative tests.
 
 File/Module: sources/token_registry.move, sources/platform_policy.move
 
@@ -960,6 +961,7 @@ Deps: Existing AdminCap.
 Err codes: Reuse E_NOT_AUTHORIZED.
 
 I2. Cap‑gate BadgeConfig updates
+✅ COMPLETED (Nov 3, 2025) — BadgeConfig setters gated by AdminCap wrapper in crowd_walrus; tests assert unauthorized caps abort.
 
 File/Module: sources/badge_rewards.move
 
@@ -1078,9 +1080,12 @@ Slippage floor: success when met; abort when not.
 Acceptance: All scenarios pass with correct events and state.
 
 L) Documentation & DevEx
-L1. Update PHASE_2_DEV_DOCUMENT.md (developer‑facing)
+L1. Update PHASE_2_DEV_DOCUMENT.md (developer-facing)
+✅ COMPLETED (Nov 3, 2025) — Guide now covers PTB recipes, admin setup, Pyth integration, and profile auto-creation touchpoints.
 
 File: PHASE_2_DEV_DOCUMENT.md
+
+Notes: Added short admin ops section per post-review feedback; no code changes required.
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
@@ -1097,6 +1102,8 @@ List entry function inputs (object refs required), rounding, slippage, staleness
 Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for both flows.
 
 L2. Update README.md (product overview)
+
+✅ COMPLETED (Nov 3, 2025) — README now highlights Phase 2 feature set, user flows, admin controls, a post-deploy checklist, and links to supporting docs.
 
 File: Documentation/README.md
 
