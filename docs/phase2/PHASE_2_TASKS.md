@@ -4,7 +4,7 @@ Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
 • Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
-• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap.
+• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap. Creation helpers (`campaign::new`, `profiles::create`) now run the same guardrails so oversized metadata aborts at creation time instead of relying on frontend filtering.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
