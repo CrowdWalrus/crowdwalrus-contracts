@@ -16,9 +16,9 @@ following conventions:
 
 ### crowd_walrus::donations::DonationReceived
 
-Emitted exactly once per successful donation (from `donate<T>`,
-`donate_and_award_first_time<T>`, and `donate_and_award<T>`) after funds have been
-split, stats updated, and slippage checks satisfied.
+Emitted exactly once per successful donation via the internal `donate<T>` pipeline,
+which is invoked by `donate_and_award_first_time<T>` and `donate_and_award<T>` after
+funds have been split, stats updated, and slippage checks satisfied.
 
 | Field | Type | Description |
 | --- | --- | --- |
