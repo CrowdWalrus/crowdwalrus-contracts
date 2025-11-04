@@ -219,13 +219,16 @@ public(package) fun create(
         E_KEY_VALUE_MISMATCH,
     );
 
+    let metadata = vec_map::from_keys_values(metadata_keys, metadata_values);
+    assert_valid_metadata(&metadata);
+
     Profile {
         id: sui_object::new(ctx),
         owner,
         total_usd_micro: 0,
         total_donations_count: 0,
         badge_levels_earned: 0,
-        metadata: vec_map::from_keys_values(metadata_keys, metadata_values),
+        metadata,
     }
 }
 
@@ -294,6 +297,22 @@ fun assert_valid_metadata_entry(
     assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
     if (!vec_map::contains(metadata, key)) {
         assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
+}
+
+fun assert_valid_metadata(metadata: &VecMap<String, String>) {
+    let mut i = 0;
+    let len = vec_map::length(metadata);
+    assert!(len <= MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    while (i < len) {
+        let (key_ref, value_ref) = vec_map::get_entry_by_idx(metadata, i);
+        let key_len = string::length(key_ref);
+        let value_len = string::length(value_ref);
+        assert!(key_len > 0, E_EMPTY_KEY);
+        assert!(value_len > 0, E_EMPTY_VALUE);
+        assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+        assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+        i = i + 1;
     };
 }
 
