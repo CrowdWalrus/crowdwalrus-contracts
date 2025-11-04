@@ -782,12 +782,12 @@ Acceptance: Pass.
 
 Deps: B1, A2.
 
-G5. donate<T> entry (core; slippage + locking)
+G5. donate<T> helper (core; slippage + locking)
 ✅ COMPLETED (Oct 30, 2025) — donate<T> now enforces stats ownership (E_STATS_MISMATCH), emits DonationReceived, locks params, and boundary/slippage tests cover all edges.
 
 File/Module: sources/donations.move
 
-Product intent: Core donation API for integrators.
+Product intent: Core donation pipeline reused internally by profile-aware entry points.
 
 Implement:
 
@@ -825,7 +825,7 @@ Implement:
 
 Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
-Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T> with the verified PriceInfoObject; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
+Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T> helper with the verified PriceInfoObject; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
 
 Preconditions: Sender has no existing profile (abort if exists to avoid duplicates); caller supplies a freshly updated PriceInfoObject.
 
@@ -855,7 +855,7 @@ Implement:
 
 Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
-Flow: call G5 donate<T>; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
+Flow: call G5 donate<T> helper; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
 
 Preconditions: Caller owns Profile (enforce owner) and provides a recently updated PriceInfoObject.
 
