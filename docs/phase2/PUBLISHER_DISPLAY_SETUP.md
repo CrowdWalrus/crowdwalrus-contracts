@@ -4,7 +4,7 @@ This guide documents how the deployer configures Sui Display metadata for the no
 
 ## Workflow Overview
 
-1. **Capture the Publisher at publish time.** A successful `sui client publish` (or equivalent programmable transaction block) emits a `Publisher` object in the transaction effects. Record its ID; the object remains owned by the publishing address.
+1. **Capture the Publisher at publish time.** The package initializer calls `sui::package::claim_and_keep`, so every publish emits a `Publisher` object under “Created Objects.” Record its ID; the object remains owned by the publishing address.
 2. **Call the admin entry once per package version.** While you still hold the `Publisher`, submit a PTB that invokes `crowd_walrus::badge_rewards::setup_badge_display(&Publisher, &mut TxContext)`. Because the entry borrows the owned `Publisher`, only the deployer can execute it.
 3. **No extra claiming or manual version bumps required.** The entry registers the four required Display fields (`name`, `image_url`, `description`, `link`), calls `display::update_version` internally, and shares the Display object so wallets pick up the metadata. Upgrades repeat the same flow using the new `Publisher` emitted by that publish transaction.
 
