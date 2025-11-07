@@ -43,6 +43,7 @@ event schemas live in `docs/phase2/EVENT_SCHEMAS.md` and remain the canonical re
 
 ### Badge display registration (`badge_rewards::setup_badge_display`)
 - Inputs: `&Publisher` obtained at publish time and `&mut TxContext`.
+- Source: `crowd_walrus::crowd_walrus::init` now calls `sui::package::claim_and_keep`, so every publish hands the deployer an owned `Publisher` visible in the transaction effects.
 - Flow: registers the donor badge `Display` template with the keys `name`, `image_url`,
   `description`, and `link`—respectively rendering the badge label, image URI from `BadgeConfig`,
   textual description with `{level}`/`{owner}` placeholders, and a deep link to the badge detail
