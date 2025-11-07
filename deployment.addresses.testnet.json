@@ -1,0 +1,25 @@
+{
+  "network": "testnet",
+  "deployedAt": "2025-11-07",
+  "txDigest": "CqFei2NF4saCuoWCgMiK9yUWSD4LE7nVY2EDbBEnqfs4",
+  "packageId": "0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10",
+  "sharedObjects": {
+    "crowdWalrus": "0x10e5b1e7f63c33d8e49eeac79168badfb9b271209bd12a59bbcde1ecd0187596",
+    "suinsManager": "0x48ceb4364109da3b9cd889d29dc9e14bafa5983777ccaa3f5d6385958b8190cf",
+    "policyRegistry": "0xaf5058f1ff30262fdeeeaa325b4b1ce12a73015abbf22867f63e9f449bb9e8c3",
+    "profilesRegistry": "0xd72f3907908b0575afea266c457c0109690ab11e8568106364c76e2444c2aeac",
+    "badgeConfig": "0x71c1e75eb42a29a81680f9f1e454e87468561a5cd28e2217e841c6693d00ea23",
+    "tokenRegistry": "0xee1330d94cd954ae58fd18a8336738562f05487fae56dda9c655f461eac52b6f"
+  },
+  "ownedCaps": {
+    "adminCap": "0x3d220d55745a74563ea5b0af717c2957bd17954be6403e738b8994875766afa3",
+    "suinsAdminCap": "0xafd251e536c837dc64ef58881965f2222b9e0f9966f9296f1f967367cb5da78b",
+    "publisher": "0xbbd5230ca6bd3a97109e26c76464baee1540f2e9376a60046f50d4bfc2c3e435",
+    "upgradeCap": "0x10fcf8049ced73339c8fe8bef00bdd53312f932619ed7687e9baa17e5e02f097"
+  },
+  "globals": {
+    "clock": "0x6",
+    "pythState": "0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0",
+    "wormholeState": "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
+  }
+}
