@@ -21,8 +21,8 @@ This guide covers **fresh publish**. For upgrades, see the [Upgrade Path](#upgra
 sui client active-env
 # Should output: testnet
 
-# If not on testnet, switch now:
-# sui client switch --env testnet
+# If not on testnet, switch now (safe to run even if already on testnet)
+sui client switch --env testnet
 
 # Check your active address (this will be the deployer/admin)
 sui client active-address
@@ -357,6 +357,22 @@ sui client call \
   --gas-budget 10000000
 ```
 
+#### 6.4 Enable a Preset (Optional)
+
+```bash
+# Re-enable a preset for future campaigns (existing campaigns unaffected)
+sui client call \
+  --package $PACKAGE_ID \
+  --module crowd_walrus \
+  --function enable_platform_policy \
+  --args \
+    $POLICY_REGISTRY_ID \
+    $ADMIN_CAP_ID \
+    '"commercial"' \
+    $CLOCK \
+  --gas-budget 10000000
+```
+
 ---
 
 ### Step 7: Populate Token Registry
@@ -577,6 +593,10 @@ export END_TIME=$((START_TIME + 2592000000))       # End in 30 days
 
 export TEST_RECIPIENT="<test_wallet_address>"
 
+# Optional: sanity check the SUINS object type before creating a campaign
+# Expected to end with: ::suins::suins::SuiNS
+sui client object $SUINS --json | jq -r '.content.type'
+
 # Create a test campaign using default "standard" policy
 sui client call \
   --package $PACKAGE_ID \
@@ -660,6 +680,10 @@ sui client upgrade \
 
 # If you have unpublished dependencies, add:
 # --with-unpublished-dependencies
+
+# Note: After a successful upgrade, the CLI prints a new package ID.
+# Set it for subsequent admin calls (e.g., migrations):
+# export NEW_PACKAGE_ID="<printed_by_upgrade_command>"
 ```
 
 This preserves existing shared object IDs (CrowdWalrus, SuiNSManager, etc.).
@@ -802,4 +826,3 @@ sui client call \
 **Last Updated**: Based on codebase state as of Phase 2 completion (November 2025)
 
 **Maintainer**: Update this guide if function signatures change or new configuration steps are added.
-
