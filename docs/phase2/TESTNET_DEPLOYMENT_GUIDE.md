@@ -705,8 +705,8 @@ This is complex and best handled by frontend integration. For manual testing, yo
 
 | Component | Action | Required | Status |
 |-----------|--------|----------|--------|
-| Package | Published to testnet | ✅ CRITICAL | ⬜ |
-| Object IDs | All IDs recorded | ✅ CRITICAL | ⬜ |
+| Package | Published to testnet | ✅ CRITICAL | ✅ Completed – Nov 7 2025 |
+| Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployments/deploy-2025-11-07-phase2.md` |
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
 | SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ⬜ |
 | Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
