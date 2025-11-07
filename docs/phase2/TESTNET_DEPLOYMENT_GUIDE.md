@@ -177,6 +177,11 @@ export PYTH_STATE="0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8ab
 export WORMHOLE_STATE="0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
 ```
 
+Persist the captured values in two places so tooling can consume them:
+
+- `deployments/deploy-<date>-phase2.env` — environment exports loaded by manual scripts.
+- `deployment.addresses.testnet.json` — structured map for front-end/indexer integrations.
+
 **To get TOKEN_REGISTRY_ID:**
 
 The TokenRegistry is stored as a dynamic field under CrowdWalrus. Use this two-step process:
