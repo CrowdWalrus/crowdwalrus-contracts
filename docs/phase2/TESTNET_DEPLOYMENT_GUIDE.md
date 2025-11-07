@@ -125,6 +125,8 @@ sui client publish --gas-budget 500000000
 - Publisher object ID (needed for badge display setup)
 - UpgradeCap object ID (save for future upgrades)
 
+> The package initializer now claims the Publisher automatically via `package::claim_and_keep`, so capture the Publisher from the **Created Objects** section right after `sui client publish` completes.
+
 **Owned objects created (transferred to deployer):**
 1. `crowd_walrus::AdminCap` - Main admin capability
 2. `suins_manager::AdminCap` - SuiNS admin capability
