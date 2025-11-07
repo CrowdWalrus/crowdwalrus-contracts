@@ -12,6 +12,58 @@ This guide covers **fresh publish**. For upgrades, see the [Upgrade Path](#upgra
 
 ---
 
+## Prerequisites: Sui & Tooling
+
+As of November 7, 2025, the latest Sui Testnet release is `testnet-v1.60.0`. Update your CLI to the exact Testnet release before deploying to avoid protocol/version mismatches.
+
+### A. Install or Update `suiup`
+
+```bash
+# Install suiup (if not already installed)
+curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
+
+# Ensure ~/.local/bin is on PATH (macOS zsh example)
+# Run these if `command -v suiup` returns nothing
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Sanity check
+command -v suiup && suiup list
+```
+
+### B. Pin Sui CLI to Testnet `1.60.0`
+
+```bash
+# Install the exact Testnet build and set it default
+suiup install sui@testnet-1.60.0 -y
+suiup default set sui@testnet-1.60.0
+
+# Verify version and path
+sui --version
+suiup which sui
+which -a sui   # Ensure the suiup path is first
+```
+
+Tip: To always get the newest Testnet build when this guide becomes stale, you can run:
+
+```bash
+suiup install sui@testnet -y
+```
+
+### C. Optional: Install/Update Walrus CLI
+
+```bash
+# Installs the latest Testnet-compatible Walrus CLI
+suiup install walrus -y
+walrus --version
+```
+
+Why update before deploy?
+- Each Sui network (testnet/mainnet) runs a specific protocol/release. Using an older CLI can fail on publish/upgrade or encode calls incorrectly.
+- `suiup` makes it easy to pin and switch versions, so rollbacks are instant if needed (`suiup show` then `suiup default set <version>`).
+
+---
+
 ## Pre-Deployment Checklist
 
 ### 1. Verify Your Environment
