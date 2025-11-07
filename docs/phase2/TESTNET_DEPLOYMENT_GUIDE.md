@@ -102,7 +102,7 @@ sui move test
 ### 3. Review Dependencies
 
 Confirm these are in your `Move.toml`:
-- ✅ Sui Framework: `mainnet-v1.57.3`
+- ✅ Sui Framework: implicit (no explicit Sui dependency; CLI resolves the correct framework for Testnet)
 - ✅ Pyth: `sui-contract-testnet`
 - ✅ SuiNS: `crowdwalrus-testnet-core-v2`
 - ✅ Subdomains: `crowdwalrus-testnet-core-v2`
