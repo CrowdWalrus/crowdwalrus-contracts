@@ -1,8 +1,12 @@
 {
   "network": "testnet",
+  "label": "phase2",
   "deployedAt": "2025-11-07",
   "txDigest": "CqFei2NF4saCuoWCgMiK9yUWSD4LE7nVY2EDbBEnqfs4",
   "packageId": "0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10",
+  "accounts": {
+    "deployer": "0x4fcb599f85adb345fd608c69040615caa7af84ec8bbf181569a4dbe7368acfbb"
+  },
   "sharedObjects": {
     "crowdWalrus": "0x10e5b1e7f63c33d8e49eeac79168badfb9b271209bd12a59bbcde1ecd0187596",
     "suinsManager": "0x48ceb4364109da3b9cd889d29dc9e14bafa5983777ccaa3f5d6385958b8190cf",
@@ -21,5 +25,13 @@
     "clock": "0x6",
     "pythState": "0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0",
     "wormholeState": "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
+  },
+  "migration": {
+    "suinsRegistration": {
+      "nftId": "0x98dd15073e0b781ca524f7ef102edac6cd4393119a1f2f2b20f24f9056adb6d9",
+      "registeredWithTx": "H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4",
+      "newManager": "0x48ceb4364109da3b9cd889d29dc9e14bafa5983777ccaa3f5d6385958b8190cf",
+      "newAdminCap": "0xafd251e536c837dc64ef58881965f2222b9e0f9966f9296f1f967367cb5da78b"
+    }
   }
 }
