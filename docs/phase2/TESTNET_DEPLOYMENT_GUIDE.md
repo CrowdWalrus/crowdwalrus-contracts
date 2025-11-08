@@ -715,7 +715,7 @@ This is complex and best handled by frontend integration. For manual testing, yo
 | Package | Published to testnet | ✅ CRITICAL | ✅ Completed – Nov 7 2025 |
 | Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployments/deploy-2025-11-07-phase2.md` |
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
-| SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ⬜ |
+| SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
 | Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
 | Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ⬜ |
 | Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ⬜ |
