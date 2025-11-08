@@ -461,3 +461,10 @@ Transaction Digest: CqFei2NF4saCuoWCgMiK9yUWSD4LE7nVY2EDbBEnqfs4
 ╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
 ➜  crowd-walrus-contracts git:(sui-update) ✗
 ```
+
+## Post-Deployment Admin Actions (Nov 8, 2025)
+
+| Action | Tx Digest | Notes |
+|--------|-----------|-------|
+| Re-enabled default "standard" platform policy | `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` | Called `crowd_walrus::enable_platform_policy` to emit a fresh `PolicyUpdated` event (0 bps, deployer address) and confirm the preset stays enabled for future campaigns. |
+| Added "commercial" policy preset | `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G` | Ran `crowd_walrus::add_platform_policy` to create a 500 bps (5%) preset that routes platform fees to `0x4aa24001f656ee00a56c1d7a16c65973fa65b4b94c0b79adead1cc3b70261f45`. |
