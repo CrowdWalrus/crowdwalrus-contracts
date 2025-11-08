@@ -456,7 +456,7 @@ Get current Pyth price feed IDs from: https://www.pyth.network/developers/price-
 
 ```bash
 # Verify this feed ID from Pyth documentation before using!
-export SUI_FEED_ID="0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b"
+export  ="0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b"
 
 # Add SUI token
 sui client call \
