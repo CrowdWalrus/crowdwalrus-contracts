@@ -12,6 +12,58 @@ This guide covers **fresh publish**. For upgrades, see the [Upgrade Path](#upgra
 
 ---
 
+## Prerequisites: Sui & Tooling
+
+As of November 7, 2025, the latest Sui Testnet release is `testnet-v1.60.0`. Update your CLI to the exact Testnet release before deploying to avoid protocol/version mismatches.
+
+### A. Install or Update `suiup`
+
+```bash
+# Install suiup (if not already installed)
+curl -sSfL https://raw.githubusercontent.com/MystenLabs/suiup/main/install.sh | sh
+
+# Ensure ~/.local/bin is on PATH (macOS zsh example)
+# Run these if `command -v suiup` returns nothing
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+
+# Sanity check
+command -v suiup && suiup list
+```
+
+### B. Pin Sui CLI to Testnet `1.60.0`
+
+```bash
+# Install the exact Testnet build and set it default
+suiup install sui@testnet-1.60.0 -y
+suiup default set sui@testnet-1.60.0
+
+# Verify version and path
+sui --version
+suiup which sui
+which -a sui   # Ensure the suiup path is first
+```
+
+Tip: To always get the newest Testnet build when this guide becomes stale, you can run:
+
+```bash
+suiup install sui@testnet -y
+```
+
+### C. Optional: Install/Update Walrus CLI
+
+```bash
+# Installs the latest Testnet-compatible Walrus CLI
+suiup install walrus -y
+walrus --version
+```
+
+Why update before deploy?
+- Each Sui network (testnet/mainnet) runs a specific protocol/release. Using an older CLI can fail on publish/upgrade or encode calls incorrectly.
+- `suiup` makes it easy to pin and switch versions, so rollbacks are instant if needed (`suiup show` then `suiup default set <version>`).
+
+---
+
 ## Pre-Deployment Checklist
 
 ### 1. Verify Your Environment
@@ -50,7 +102,7 @@ sui move test
 ### 3. Review Dependencies
 
 Confirm these are in your `Move.toml`:
-- ✅ Sui Framework: `mainnet-v1.57.3`
+- ✅ Sui Framework: implicit (no explicit Sui dependency; CLI resolves the correct framework for Testnet)
 - ✅ Pyth: `sui-contract-testnet`
 - ✅ SuiNS: `crowdwalrus-testnet-core-v2`
 - ✅ Subdomains: `crowdwalrus-testnet-core-v2`
@@ -72,6 +124,8 @@ sui client publish --gas-budget 500000000
 - **Package ID** (most important - save this!)
 - Publisher object ID (needed for badge display setup)
 - UpgradeCap object ID (save for future upgrades)
+
+> The package initializer now claims the Publisher automatically via `package::claim_and_keep`, so capture the Publisher from the **Created Objects** section right after `sui client publish` completes.
 
 **Owned objects created (transferred to deployer):**
 1. `crowd_walrus::AdminCap` - Main admin capability
@@ -122,6 +176,11 @@ export CLOCK="0x6"
 export PYTH_STATE="0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0"
 export WORMHOLE_STATE="0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
 ```
+
+Persist the captured values in two places so tooling can consume them:
+
+- `deployments/deploy-<date>-phase2.env` — environment exports loaded by manual scripts.
+- `deployment.addresses.testnet.json` — structured map for front-end/indexer integrations.
 
 **To get TOKEN_REGISTRY_ID:**
 
@@ -389,15 +448,15 @@ For **each** supported token type, you must:
 Get current Pyth price feed IDs from: https://www.pyth.network/developers/price-feed-ids#sui-testnet
 
 **Example Feed IDs (verify these at deployment time):**
-- **SUI/USD**: `0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b`
-- **USDC/USD**: `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`
-- **USDT/USD**: `0x1fc18861232290221461220bd4e2acd1dcdfbc89c84092c93c18bdc7756c1588`
+- **SUI/USD** — SUI has 9 decimals: `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`
+- **USDC/USD** — USDC has 6 decimals: `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`
+
 
 #### 7.2 Add SUI Token
 
 ```bash
 # Verify this feed ID from Pyth documentation before using!
-export SUI_FEED_ID="0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b"
+export SUI_FEED_ID="0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca"
 
 # Add SUI token
 sui client call \
@@ -412,7 +471,7 @@ sui client call \
     '"Sui"' \
     9 \
     $SUI_FEED_ID \
-    60000 \
+    300000 \
     $CLOCK \
   --gas-budget 20000000
 ```
@@ -425,7 +484,7 @@ sui client call \
 - `name`: Full token name (e.g., `"Sui"`)
 - `decimals`: Token decimals (SUI = 9, USDC = 6, etc.) - **must be ≤ 38** (enforced)
 - `pyth_feed_id`: 32-byte Pyth feed ID as `0x...` hex string - **must be exactly 32 bytes** (enforced)
-- `max_age_ms`: Default staleness limit in milliseconds (60000 = 60 seconds)
+- `max_age_ms`: Default staleness limit in milliseconds (300000 = 5 minutes)
 - `clock`: Standard Sui Clock object
 
 #### 7.3 Enable the Token
@@ -447,10 +506,7 @@ sui client call \
 #### 7.4 Add USDC (Example)
 
 ```bash
-# Get the actual USDC package ID on testnet
-# NOTE: USDC module/type name varies by issuer - verify the exact type on testnet before use
-# This is an example - replace with actual testnet USDC type
-export USDC_TYPE="0x<testnet_usdc_package>::usdc::USDC"
+export USDC_TYPE="0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC"
 export USDC_FEED_ID="0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722"
 
 # Add USDC token
@@ -466,7 +522,7 @@ sui client call \
     '"USD Coin"' \
     6 \
     $USDC_FEED_ID \
-    60000 \
+    300000 \
     $CLOCK \
   --gas-budget 20000000
 
@@ -653,14 +709,14 @@ This is complex and best handled by frontend integration. For manual testing, yo
 
 | Component | Action | Required | Status |
 |-----------|--------|----------|--------|
-| Package | Published to testnet | ✅ CRITICAL | ⬜ |
-| Object IDs | All IDs recorded | ✅ CRITICAL | ⬜ |
+| Package | Published to testnet | ✅ CRITICAL | ✅ Completed – Nov 7 2025 |
+| Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployments/deploy-2025-11-07-phase2.md` |
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
-| SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ⬜ |
-| Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
-| Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ⬜ |
-| Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ⬜ |
-| Badge Config | Set thresholds & image URIs | ✅ CRITICAL | ⬜ |
+| SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
+| Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ✅ Completed – Nov 8 2025 (tx `CZWgWxEb318Z728Jt5CSPZSzXEBf9yeRkN6hWFXKeNub`) |
+| Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` + `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G`) |
+| Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (SUI `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` + `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR`, USDC `C2TjU2W7cMgpBzmSbatCLkyuLqwbktkdS6sZ5Znn98pw` + `GkG73wkDMpYbf8rK7y3YvzsiuKH8yXE55mrwYXwgs6K4`) |
+| Badge Config | Set thresholds & image URIs | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `D59JZszCzcypsCow7jQfiUWr1CV4yT9KyftyByAbryMH`) |
 | Smoke Tests | Created test campaign | ⚠️ Recommended | ⬜ |
 
 ---
@@ -798,7 +854,7 @@ Based on actual testnet transactions:
 CLOCK="0x6"
 
 # These are Pyth deployment objects (check Pyth docs for updates)
-PYTH_STATE="0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0"
+PYTH_STATE="0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c"
 WORMHOLE_STATE="0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
 
 # SuiNS shared object (NOT the package address)

@@ -12,6 +12,7 @@ use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field::{Self as df};
 use sui::event::{Self as event};
 use sui::object::{Self as sui_object};
+use sui::package;
 use sui::tx_context::{Self as sui_tx_context};
 use sui::vec_map::{Self as vec_map};
 use suins::suins::SuiNS;
@@ -118,7 +119,8 @@ public struct TokenRegistrySlot has store {
 // === Init Function ===
 
 /// Initialize the crowd walrus
-fun init(_otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
+fun init(otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
+    package::claim_and_keep(otw, ctx);
     let crowd_walrus_uid = sui_object::new(ctx);
     let crowd_walrus_id = sui_object::uid_to_inner(&crowd_walrus_uid);
 

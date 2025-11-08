@@ -482,7 +482,7 @@ Document how deployer obtains the sui::package::Publisher at publish time and pa
 
 Add an admin entry in badge_rewards that accepts &Publisher and registers templates.
 
-No object “claiming” is required in init; the deployer simply supplies the Publisher to the entry when configuring display.
+Init now calls `sui::package::claim_and_keep`, so the deployer automatically receives the Publisher and can supply it to the display entry.
 
 Preconditions: Package published; Publisher available to deployer.
 
