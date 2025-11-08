@@ -713,7 +713,7 @@ This is complex and best handled by frontend integration. For manual testing, yo
 | Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployments/deploy-2025-11-07-phase2.md` |
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
 | SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
-| Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
+| Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ✅ Completed – Nov 8 2025 (tx `CZWgWxEb318Z728Jt5CSPZSzXEBf9yeRkN6hWFXKeNub`) |
 | Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` + `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G`) |
 | Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (SUI `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` + `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR`, USDC `C2TjU2W7cMgpBzmSbatCLkyuLqwbktkdS6sZ5Znn98pw` + `GkG73wkDMpYbf8rK7y3YvzsiuKH8yXE55mrwYXwgs6K4`) |
 | Badge Config | Set thresholds & image URIs | ✅ CRITICAL | ⬜ |
