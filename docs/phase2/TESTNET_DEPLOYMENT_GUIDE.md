@@ -717,7 +717,7 @@ This is complex and best handled by frontend integration. For manual testing, yo
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
 | SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
 | Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
-| Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ⬜ |
+| Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` + `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G`) |
 | Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ⬜ |
 | Badge Config | Set thresholds & image URIs | ✅ CRITICAL | ⬜ |
 | Smoke Tests | Created test campaign | ⚠️ Recommended | ⬜ |
