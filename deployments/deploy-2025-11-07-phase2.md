@@ -468,3 +468,8 @@ Transaction Digest: CqFei2NF4saCuoWCgMiK9yUWSD4LE7nVY2EDbBEnqfs4
 |--------|-----------|-------|
 | Re-enabled default "standard" platform policy | `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` | Called `crowd_walrus::enable_platform_policy` to emit a fresh `PolicyUpdated` event (0 bps, deployer address) and confirm the preset stays enabled for future campaigns. |
 | Added "commercial" policy preset | `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G` | Ran `crowd_walrus::add_platform_policy` to create a 500 bps (5%) preset that routes platform fees to `0x4aa24001f656ee00a56c1d7a16c65973fa65b4b94c0b79adead1cc3b70261f45`. |
+
+| Token | Tx Digests | Notes |
+|-------|------------|-------|
+| SUI added & enabled | `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` (add), `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR` (enable) | Added with Pyth feed `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`, decimals 9, `max_age_ms=300000`, then enabled. |
+| Native USDC added & enabled | `C2TjU2W7cMgpBzmSbatCLkyuLqwbktkdS6sZ5Znn98pw` (add), `GkG73wkDMpYbf8rK7y3YvzsiuKH8yXE55mrwYXwgs6K4` (enable) | Coin type `0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC`, feed `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`, decimals 6, `max_age_ms=300000`, then enabled. |
