@@ -448,15 +448,15 @@ For **each** supported token type, you must:
 Get current Pyth price feed IDs from: https://www.pyth.network/developers/price-feed-ids#sui-testnet
 
 **Example Feed IDs (verify these at deployment time):**
-- **SUI/USD**: `0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b`
-- **USDC/USD**: `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`
-- **USDT/USD**: `0x1fc18861232290221461220bd4e2acd1dcdfbc89c84092c93c18bdc7756c1588`
+- **SUI/USD** — SUI has 9 decimals: `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`
+- **USDC/USD** — USDC has 6 decimals: `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`
+
 
 #### 7.2 Add SUI Token
 
 ```bash
 # Verify this feed ID from Pyth documentation before using!
-export  ="0x23d7315d5865acaa1550110f319ce1a79e25f526d5ec7f0e5ef4798da6cfd43b"
+export SUI_FEED_ID="0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca"
 
 # Add SUI token
 sui client call \
@@ -471,7 +471,7 @@ sui client call \
     '"Sui"' \
     9 \
     $SUI_FEED_ID \
-    60000 \
+    300000 \
     $CLOCK \
   --gas-budget 20000000
 ```
@@ -484,7 +484,7 @@ sui client call \
 - `name`: Full token name (e.g., `"Sui"`)
 - `decimals`: Token decimals (SUI = 9, USDC = 6, etc.) - **must be ≤ 38** (enforced)
 - `pyth_feed_id`: 32-byte Pyth feed ID as `0x...` hex string - **must be exactly 32 bytes** (enforced)
-- `max_age_ms`: Default staleness limit in milliseconds (60000 = 60 seconds)
+- `max_age_ms`: Default staleness limit in milliseconds (300000 = 5 minutes)
 - `clock`: Standard Sui Clock object
 
 #### 7.3 Enable the Token
@@ -506,10 +506,7 @@ sui client call \
 #### 7.4 Add USDC (Example)
 
 ```bash
-# Get the actual USDC package ID on testnet
-# NOTE: USDC module/type name varies by issuer - verify the exact type on testnet before use
-# This is an example - replace with actual testnet USDC type
-export USDC_TYPE="0x<testnet_usdc_package>::usdc::USDC"
+export USDC_TYPE="0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC"
 export USDC_FEED_ID="0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722"
 
 # Add USDC token
@@ -525,7 +522,7 @@ sui client call \
     '"USD Coin"' \
     6 \
     $USDC_FEED_ID \
-    60000 \
+    300000 \
     $CLOCK \
   --gas-budget 20000000
 
@@ -718,7 +715,7 @@ This is complex and best handled by frontend integration. For manual testing, yo
 | SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
 | Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ⬜ |
 | Platform Policies | Updated "standard", added presets | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `BRfLr73CqJjKfFLAT2mPunutjjNkHQF2hFTe25L9sZk9` + `JB3YeQupHiSyqhuqNd2bJ7LereRQHWwafni3StwXL14G`) |
-| Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ⬜ |
+| Token Registry | Added & enabled tokens (min 1) | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (SUI `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` + `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR`, USDC `C2TjU2W7cMgpBzmSbatCLkyuLqwbktkdS6sZ5Znn98pw` + `GkG73wkDMpYbf8rK7y3YvzsiuKH8yXE55mrwYXwgs6K4`) |
 | Badge Config | Set thresholds & image URIs | ✅ CRITICAL | ⬜ |
 | Smoke Tests | Created test campaign | ⚠️ Recommended | ⬜ |
 
@@ -857,7 +854,7 @@ Based on actual testnet transactions:
 CLOCK="0x6"
 
 # These are Pyth deployment objects (check Pyth docs for updates)
-PYTH_STATE="0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0"
+PYTH_STATE="0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c"
 WORMHOLE_STATE="0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
 
 # SuiNS shared object (NOT the package address)
