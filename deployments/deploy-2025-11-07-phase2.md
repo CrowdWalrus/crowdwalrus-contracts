@@ -471,7 +471,7 @@ Transaction Digest: CqFei2NF4saCuoWCgMiK9yUWSD4LE7nVY2EDbBEnqfs4
 
 | Token | Tx Digests | Notes |
 |-------|------------|-------|
-| SUI added & enabled | `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` (add), `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR` (enable) | Added with Pyth feed `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`, decimals 9, `max_age_ms=300000`, then enabled. |
+| SUI added & enabled | `EMGASi3rii8L9MX4Ld9AEaQmMSLaNJeLrETdvjRJZysc` (add), `99ucADmBk4suaFqNR4fEasSWeAgAsPZSy723AtNoozGR` (enable) | Added with Pyth feed `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`, decimals 9, `max_age_ms=300000`, then enabled. **2025‑11‑10 correction:** feed ID updated via `update_token_metadata<0x2::sui::SUI>` (tx `EUXLEGCyMsaHcWMY16GgWygyhHvjaNFXGMtW8p5PobmC`) to `0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266`. |
 | Native USDC added & enabled | `C2TjU2W7cMgpBzmSbatCLkyuLqwbktkdS6sZ5Znn98pw` (add), `GkG73wkDMpYbf8rK7y3YvzsiuKH8yXE55mrwYXwgs6K4` (enable) | Coin type `0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC`, feed `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`, decimals 6, `max_age_ms=300000`, then enabled. |
 | DonorBadge Display registered | `CZWgWxEb318Z728Jt5CSPZSzXEBf9yeRkN6hWFXKeNub` | `badge_rewards::setup_badge_display` produced `Display<DonorBadge>` (templates for name, image_url, description, link) and shared it so wallets can render badges. |
 | Badge Config updated | `D59JZszCzcypsCow7jQfiUWr1CV4yT9KyftyByAbryMH` | Set 5 levels: amount_micro [5M,10M,15M,20M,25M], payments [2,4,6,8,10], Walrus image URIs (five). |
