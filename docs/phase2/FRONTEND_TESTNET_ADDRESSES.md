@@ -30,7 +30,7 @@ This file centralizes all on‑chain IDs and constants the frontend needs on Sui
 - SUI
   - Type: `0x2::sui::SUI`
   - Decimals: 9
-  - Pyth feed ID (SUI/USD): `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`
+  - Pyth feed ID (SUI/USD): `0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266`
   - Registry max_age_ms: 300000 (5 minutes)
 - USDC (native Circle)
   - Type: `0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC`
@@ -70,4 +70,3 @@ Pass `none` to use the default preset (standard) or `some("commercial")` to use 
 
 ---
 If any of these change (new publish/upgrade), update this file and the frontend .env accordingly.
-
