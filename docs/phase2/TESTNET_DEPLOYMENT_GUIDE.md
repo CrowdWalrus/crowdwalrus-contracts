@@ -448,7 +448,7 @@ For **each** supported token type, you must:
 Get current Pyth price feed IDs from: https://www.pyth.network/developers/price-feed-ids#sui-testnet
 
 **Example Feed IDs (verify these at deployment time):**
-- **SUI/USD** — SUI has 9 decimals: `0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca`
+- **SUI/USD** — SUI has 9 decimals: `0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266`
 - **USDC/USD** — USDC has 6 decimals: `0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722`
 
 
@@ -456,7 +456,7 @@ Get current Pyth price feed IDs from: https://www.pyth.network/developers/price-
 
 ```bash
 # Verify this feed ID from Pyth documentation before using!
-export SUI_FEED_ID="0x0c723d5e6759de43502f5a10a51bce0858f25ab299147bb7d4fdceaf414cadca"
+export SUI_FEED_ID="0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266"
 
 # Add SUI token
 sui client call \
