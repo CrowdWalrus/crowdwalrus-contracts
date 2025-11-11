@@ -1,24 +1,24 @@
 # Crowd Walrus — Frontend Addresses (Sui Testnet)
 
-This file centralizes all on‑chain IDs and constants the frontend needs on Sui testnet for Phase 2.
+Centralized on‑chain IDs and constants the frontend needs on Sui testnet (Phase 2, fresh publish on 2025‑11‑11).
 
 ## Overview
 - Network: testnet
-- Package ID: `0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10`
+- Package ID: `0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e`
 - Deployer: `0x4fcb599f85adb345fd608c69040615caa7af84ec8bbf181569a4dbe7368acfbb`
 
 ## Core Shared Objects
-- CrowdWalrus (platform): `0x10e5b1e7f63c33d8e49eeac79168badfb9b271209bd12a59bbcde1ecd0187596`
+- CrowdWalrus (platform): `0xc6632fb8fc6b2ceb5dee81292855a5def8a7c4289c8c7aa9908d0d5373e1376b`
   - Root platform object used by admin entries and campaign creation.
-- PolicyRegistry: `0xaf5058f1ff30262fdeeeaa325b4b1ce12a73015abbf22867f63e9f449bb9e8c3`
+- PolicyRegistry: `0xd8f6ef8263676816f298c1f7f311829dd3ee67e26993832e842cb7660859f906`
   - Stores platform policy presets (e.g., "standard", "commercial").
-- ProfilesRegistry: `0xd72f3907908b0575afea266c457c0109690ab11e8568106364c76e2444c2aeac`
+- ProfilesRegistry: `0x2284d6443cbe5720da6b658237b66176a7c9746d2f8322c8a5cd0310357766b0`
   - Auto‑creates/looks up donor profiles.
-- BadgeConfig: `0x71c1e75eb42a29a81680f9f1e454e87468561a5cd28e2217e841c6693d00ea23`
+- BadgeConfig: `0x6faec79a14bcd741a97d5a42722c49e6abed148955e87cdce0ad9e505b6c5412`
   - Holds badge thresholds (USD + donation count) and level image URIs.
-- TokenRegistry: `0xee1330d94cd954ae58fd18a8336738562f05487fae56dda9c655f461eac52b6f`
+- TokenRegistry: `0x92909eb4d9ff776ef04ff37fb5e100426dabc3e2a3bae2e549bde01ebd410ae4`
   - Stores token metadata (symbol, name, decimals, Pyth feed, enabled, max_age_ms).
-- SuiNSManager: `0x48ceb4364109da3b9cd889d29dc9e14bafa5983777ccaa3f5d6385958b8190cf`
+- SuiNSManager: `0x73d8313a788722f5be2ea362cbb33ee9afac241d2bb88541aa6a93bf08e245ac`
   - Used by campaign creation to register subdomains.
 
 ## Global Objects
@@ -39,7 +39,7 @@ This file centralizes all on‑chain IDs and constants the frontend needs on Sui
   - Registry max_age_ms: 300000 (5 minutes)
 
 Notes:
-- Frontend should include a fresh Pyth price update for the selected token in the same PTB as the donation.
+- Frontend must include a fresh Pyth price update for the selected token in the same PTB as the donation.
 - Donor may optionally pass a stricter per‑tx max_age_ms; effective limit is min(registry, donor override).
 
 ## Policies (for campaign creation)
@@ -49,11 +49,11 @@ Notes:
 Pass `none` to use the default preset (standard) or `some("commercial")` to use the 5% preset when creating a campaign.
 
 ## Badges
-- Display<DonorBadge> object: `0x3e040f2d1efe17209a8acbdca994a46765654df45b4d59fc52b2f415d6933160`
+- Display<DonorBadge> object: `0x7bcb7c36670767496e30c8ca8c51bdce92f1e34ebd4661d10e62660b6ef643a6`
   - Wallet metadata template registered; required for rendering badge name/image/description/link.
 - Badge thresholds (USD micro): [5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000]
 - Donation counts: [2, 4, 6, 8, 10]
-- Image URIs (Walrus aggregator): level‑ordered list as configured on Nov 8, 2025.
+- Image URIs: configured on 2025‑11‑11 (see on‑chain BadgeConfig).
 
 ## SuiNS
 - SuiNSManager is wired with the production registration NFT.
@@ -65,8 +65,8 @@ Pass `none` to use the default preset (standard) or `some("commercial")` to use 
 
 ## Admin (testnet note)
 - Admin caps are intentionally kept on the deployer for testnet:
-  - AdminCap: `0x3d220d55745a74563ea5b0af717c2957bd17954be6403e738b8994875766afa3`
-  - SuiNS AdminCap: `0xafd251e536c837dc64ef58881965f2222b9e0f9966f9296f1f967367cb5da78b`
+  - AdminCap: `0x02596af627e9b4aa8aefbe4c83700934d51a44a559047c1e4f161e446a1f0775`
+  - SuiNS AdminCap: `0x729906c42824a50870f07ad6f30cc4dffba6e085b10e57072551bddcc6303041`
 
 ---
 If any of these change (new publish/upgrade), update this file and the frontend .env accordingly.
