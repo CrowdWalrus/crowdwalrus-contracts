@@ -31,7 +31,7 @@ rev = "sui-contract-testnet"
 
 These state IDs are used at runtime in PTBs (Programmable Transaction Blocks), not in Move.toml:
 
-- **Pyth State ID:** `0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0`
+- **Pyth State ID (Beta):** `0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c`
 - **Wormhole State ID:** `0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790`
 
 ### Architecture Notes
