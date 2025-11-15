@@ -173,7 +173,7 @@ export UPGRADE_CAP_ID="<owned by deployer>"
 export CLOCK="0x6"
 
 # Pyth State Objects (Testnet – verify current IDs at deployment time)
-export PYTH_STATE="0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0"
+export PYTH_STATE="0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c"
 export WORMHOLE_STATE="0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790"
 ```
 

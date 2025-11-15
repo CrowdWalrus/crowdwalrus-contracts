@@ -319,7 +319,7 @@ public(package) fun donate<T>(
 /// # Aborts
 /// - `profiles::profile_exists_error_code()`: Sender already has a profile (use `donate_and_award` instead).
 /// - All other abort paths surfaced by `donate<T>` (time window, token disabled, slippage, stale price, etc.).
-entry fun donate_and_award_first_time<T>(
+public fun donate_and_award_first_time<T>(
     campaign: &mut campaign::Campaign,
     stats: &mut campaign_stats::CampaignStats,
     registry: &token_registry::TokenRegistry,
@@ -403,7 +403,7 @@ entry fun donate_and_award_first_time<T>(
 /// # Aborts
 /// - `profiles::E_NOT_PROFILE_OWNER`: Sender does not own the provided profile.
 /// - Any abort surfaced by `donate<T>` (campaign inactive/closed, token disabled, slippage, stale price, etc.).
-entry fun donate_and_award<T>(
+public fun donate_and_award<T>(
     campaign: &mut campaign::Campaign,
     stats: &mut campaign_stats::CampaignStats,
     registry: &token_registry::TokenRegistry,
