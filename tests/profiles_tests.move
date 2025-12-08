@@ -275,7 +275,7 @@ fun test_create_profile_entry_creates_profile() {
 
 #[test, expected_failure(
     abort_code = profiles::E_PROFILE_EXISTS,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::profiles
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::profiles
 )]
 fun test_create_profile_entry_duplicate_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(OWNER);
@@ -300,7 +300,7 @@ fun test_create_profile_entry_duplicate_aborts() {
 
 #[test, expected_failure(
     abort_code = profiles::E_PROFILE_EXISTS,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::profiles
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::profiles
 )]
 fun test_profiles_registry_duplicate_creation_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(OWNER);
