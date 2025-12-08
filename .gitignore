@@ -117,3 +117,6 @@ temp/
 # *-lock.json
 package-lock.json
 bun.lock
+
+# Scripts
+scripts/
