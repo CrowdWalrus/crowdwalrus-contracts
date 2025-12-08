@@ -289,6 +289,78 @@ entry fun create_campaign(
     campaign_id
 }
 
+/// Set a SuiNS subdomain for a profile. Subdomains are immutable for the owner once set.
+entry fun set_profile_subdomain(
+    profile: &mut profiles::Profile,
+    suins_manager: &SuiNSManager,
+    suins: &mut SuiNS,
+    subdomain_name: String,
+    clock: &Clock,
+    ctx: &mut sui_tx_context::TxContext,
+) {
+    let sender = sui_tx_context::sender(ctx);
+    assert!(profiles::owner(profile) == sender, profiles::not_profile_owner_error_code());
+    profiles::assert_subdomain_not_set(profile);
+
+    let app = CrowdWalrusApp {};
+
+    let profile_id = sui_object::id(profile);
+    let subdomain_for_event = copy subdomain_name;
+
+    register_subdomain(
+        suins_manager,
+        &app,
+        suins,
+        clock,
+        copy subdomain_for_event,
+        profile_id.to_address(),
+        ctx,
+    );
+
+    profiles::set_subdomain(profile, subdomain_name);
+
+    profiles::emit_profile_subdomain_set(
+        profile_id,
+        sender,
+        subdomain_for_event,
+        clock::timestamp_ms(clock),
+    );
+}
+
+/// Admin-only removal of a profile's subdomain. Owners cannot clear or change their subdomain once set.
+entry fun remove_profile_subdomain(
+    suins_manager: &SuiNSManager,
+    admin_cap: &suins_manager::AdminCap,
+    suins: &mut SuiNS,
+    profile: &mut profiles::Profile,
+    clock: &Clock,
+    ctx: &sui_tx_context::TxContext,
+) {
+    let sender = sui_tx_context::sender(ctx);
+    let subdomain_opt = profiles::subdomain_name(profile);
+    assert!(std::option::is_some(&subdomain_opt), profiles::subdomain_not_set_error_code());
+    let subdomain_name = std::option::destroy_some(subdomain_opt);
+    let subdomain_for_event = copy subdomain_name;
+
+    suins_manager::remove_subdomain(
+        suins_manager,
+        admin_cap,
+        suins,
+        subdomain_name,
+        clock,
+    );
+
+    profiles::clear_subdomain(profile);
+
+    profiles::emit_profile_subdomain_removed(
+        sui_object::id(profile),
+        profiles::owner(profile),
+        subdomain_for_event,
+        clock::timestamp_ms(clock),
+        sender,
+    );
+}
+
 fun resolve_payout_policy(
     policy_registry: &platform_policy::PolicyRegistry,
     policy_name_opt: std::option::Option<String>,
