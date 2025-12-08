@@ -74,7 +74,7 @@ fun test_add_coin_registers_metadata() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = token_registry::E_COIN_EXISTS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::token_registry)]
+#[test, expected_failure(abort_code = token_registry::E_COIN_EXISTS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::token_registry)]
 fun test_add_coin_duplicate_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -310,7 +310,7 @@ fun test_set_max_age_updates_value() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = token_registry::E_BAD_FEED_ID, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::token_registry)]
+#[test, expected_failure(abort_code = token_registry::E_BAD_FEED_ID, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::token_registry)]
 fun test_add_coin_bad_feed_length_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -335,7 +335,7 @@ fun test_add_coin_bad_feed_length_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = token_registry::E_BAD_DECIMALS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::token_registry)]
+#[test, expected_failure(abort_code = token_registry::E_BAD_DECIMALS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::token_registry)]
 fun test_add_coin_bad_decimals_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -360,7 +360,7 @@ fun test_add_coin_bad_decimals_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = token_registry::E_COIN_NOT_FOUND, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::token_registry)]
+#[test, expected_failure(abort_code = token_registry::E_COIN_NOT_FOUND, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::token_registry)]
 fun test_set_enabled_missing_coin_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -383,7 +383,7 @@ fun test_set_enabled_missing_coin_aborts() {
 
 #[test, expected_failure(
     abort_code = crowd_walrus::E_NOT_AUTHORIZED,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::crowd_walrus
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus
 )]
 fun test_add_coin_requires_matching_admin_cap() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
