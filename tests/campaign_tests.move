@@ -471,17 +471,17 @@ public fun test_update_campaign_metadata_happy_path() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = campaign::E_INVALID_BPS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign)]
+#[test, expected_failure(abort_code = campaign::E_INVALID_BPS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
 public fun test_new_payout_policy_rejects_excess_bps() {
     let _policy = campaign::new_payout_policy(10_001, ADMIN, USER1);
 }
 
-#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign)]
+#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
 public fun test_new_payout_policy_rejects_zero_platform_address() {
     let _policy = campaign::new_payout_policy(100, @0x0, USER1);
 }
 
-#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign)]
+#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
 public fun test_new_payout_policy_rejects_zero_recipient_address() {
     let _policy = campaign::new_payout_policy(100, ADMIN, @0x0);
 }
@@ -549,7 +549,7 @@ public fun test_campaign_stats_id_defaults_and_setter() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = campaign::E_STATS_ALREADY_SET, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign)]
+#[test, expected_failure(abort_code = campaign::E_STATS_ALREADY_SET, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
 public fun test_campaign_stats_id_double_set_fails() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -864,7 +864,7 @@ public fun test_mark_deleted_sets_flags() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign)]
+#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
 public fun test_add_update_rejects_deleted_campaign() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -907,7 +907,7 @@ public fun test_add_update_rejects_deleted_campaign() {
 // === Campaign Creation Validation Tests ===
 // Note: These tests verify validation rules enforced during campaign creation
 
-#[test, expected_failure(abort_code = 6, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::crowd_walrus)] // E_START_DATE_IN_PAST
+#[test, expected_failure(abort_code = 6, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus)] // E_START_DATE_IN_PAST
 public fun test_create_campaign_start_date_in_past() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -961,7 +961,7 @@ public fun test_create_campaign_invalid_date_range() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = crowd_walrus::campaign::E_RECIPIENT_ADDRESS_INVALID, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::crowd_walrus)]
+#[test, expected_failure(abort_code = crowd_walrus::campaign::E_RECIPIENT_ADDRESS_INVALID, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus)]
 public fun test_create_campaign_invalid_recipient_address() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
