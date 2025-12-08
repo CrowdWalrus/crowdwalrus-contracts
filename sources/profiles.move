@@ -20,6 +20,8 @@ const E_EMPTY_VALUE: u64 = 8;
 const E_KEY_TOO_LONG: u64 = 9;
 const E_VALUE_TOO_LONG: u64 = 10;
 const E_TOO_MANY_METADATA_ENTRIES: u64 = 11;
+const E_SUBDOMAIN_ALREADY_SET: u64 = 12;
+const E_SUBDOMAIN_NOT_SET: u64 = 13;
 
 public(package) fun profile_exists_error_code(): u64 {
     E_PROFILE_EXISTS
@@ -27,6 +29,14 @@ public(package) fun profile_exists_error_code(): u64 {
 
 public(package) fun not_profile_owner_error_code(): u64 {
     E_NOT_PROFILE_OWNER
+}
+
+public(package) fun subdomain_already_set_error_code(): u64 {
+    E_SUBDOMAIN_ALREADY_SET
+}
+
+public(package) fun subdomain_not_set_error_code(): u64 {
+    E_SUBDOMAIN_NOT_SET
 }
 
 public struct ProfilesRegistry has key {
@@ -45,6 +55,21 @@ public struct ProfileMetadataUpdated has copy, drop {
     key: String,
     value: String,
     timestamp_ms: u64,
+}
+
+public struct ProfileSubdomainSet has copy, drop {
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+}
+
+public struct ProfileSubdomainRemoved has copy, drop {
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+    removed_by: address,
 }
 
 public struct RegistryKey has copy, drop, store {
@@ -166,6 +191,7 @@ public struct Profile has key {
     total_usd_micro: u64,
     total_donations_count: u64,
     badge_levels_earned: u16,
+    subdomain_name: std::option::Option<String>,
     metadata: VecMap<String, String>,
 }
 
@@ -187,6 +213,40 @@ public fun badge_levels_earned(profile: &Profile): u16 {
 
 public fun metadata(profile: &Profile): &VecMap<String, String> {
     &profile.metadata
+}
+
+public fun subdomain_name(profile: &Profile): std::option::Option<String> {
+    profile.subdomain_name
+}
+
+public(package) fun emit_profile_subdomain_set(
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+) {
+    event::emit(ProfileSubdomainSet {
+        profile_id,
+        owner,
+        subdomain_name,
+        timestamp_ms,
+    });
+}
+
+public(package) fun emit_profile_subdomain_removed(
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+    removed_by: address,
+) {
+    event::emit(ProfileSubdomainRemoved {
+        profile_id,
+        owner,
+        subdomain_name,
+        timestamp_ms,
+        removed_by,
+    });
 }
 
 #[test_only]
@@ -228,8 +288,23 @@ public(package) fun create(
         total_usd_micro: 0,
         total_donations_count: 0,
         badge_levels_earned: 0,
+        subdomain_name: std::option::none(),
         metadata,
     }
+}
+
+public(package) fun assert_subdomain_not_set(profile: &Profile) {
+    assert!(std::option::is_none(&profile.subdomain_name), E_SUBDOMAIN_ALREADY_SET);
+}
+
+public(package) fun set_subdomain(profile: &mut Profile, subdomain_name: String) {
+    assert_subdomain_not_set(profile);
+    profile.subdomain_name = std::option::some(subdomain_name);
+}
+
+public(package) fun clear_subdomain(profile: &mut Profile) {
+    assert!(std::option::is_some(&profile.subdomain_name), E_SUBDOMAIN_NOT_SET);
+    profile.subdomain_name = std::option::none();
 }
 
 public(package) fun add_contribution(profile: &mut Profile, amount_micro: u64) {
