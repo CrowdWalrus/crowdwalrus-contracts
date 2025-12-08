@@ -198,7 +198,7 @@ public fun test_add_donation_handles_many_coin_types() {
 
 #[test, expected_failure(
     abort_code = campaign_stats::E_OVERFLOW,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign_stats,
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign_stats,
 )]
 public fun test_add_donation_overflow_usd_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -238,7 +238,7 @@ public fun test_add_donation_overflow_usd_aborts() {
 
 #[test, expected_failure(
     abort_code = campaign_stats::E_OVERFLOW,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign_stats,
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign_stats,
 )]
 public fun test_add_donation_raw_overflow_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -278,7 +278,7 @@ public fun test_add_donation_raw_overflow_aborts() {
 
 #[test, expected_failure(
     abort_code = campaign_stats::E_OVERFLOW,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign_stats,
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign_stats,
 )]
 public fun test_add_donation_per_coin_count_overflow_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -318,7 +318,7 @@ public fun test_add_donation_per_coin_count_overflow_aborts() {
 
 #[test, expected_failure(
     abort_code = campaign_stats::E_STATS_ALREADY_EXISTS,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::campaign_stats
+    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign_stats
 )]
 public fun test_create_for_campaign_twice_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
