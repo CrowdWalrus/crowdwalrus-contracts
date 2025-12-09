@@ -772,6 +772,7 @@ After migration, proceed with Steps 5-11 (badge display, policies, tokens, etc.)
 3. **At least one token** must be added and enabled for donations to work
 4. **Most admin functions** require the Clock object (`0x6`) as an argument (exceptions: `set_suins_nft`, `migrate_token_registry`)
 5. **Recipient address** in campaign creation must be non-zero (enforced by contract)
+6. **Badge display edits** can now be done in-place via `badge_rewards::update_badge_display` (Publisher) or `crowd_walrus::update_badge_display_with_admin` (AdminCap). Each call edits the given keys, rebuilds the `link` from a `deep_link_base`, bumps the display version, and emits `BadgeDisplayUpdated` + `display::VersionUpdated` events so wallets refresh. Default production base: `https://crowdwalrus.xyz` and links resolve to `/profile/{owner}` (no level in path).
 
 ### Pyth Oracle Integration
 - Price updates must happen **in the same PTB** as donations
@@ -819,6 +820,46 @@ Based on actual testnet transactions:
 - ✅ Verify BadgeConfig is populated (call `update_badge_config`)
 - ✅ Check **BOTH** thresholds are met (amount AND count)
 - ✅ Confirm Display was set up (optional, but needed for wallet rendering)
+- ✅ If artwork/copy changed, run the display update entry to refresh metadata (see below)
+
+### Badge Display Updates (Testnet)
+- Display object ID: `0x3e040f2d1efe17209a8acbdca994a46765654df45b4d59fc52b2f415d6933160` (created in tx `CZWgWxEb318Z728Jt5CSPZSzXEBf9yeRkN6hWFXKeNub`).
+- To refresh fields and bump version:
+
+```bash
+# Use update_badge_display_with_admin for AdminCap; swap to badge_rewards::update_badge_display when using Publisher
+sui client call \
+  --package $PACKAGE_ID \
+  --module crowd_walrus \
+  --function update_badge_display_with_admin \
+  --args 0x3e040f2d1efe17209a8acbdca994a46765654df45b4d59fc52b2f415d6933160 \
+        $ADMIN_CAP_ID \
+        $CROWD_WALRUS_ID \
+        '["name","image_url","description"]' \
+        '["Crowd Walrus Donor Badge LVL {level}","{image_uri}","Updated copy"]' \
+        "https://crowdwalrus.xyz" \
+        0x6 \
+  --gas-budget 30000000
+```
+
+Notes: keep `keys`/`values` aligned; omit trailing slash in `deep_link_base` (the call appends `/profile/{owner}` automatically). Allowed keys: `name`, `image_url`, `description`; `link` is regenerated from the base.
+
+Finding the Display object ID after a new deploy: capture it from the `setup_badge_display` transaction effects, or query `sui client objects --owner <deployer-address> | grep Display<badge_rewards::DonorBadge>`.
+
+Removing display fields:
+```bash
+sui client call \
+  --package $PACKAGE_ID \
+  --module crowd_walrus \
+  --function remove_badge_display_keys_with_admin \
+  --args 0x3e040f2d1efe17209a8acbdca994a46765654df45b4d59fc52b2f415d6933160 \
+        $ADMIN_CAP_ID \
+        $CROWD_WALRUS_ID \
+        '["description"]' \
+        "https://crowdwalrus.xyz" \
+        0x6 \
+  --gas-budget 30000000
+```
 
 ### CLI errors
 - ✅ Use `none` not `'[]'` for Option<String> arguments
