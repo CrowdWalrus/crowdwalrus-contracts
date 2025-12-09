@@ -2,9 +2,12 @@
 module crowd_walrus::profile_subdomain_tests;
 
 use crowd_walrus::crowd_walrus::{Self as cw, CrowdWalrusApp};
+use crowd_walrus::crowd_walrus_tests;
 use crowd_walrus::profiles::{Self as profiles};
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager};
 use crowd_walrus::suins_manager_tests as sm_tests;
+use std::string::{Self as string};
+use std::unit_test::assert_eq;
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, ctx};
 use suins::domain;
@@ -14,6 +17,172 @@ use suins::suins::SuiNS;
 const ADMIN: address = @0xA;
 const OWNER: address = @0x1;
 const OTHER: address = @0x2;
+
+// Create + subdomain in a single PTB via public helpers.
+#[test]
+fun test_create_profile_and_subdomain_single_ptb() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock = scenario.take_shared<Clock>();
+
+    let mut profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ctx(&mut scenario),
+    );
+
+    let subdomain_name = sm_tests::get_test_subdomain_name(b"ptb-sub");
+    cw::set_profile_subdomain_public(
+        &mut profile,
+        &suins_manager,
+        &mut suins,
+        subdomain_name,
+        &clock,
+        ctx(&mut scenario),
+    );
+
+    let profile_id = sui::object::id(&profile);
+
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(suins_manager);
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let opt = profiles::subdomain_name(&profile_after);
+    assert!(std::option::is_some(&opt));
+    let value = std::option::destroy_some(opt);
+    assert!(value == subdomain_name);
+    ts::return_to_address(OWNER, profile_after);
+
+    let suins_read = scenario.take_shared<SuiNS>();
+    let mut record_opt = suins_read.registry<Registry>().lookup(domain::new(subdomain_name));
+    assert!(record_opt.is_some());
+    let record = record_opt.extract();
+    assert!(record.target_address() == std::option::some(profile_id.to_address()));
+    ts::return_shared(suins_read);
+
+    scenario.end();
+}
+
+// Create + metadata + subdomain all in one PTB to mirror the full onboarding flow.
+#[test]
+fun test_create_profile_metadata_and_subdomain_single_ptb() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock = scenario.take_shared<Clock>();
+
+    let mut profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ctx(&mut scenario),
+    );
+
+    profiles::upsert_profile_metadata(
+        &mut profile,
+        vector[string::utf8(b"name")],
+        vector[string::utf8(b"Full Setup")],
+        &clock,
+        ctx(&mut scenario),
+    );
+
+    let subdomain_name = sm_tests::get_test_subdomain_name(b"ptb-full");
+    cw::set_profile_subdomain_public(
+        &mut profile,
+        &suins_manager,
+        &mut suins,
+        subdomain_name,
+        &clock,
+        ctx(&mut scenario),
+    );
+
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(suins_manager);
+    ts::return_shared(suins);
+    ts::return_shared(clock);
+
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let metadata = profiles::metadata(&profile_after);
+    assert_eq!(metadata.length(), 1);
+    assert_eq!(
+        *metadata.get(&string::utf8(b"name")),
+        string::utf8(b"Full Setup"),
+    );
+    let opt = profiles::subdomain_name(&profile_after);
+    assert!(std::option::is_some(&opt));
+    let value = std::option::destroy_some(opt);
+    assert!(value == subdomain_name);
+    ts::return_to_address(OWNER, profile_after);
+
+    scenario.end();
+}
+
+// Create without subdomain, then set it later with the public helper.
+#[test]
+fun test_create_profile_then_add_subdomain_later() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    // Tx1: create profile only.
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let clock = scenario.take_shared<Clock>();
+    let profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ctx(&mut scenario),
+    );
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    // Tx2: set subdomain using the new helper.
+    scenario.next_tx(OWNER);
+    let suins_manager = scenario.take_shared<SuiNSManager>();
+    let mut suins = scenario.take_shared<SuiNS>();
+    let clock_set = scenario.take_shared<Clock>();
+    let mut profile_for_sub = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let subdomain_name = sm_tests::get_test_subdomain_name(b"later-sub");
+    cw::set_profile_subdomain_public(
+        &mut profile_for_sub,
+        &suins_manager,
+        &mut suins,
+        subdomain_name,
+        &clock_set,
+        ctx(&mut scenario),
+    );
+    ts::return_to_address(OWNER, profile_for_sub);
+    ts::return_shared(suins_manager);
+    ts::return_shared(suins);
+    ts::return_shared(clock_set);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let opt = profiles::subdomain_name(&profile_after);
+    assert!(std::option::is_some(&opt));
+    let value = std::option::destroy_some(opt);
+    assert!(value == subdomain_name);
+    ts::return_to_address(OWNER, profile_after);
+
+    scenario.end();
+}
 
 // Ensure the happy path registers the subdomain and stores it immutably on the profile.
 #[test]
