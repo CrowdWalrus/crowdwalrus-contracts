@@ -138,13 +138,25 @@ public(package) fun create_or_get_profile_for_sender(
     }
 }
 
+/// PTB-friendly helper that creates and registers a profile for the sender
+/// and returns the owned Profile object so callers can compose additional
+/// operations (metadata updates, subdomain registration, etc.) within the
+/// same transaction before transferring it out.
+public fun create_profile_for_sender(
+    registry: &mut ProfilesRegistry,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+): Profile {
+    create_for(registry, tx_ctx::sender(ctx), clock, ctx)
+}
+
 entry fun create_profile(
     registry: &mut ProfilesRegistry,
     clock: &Clock,
     ctx: &mut tx_ctx::TxContext,
 ) {
     let sender = tx_ctx::sender(ctx);
-    let profile = create_for(registry, sender, clock, ctx);
+    let profile = create_profile_for_sender(registry, clock, ctx);
     transfer_to(profile, sender);
 }
 
@@ -156,21 +168,57 @@ entry fun update_profile_metadata(
     clock: &Clock,
     ctx: &tx_ctx::TxContext,
 ) {
+    upsert_profile_metadata(
+        profile,
+        vector[key],
+        vector[value],
+        clock,
+        ctx,
+    );
+}
+
+/// Batch-capable metadata updater that emits one `ProfileMetadataUpdated` event
+/// per key/value pair. Accepts empty vectors (no-op) so callers can keep a
+/// single PTB structure regardless of whether metadata is provided.
+public fun upsert_profile_metadata(
+    profile: &mut Profile,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    clock: &Clock,
+    ctx: &tx_ctx::TxContext,
+) {
     let sender = tx_ctx::sender(ctx);
     assert!(profile.owner == sender, E_NOT_PROFILE_OWNER);
-    assert_valid_metadata_entry(&profile.metadata, &key, &value);
+    assert!(
+        std::vector::length(&metadata_keys) == std::vector::length(&metadata_values),
+        E_KEY_VALUE_MISMATCH,
+    );
 
-    let key_for_event = clone_string(&key);
-    let value_for_event = clone_string(&value);
-    insert_or_update_metadata(&mut profile.metadata, key, value);
+    let len = std::vector::length(&metadata_keys);
+    let mut i = 0;
+    while (i < len) {
+        let key_ref = std::vector::borrow(&metadata_keys, i);
+        let value_ref = std::vector::borrow(&metadata_values, i);
 
-    event::emit(ProfileMetadataUpdated {
-        profile_id: sui_object::id(profile),
-        owner: sender,
-        key: key_for_event,
-        value: value_for_event,
-        timestamp_ms: clock::timestamp_ms(clock),
-    });
+        assert_valid_metadata_entry(&profile.metadata, key_ref, value_ref);
+
+        let key_for_store = *key_ref;
+        let value_for_store = *value_ref;
+        let key_for_event = *key_ref;
+        let value_for_event = *value_ref;
+
+        insert_or_update_metadata(&mut profile.metadata, key_for_store, value_for_store);
+
+        event::emit(ProfileMetadataUpdated {
+            profile_id: sui_object::id(profile),
+            owner: sender,
+            key: key_for_event,
+            value: value_for_event,
+            timestamp_ms: clock::timestamp_ms(clock),
+        });
+
+        i = i + 1;
+    };
 }
 
 #[test_only]
@@ -404,11 +452,6 @@ fun insert_or_update_metadata(
     };
 }
 
-// Clone string by taking a substring spanning the entire value.
-fun clone_string(value: &String): String {
-    string::substring(value, 0, string::length(value))
-}
-
 public fun profile_metadata_updated_owner(event: &ProfileMetadataUpdated): address {
     event.owner
 }
@@ -420,11 +463,11 @@ public fun profile_metadata_updated_profile_id(
 }
 
 public fun profile_metadata_updated_key(event: &ProfileMetadataUpdated): String {
-    clone_string(&event.key)
+    copy event.key
 }
 
 public fun profile_metadata_updated_value(event: &ProfileMetadataUpdated): String {
-    clone_string(&event.value)
+    copy event.value
 }
 
 public fun profile_metadata_updated_timestamp_ms(event: &ProfileMetadataUpdated): u64 {
