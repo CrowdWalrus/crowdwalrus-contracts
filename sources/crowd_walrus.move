@@ -289,8 +289,7 @@ entry fun create_campaign(
     campaign_id
 }
 
-/// Set a SuiNS subdomain for a profile. Subdomains are immutable for the owner once set.
-entry fun set_profile_subdomain(
+fun set_profile_subdomain_internal(
     profile: &mut profiles::Profile,
     suins_manager: &SuiNSManager,
     suins: &mut SuiNS,
@@ -312,7 +311,7 @@ entry fun set_profile_subdomain(
         &app,
         suins,
         clock,
-        copy subdomain_for_event,
+        copy subdomain_name,
         profile_id.to_address(),
         ctx,
     );
@@ -324,6 +323,46 @@ entry fun set_profile_subdomain(
         sender,
         subdomain_for_event,
         clock::timestamp_ms(clock),
+    );
+}
+
+/// PTB-friendly helper so callers can compose profile creation,
+/// metadata updates, and SuiNS subdomain registration within a single
+/// transaction while holding the Profile by value.
+public fun set_profile_subdomain_public(
+    profile: &mut profiles::Profile,
+    suins_manager: &SuiNSManager,
+    suins: &mut SuiNS,
+    subdomain_name: String,
+    clock: &Clock,
+    ctx: &mut sui_tx_context::TxContext,
+) {
+    set_profile_subdomain_internal(
+        profile,
+        suins_manager,
+        suins,
+        subdomain_name,
+        clock,
+        ctx,
+    );
+}
+
+/// Set a SuiNS subdomain for a profile. Subdomains are immutable for the owner once set.
+entry fun set_profile_subdomain(
+    profile: &mut profiles::Profile,
+    suins_manager: &SuiNSManager,
+    suins: &mut SuiNS,
+    subdomain_name: String,
+    clock: &Clock,
+    ctx: &mut sui_tx_context::TxContext,
+) {
+    set_profile_subdomain_internal(
+        profile,
+        suins_manager,
+        suins,
+        subdomain_name,
+        clock,
+        ctx,
     );
 }
 
