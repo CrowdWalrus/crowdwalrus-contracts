@@ -2,11 +2,12 @@ module crowd_walrus::badge_rewards;
 
 use crowd_walrus::profiles::{Self as profiles};
 use std::string::{Self as string, String};
+use sui::vec_map;
 use sui::clock::{Self as clock, Clock};
 use sui::display;
 use sui::event;
 use sui::object::{Self as sui_object};
-use sui::package::Publisher;
+use sui::package::{Self as package, Publisher};
 use sui::tx_context::{Self as tx_ctx};
 
 const LEVEL_COUNT: u64 = 5;
@@ -17,6 +18,11 @@ const E_NOT_ASCENDING: u64 = 2;
 const E_EMPTY_URI: u64 = 3;
 const E_BAD_BADGE_LEVEL: u64 = 4;
 const E_INVALID_TOTALS: u64 = 5;
+const E_INVALID_PUBLISHER: u64 = 6;
+const E_BAD_DISPLAY_LENGTH: u64 = 7;
+
+const BADGE_DEEP_LINK_BASE_DEFAULT: vector<u8> = b"https://crowdwalrus.xyz";
+const BADGE_DEEP_LINK_SUFFIX: vector<u8> = b"/profile/{owner}";
 
 public struct BadgeConfig has key {
     id: sui_object::UID,
@@ -53,6 +59,12 @@ public struct BadgeMinted has copy, drop {
     timestamp_ms: u64,
 }
 
+public struct BadgeDisplayUpdated has copy, drop {
+    keys: vector<String>,
+    deep_link_template: String,
+    timestamp_ms: u64,
+}
+
 public fun badge_config_updated_amount_thresholds(event: &BadgeConfigUpdated): vector<u64> {
     clone_u64_vector(&event.amount_thresholds_micro)
 }
@@ -82,6 +94,18 @@ public fun badge_minted_profile_id(event: &BadgeMinted): sui_object::ID {
 }
 
 public fun badge_minted_timestamp_ms(event: &BadgeMinted): u64 {
+    event.timestamp_ms
+}
+
+public fun badge_display_updated_keys(event: &BadgeDisplayUpdated): vector<String> {
+    clone_string_vector(&event.keys)
+}
+
+public fun badge_display_updated_deep_link_template(event: &BadgeDisplayUpdated): String {
+    clone_string(&event.deep_link_template)
+}
+
+public fun badge_display_updated_timestamp_ms(event: &BadgeDisplayUpdated): u64 {
     event.timestamp_ms
 }
 
@@ -277,13 +301,136 @@ entry fun setup_badge_display(pub: &Publisher, ctx: &mut tx_ctx::TxContext) {
             string::utf8(b"Crowd Walrus Donor Badge Level {level}"),
             string::utf8(b"{image_uri}"),
             string::utf8(b"Rewarded to {owner} for reaching badge level {level}. Issued at {issued_at_ms} ms."),
-            // TODO: Replace placeholder badge deep link with final production URL.
-            string::utf8(b"https://crowdwalrus.app/badges/{owner}/{level}"),
+            default_badge_deep_link_template(),
         ],
         ctx,
     );
     display::update_version(&mut display);
     sui::transfer::public_share_object(display);
+}
+
+#[allow(lint(share_owned))]
+entry fun update_badge_display(
+    pub: &Publisher,
+    display: &mut display::Display<DonorBadge>,
+    keys: vector<String>,
+    values: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+    _ctx: &mut tx_ctx::TxContext,
+) {
+    assert!(package::from_package<DonorBadge>(pub), E_INVALID_PUBLISHER);
+    update_badge_display_internal(display, keys, values, deep_link_base, clock);
+}
+
+#[allow(lint(share_owned))]
+entry fun remove_badge_display_keys(
+    pub: &Publisher,
+    display: &mut display::Display<DonorBadge>,
+    keys: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+    _ctx: &mut tx_ctx::TxContext,
+) {
+    assert!(package::from_package<DonorBadge>(pub), E_INVALID_PUBLISHER);
+    remove_badge_display_internal(display, keys, deep_link_base, clock);
+}
+
+public(package) fun update_badge_display_internal(
+    display: &mut display::Display<DonorBadge>,
+    keys: vector<String>,
+    values: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+) {
+    assert!(vector::length(&keys) == vector::length(&values), E_BAD_DISPLAY_LENGTH);
+
+    apply_display_edits(display, &keys, &values);
+
+    set_link_template(display, &deep_link_base);
+
+    display::update_version(display);
+    event::emit(BadgeDisplayUpdated {
+        keys: clone_string_vector(&keys),
+        deep_link_template: deep_link_template(&deep_link_base),
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+public(package) fun remove_badge_display_internal(
+    display: &mut display::Display<DonorBadge>,
+    keys: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+) {
+    remove_display_keys(display, &keys);
+    set_link_template(display, &deep_link_base);
+    display::update_version(display);
+    event::emit(BadgeDisplayUpdated {
+        keys: clone_string_vector(&keys),
+        deep_link_template: deep_link_template(&deep_link_base),
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+fun apply_display_edits(
+    display: &mut display::Display<DonorBadge>,
+    keys: &vector<String>,
+    values: &vector<String>,
+) {
+    let mut idx = 0;
+    let len = vector::length(keys);
+    while (idx < len) {
+        let key_ref = vector::borrow(keys, idx);
+        let value_ref = vector::borrow(values, idx);
+        let key = clone_string(key_ref);
+        let value = clone_string(value_ref);
+        let exists = {
+            let snapshot = display::fields(display);
+            vec_map::contains(snapshot, &key)
+        };
+        if (exists) {
+            display::edit(display, key, value);
+        } else {
+            display::add(display, key, value);
+        };
+        idx = idx + 1;
+    };
+}
+
+fun remove_display_keys(
+    display: &mut display::Display<DonorBadge>,
+    keys: &vector<String>,
+) {
+    let mut idx = 0;
+    let len = vector::length(keys);
+    while (idx < len) {
+        let key_ref = vector::borrow(keys, idx);
+        display::remove(display, clone_string(key_ref));
+        idx = idx + 1;
+    };
+}
+
+fun set_link_template(display: &mut display::Display<DonorBadge>, base: &String) {
+    let link_key = string::utf8(b"link");
+    let link_value = deep_link_template(base);
+    let fields = display::fields(display);
+    if (vec_map::contains(fields, &link_key)) {
+        display::edit(display, link_key, link_value);
+    } else {
+        display::add(display, link_key, link_value);
+    };
+}
+
+fun deep_link_template(base: &String): String {
+    let mut template = clone_string(base);
+    string::append_utf8(&mut template, BADGE_DEEP_LINK_SUFFIX);
+    template
+}
+
+fun default_badge_deep_link_template(): String {
+    let base = string::utf8(BADGE_DEEP_LINK_BASE_DEFAULT);
+    deep_link_template(&base)
 }
 
 fun validate_inputs(
