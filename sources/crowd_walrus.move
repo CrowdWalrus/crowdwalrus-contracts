@@ -11,6 +11,7 @@ use std::string::{Self as string, String};
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field::{Self as df};
 use sui::event::{Self as event};
+use sui::display;
 use sui::object::{Self as sui_object};
 use sui::package;
 use sui::tx_context::{Self as sui_tx_context};
@@ -1010,6 +1011,44 @@ entry fun update_badge_config(
         amount_thresholds_micro,
         payment_thresholds,
         image_uris,
+        clock,
+    );
+}
+
+entry fun update_badge_display_with_admin(
+    display: &mut display::Display<badge_rewards::DonorBadge>,
+    admin_cap: &AdminCap,
+    crowd_walrus_id: sui_object::ID,
+    keys: vector<String>,
+    values: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    assert_admin_cap_for(admin_cap, crowd_walrus_id);
+    badge_rewards::update_badge_display_internal(
+        display,
+        keys,
+        values,
+        deep_link_base,
+        clock,
+    );
+}
+
+entry fun remove_badge_display_keys_with_admin(
+    display: &mut display::Display<badge_rewards::DonorBadge>,
+    admin_cap: &AdminCap,
+    crowd_walrus_id: sui_object::ID,
+    keys: vector<String>,
+    deep_link_base: String,
+    clock: &Clock,
+    _ctx: &mut sui_tx_context::TxContext,
+) {
+    assert_admin_cap_for(admin_cap, crowd_walrus_id);
+    badge_rewards::remove_badge_display_internal(
+        display,
+        keys,
+        deep_link_base,
         clock,
     );
 }
