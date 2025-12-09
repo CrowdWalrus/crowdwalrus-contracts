@@ -357,12 +357,321 @@ fun test_setup_badge_display_registers_templates() {
         b"Rewarded to {owner} for reaching badge level {level}. Issued at {issued_at_ms} ms.",
     );
     let expected_link =
-        string::utf8(b"https://crowdwalrus.app/badges/{owner}/{level}");
+        string::utf8(b"https://crowdwalrus.xyz/profile/{owner}");
     assert_eq!(*vec_map::get(fields, &name_key), expected_name);
     assert_eq!(*vec_map::get(fields, &image_key), expected_image);
     assert_eq!(*vec_map::get(fields, &description_key), expected_description);
     assert_eq!(*vec_map::get(fields, &link_key), expected_link);
     ts::return_shared(display_obj);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_update_badge_display_bumps_version_and_updates_templates() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let tx = ctx(&mut scenario);
+    let publisher = badge_rewards::test_claim_publisher(tx);
+    badge_rewards::setup_badge_display(&publisher, tx);
+    publisher.burn();
+    let _ = ts::next_tx(&mut scenario, ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let mut display_obj =
+        scenario.take_shared<display::Display<badge_rewards::DonorBadge>>();
+    let mut clock_obj = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock_obj, 25_000);
+    let tx_update = ctx(&mut scenario);
+    let publisher = badge_rewards::test_claim_publisher(tx_update);
+
+    let version_events_before = vector::length(
+        &event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>(),
+    );
+
+    badge_rewards::update_badge_display(
+        &publisher,
+        &mut display_obj,
+        vector[
+            string::utf8(b"name"),
+            string::utf8(b"description"),
+            string::utf8(b"image_url"),
+        ],
+        vector[
+            string::utf8(b"Crowd Walrus Badge LVL {level}"),
+            string::utf8(b"Updated for {owner}"),
+            string::utf8(b"https://cdn.crowdwalrus.app/badges/{level}.png"),
+        ],
+        string::utf8(b"https://staging.crowdwalrus.app"),
+        &clock_obj,
+        tx_update,
+    );
+
+    let version_events_after =
+        event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>();
+    assert_eq!(
+        vector::length(&version_events_after),
+        version_events_before + 1,
+    );
+
+    let display_events = event::events_by_type<badge_rewards::BadgeDisplayUpdated>();
+    let last_display_event =
+        vector::borrow(&display_events, vector::length(&display_events) - 1);
+    let expected_link =
+        string::utf8(b"https://staging.crowdwalrus.app/profile/{owner}");
+    assert_eq!(
+        badge_rewards::badge_display_updated_deep_link_template(last_display_event),
+        expected_link,
+    );
+
+    let fields = display::fields(&display_obj);
+    let name_key = string::utf8(b"name");
+    let image_key = string::utf8(b"image_url");
+    let description_key = string::utf8(b"description");
+    let link_key = string::utf8(b"link");
+    assert_eq!(
+        *vec_map::get(fields, &name_key),
+        string::utf8(b"Crowd Walrus Badge LVL {level}"),
+    );
+    assert_eq!(
+        *vec_map::get(fields, &image_key),
+        string::utf8(b"https://cdn.crowdwalrus.app/badges/{level}.png"),
+    );
+    assert_eq!(
+        *vec_map::get(fields, &description_key),
+        string::utf8(b"Updated for {owner}"),
+    );
+    assert_eq!(*vec_map::get(fields, &link_key), expected_link);
+
+    ts::return_shared(clock_obj);
+    ts::return_shared(display_obj);
+    publisher.burn();
+
+    let effects = ts::next_tx(&mut scenario, ADMIN);
+    assert_eq!(ts::num_user_events(&effects), 2);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_update_badge_display_with_admin_cap() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let tx = ctx(&mut scenario);
+    let publisher = badge_rewards::test_claim_publisher(tx);
+    badge_rewards::setup_badge_display(&publisher, tx);
+    publisher.burn();
+    let _ = ts::next_tx(&mut scenario, ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let mut display_obj =
+        scenario.take_shared<display::Display<badge_rewards::DonorBadge>>();
+    let admin_cap = scenario.take_from_sender<crowd_walrus::AdminCap>();
+    let crowd_walrus_id = crowd_walrus::admin_cap_crowd_walrus_id(&admin_cap);
+    let mut clock_obj = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock_obj, 33_333);
+
+    let version_events_before = vector::length(
+        &event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>(),
+    );
+
+    crowd_walrus::update_badge_display_with_admin(
+        &mut display_obj,
+        &admin_cap,
+        crowd_walrus_id,
+        vector[
+            string::utf8(b"name"),
+        ],
+        vector[
+            string::utf8(b"Reissued {level}"),
+        ],
+        string::utf8(b"https://app.crowdwalrus.com"),
+        &clock_obj,
+        ctx(&mut scenario),
+    );
+
+    let version_events_after =
+        event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>();
+    assert_eq!(
+        vector::length(&version_events_after),
+        version_events_before + 1,
+    );
+
+    let link_key = string::utf8(b"link");
+    let name_key = string::utf8(b"name");
+    let fields = display::fields(&display_obj);
+    assert_eq!(
+        *vec_map::get(fields, &link_key),
+        string::utf8(b"https://app.crowdwalrus.com/profile/{owner}"),
+    );
+    assert_eq!(
+        *vec_map::get(fields, &name_key),
+        string::utf8(b"Reissued {level}"),
+    );
+
+    let display_events = event::events_by_type<badge_rewards::BadgeDisplayUpdated>();
+    let last_display_event =
+        vector::borrow(&display_events, vector::length(&display_events) - 1);
+    assert_eq!(
+        badge_rewards::badge_display_updated_timestamp_ms(last_display_event),
+        33_333,
+    );
+
+    ts::return_shared(clock_obj);
+    ts::return_shared(display_obj);
+    scenario.return_to_sender(admin_cap);
+
+    let effects = ts::next_tx(&mut scenario, ADMIN);
+    assert_eq!(ts::num_user_events(&effects), 2);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_remove_badge_display_keys() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let tx = ctx(&mut scenario);
+    let publisher = badge_rewards::test_claim_publisher(tx);
+    badge_rewards::setup_badge_display(&publisher, tx);
+    publisher.burn();
+    let _ = ts::next_tx(&mut scenario, ADMIN);
+
+    scenario.next_tx(ADMIN);
+    let mut display_obj =
+        scenario.take_shared<display::Display<badge_rewards::DonorBadge>>();
+    let mut clock_obj = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock_obj, 44_444);
+    let tx_update = ctx(&mut scenario);
+    let publisher = badge_rewards::test_claim_publisher(tx_update);
+
+    let version_before =
+        vector::length(&event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>());
+
+    badge_rewards::remove_badge_display_keys(
+        &publisher,
+        &mut display_obj,
+        vector[string::utf8(b"description")],
+        string::utf8(b"https://crowdwalrus.xyz"),
+        &clock_obj,
+        tx_update,
+    );
+
+    let fields = display::fields(&display_obj);
+    let description_key = string::utf8(b"description");
+    assert!(!vec_map::contains(fields, &description_key));
+    let link_key = string::utf8(b"link");
+    assert_eq!(
+        *vec_map::get(fields, &link_key),
+        string::utf8(b"https://crowdwalrus.xyz/profile/{owner}"),
+    );
+
+    let version_events_after =
+        event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>();
+    assert_eq!(
+        vector::length(&version_events_after),
+        version_before + 1,
+    );
+
+    let display_events = event::events_by_type<badge_rewards::BadgeDisplayUpdated>();
+    let last_display_event =
+        vector::borrow(&display_events, vector::length(&display_events) - 1);
+    assert_eq!(
+        badge_rewards::badge_display_updated_deep_link_template(last_display_event),
+        string::utf8(b"https://crowdwalrus.xyz/profile/{owner}"),
+    );
+
+    ts::return_shared(clock_obj);
+    ts::return_shared(display_obj);
+    publisher.burn();
+
+    let effects = ts::next_tx(&mut scenario, ADMIN);
+    assert_eq!(ts::num_user_events(&effects), 2);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_remove_then_restore_badge_display_field_with_publisher() {
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    // Set up initial display
+    scenario.next_tx(ADMIN);
+    let tx_setup = ctx(&mut scenario);
+    let publisher_setup = badge_rewards::test_claim_publisher(tx_setup);
+    badge_rewards::setup_badge_display(&publisher_setup, tx_setup);
+    publisher_setup.burn();
+    let _ = ts::next_tx(&mut scenario, ADMIN);
+
+    // Remove description
+    scenario.next_tx(ADMIN);
+    let mut display_obj =
+        scenario.take_shared<display::Display<badge_rewards::DonorBadge>>();
+    let mut clock_obj = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock_obj, 50_000);
+    let tx_remove = ctx(&mut scenario);
+    let publisher_remove = badge_rewards::test_claim_publisher(tx_remove);
+
+    badge_rewards::remove_badge_display_keys(
+        &publisher_remove,
+        &mut display_obj,
+        vector[string::utf8(b"description")],
+        string::utf8(b"https://crowdwalrus.xyz"),
+        &clock_obj,
+        tx_remove,
+    );
+
+    let fields_after_remove = display::fields(&display_obj);
+    let description_key = string::utf8(b"description");
+    assert!(!vec_map::contains(fields_after_remove, &description_key));
+    publisher_remove.burn();
+
+    let version_events_remove =
+        event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>();
+    assert_eq!(vector::length(&version_events_remove), 1);
+
+    ts::return_shared(clock_obj);
+    ts::return_shared(display_obj);
+    let _ = ts::next_tx(&mut scenario, ADMIN);
+
+    // Restore description via update
+    scenario.next_tx(ADMIN);
+    let mut display_obj_restore =
+        scenario.take_shared<display::Display<badge_rewards::DonorBadge>>();
+    let mut clock_restore = scenario.take_shared<Clock>();
+    clock::set_for_testing(&mut clock_restore, 55_000);
+    let tx_update = ctx(&mut scenario);
+    let publisher_update = badge_rewards::test_claim_publisher(tx_update);
+
+    badge_rewards::update_badge_display(
+        &publisher_update,
+        &mut display_obj_restore,
+        vector[string::utf8(b"description")],
+        vector[string::utf8(b"Restored description {owner}")],
+        string::utf8(b"https://crowdwalrus.xyz"),
+        &clock_restore,
+        tx_update,
+    );
+
+    let fields_after_update = display::fields(&display_obj_restore);
+    assert_eq!(
+        *vec_map::get(fields_after_update, &description_key),
+        string::utf8(b"Restored description {owner}"),
+    );
+
+    let version_events_final =
+        event::events_by_type<display::VersionUpdated<badge_rewards::DonorBadge>>();
+    assert_eq!(vector::length(&version_events_final), 1);
+
+    ts::return_shared(clock_restore);
+    ts::return_shared(display_obj_restore);
+    publisher_update.burn();
+
+    let effects = ts::next_tx(&mut scenario, ADMIN);
+    assert_eq!(ts::num_user_events(&effects), 2);
 
     ts::end(scenario);
 }
