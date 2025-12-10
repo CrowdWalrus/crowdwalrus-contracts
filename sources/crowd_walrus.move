@@ -283,7 +283,7 @@ entry fun create_campaign(
     );
     campaign::share(campaign_obj);
 
-    transfer::public_transfer(campaign_owner_cap, sui_tx_context::sender(ctx));
+    campaign::transfer_owner_cap(campaign_owner_cap, sui_tx_context::sender(ctx));
     event::emit(CampaignCreated {
         campaign_id,
         creator: sui_tx_context::sender(ctx),
