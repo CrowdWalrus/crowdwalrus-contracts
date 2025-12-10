@@ -16,6 +16,7 @@ use sui::object::{Self as sui_object};
 use sui::package;
 use sui::tx_context::{Self as sui_tx_context};
 use sui::vec_map::{Self as vec_map};
+use sui::vec_set::{Self as vec_set, VecSet};
 use suins::suins::SuiNS;
 
 public struct CROWD_WALRUS has drop {}
@@ -28,6 +29,8 @@ const E_NOT_AUTHORIZED: u64 = 1;
 const E_ALREADY_VERIFIED: u64 = 2;
 const E_NOT_VERIFIED: u64 = 3;
 const E_TOKEN_REGISTRY_NOT_INITIALIZED: u64 = 4;
+const E_VERIFY_CAP_REVOKED: u64 = 5;
+const E_VERIFY_CAP_NOT_REVOKED: u64 = 6;
 
 const DEFAULT_POLICY_NAME: vector<u8> = b"standard";
 
@@ -58,6 +61,8 @@ public struct CrowdWalrus has key, store {
     /// Shared badge configuration ObjectID created at publish time.
     /// Note: Created empty; platform admins must configure thresholds and URIs before badge minting.
     badge_config_id: sui_object::ID,
+    /// Blocklist of revoked verification capabilities.
+    revoked_verify_caps: VecSet<sui_object::ID>,
 }
 
 /// Capability for admin operations
@@ -90,6 +95,12 @@ public struct CampaignDeleted has copy, drop {
     campaign_id: sui_object::ID,
     editor: address,
     timestamp_ms: u64,
+}
+
+public struct VerifyCapRevoked has copy, drop {
+    crowd_walrus_id: sui_object::ID,
+    verify_cap_id: sui_object::ID,
+    revoked_by: address,
 }
 
 public struct PolicyRegistryCreated has copy, drop {
@@ -151,6 +162,7 @@ fun init(otw: CROWD_WALRUS, ctx: &mut sui_tx_context::TxContext) {
         policy_registry_id,
         profiles_registry_id,
         badge_config_id,
+        revoked_verify_caps: vec_set::empty(),
     };
     record_token_registry_id(&mut crowd_walrus, token_registry_id);
 
@@ -435,6 +447,11 @@ entry fun verify_campaign(
     let campaign_id = sui_object::id(campaign);
 
     assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    let verify_cap_id = sui_object::id(cap);
+    assert!(
+        !vec_set::contains(&crowd_walrus.revoked_verify_caps, &verify_cap_id),
+        E_VERIFY_CAP_REVOKED,
+    );
     assert!(!campaign::is_verified(campaign), E_ALREADY_VERIFIED);
     campaign::assert_not_deleted(campaign);
 
@@ -455,6 +472,11 @@ entry fun unverify_campaign(
 ) {
 
     assert!(sui_object::id(crowd_walrus) == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+    let verify_cap_id = sui_object::id(cap);
+    assert!(
+        !vec_set::contains(&crowd_walrus.revoked_verify_caps, &verify_cap_id),
+        E_VERIFY_CAP_REVOKED,
+    );
     assert!(campaign::is_verified(campaign), E_NOT_VERIFIED);
 
     campaign::set_verified(campaign, &CrowdWalrusApp {}, false);
@@ -546,6 +568,43 @@ entry fun create_verify_cap(
     )
 }
 
+/// Revoke a verification capability by Object ID. Does not require possession of the cap.
+entry fun revoke_verify_cap(
+    crowd_walrus: &mut CrowdWalrus,
+    cap: &AdminCap,
+    verify_cap_id: sui_object::ID,
+    ctx: &sui_tx_context::TxContext,
+) {
+    let crowd_walrus_id = sui_object::id(crowd_walrus);
+    assert!(crowd_walrus_id == cap.crowd_walrus_id, E_NOT_AUTHORIZED);
+
+    if (!vec_set::contains(&crowd_walrus.revoked_verify_caps, &verify_cap_id)) {
+        vec_set::insert(&mut crowd_walrus.revoked_verify_caps, verify_cap_id);
+        event::emit(VerifyCapRevoked {
+            crowd_walrus_id,
+            verify_cap_id,
+            revoked_by: sui_tx_context::sender(ctx),
+        });
+    };
+}
+
+/// Allow holders to burn a revoked verification capability for wallet hygiene.
+entry fun destroy_revoked_verify_cap(
+    crowd_walrus: &CrowdWalrus,
+    cap: VerifyCap,
+    _ctx: &sui_tx_context::TxContext,
+) {
+    assert!(cap.crowd_walrus_id == sui_object::id(crowd_walrus), E_NOT_AUTHORIZED);
+    let verify_cap_id = sui_object::id(&cap);
+    assert!(
+        vec_set::contains(&crowd_walrus.revoked_verify_caps, &verify_cap_id),
+        E_VERIFY_CAP_NOT_REVOKED,
+    );
+
+    let VerifyCap { id, crowd_walrus_id: _ } = cap;
+    sui_object::delete(id);
+}
+
 // === View Functions ===
 /// Get Admin Cap crowd_walrus_id
 public fun crowd_walrus_id(cap: &AdminCap): sui_object::ID {
@@ -597,6 +656,11 @@ public fun is_campaign_verified(_crowd_walrus: &CrowdWalrus, campaign: &campaign
     campaign::is_verified(campaign)
 }
 
+/// Check whether a VerifyCap (by ID) has been revoked for this CrowdWalrus instance.
+public fun is_verify_cap_revoked(crowd_walrus: &CrowdWalrus, cap_id: sui_object::ID): bool {
+    vec_set::contains(&crowd_walrus.revoked_verify_caps, &cap_id)
+}
+
 #[test]
 public fun test_init_function() {
     use sui::test_scenario::{Self as ts, ctx};
@@ -607,7 +671,7 @@ public fun test_init_function() {
 
     scenario.next_tx(publisher_address);
 
-    let crowd_walrus = scenario.take_shared<CrowdWalrus>();
+    let mut crowd_walrus = scenario.take_shared<CrowdWalrus>();
     let crowd_walrus_cap = scenario.take_from_sender<AdminCap>();
     assert!(sui_object::id(&crowd_walrus) == crowd_walrus_cap.crowd_walrus_id);
 
@@ -620,6 +684,17 @@ public fun test_init_function() {
     assert!(sui_object::id(&profiles_registry) == profiles_registry_id(&crowd_walrus));
     assert!(sui_object::id(&token_registry) == token_registry_id(&crowd_walrus));
     assert!(sui_object::id(&badge_config) == badge_config_id(&crowd_walrus));
+
+    // verify cap revocation view helper
+    let verify_cap_id = create_verify_cap_for_user(
+        sui_object::id(&crowd_walrus),
+        publisher_address,
+        ctx(&mut scenario),
+    );
+    assert!(!is_verify_cap_revoked(&crowd_walrus, verify_cap_id));
+
+    revoke_verify_cap(&mut crowd_walrus, &crowd_walrus_cap, verify_cap_id, ctx(&mut scenario));
+    assert!(is_verify_cap_revoked(&crowd_walrus, verify_cap_id));
 
     let suins_manager_cap = scenario.take_from_sender<suins_manager::AdminCap>();
     let suins_manager = scenario.take_shared<suins_manager::SuiNSManager>();
@@ -672,6 +747,7 @@ public fun test_migrate_token_registry_creates_when_missing() {
         policy_registry_id,
         profiles_registry_id,
         badge_config_id,
+        revoked_verify_caps: vec_set::empty(),
     };
     transfer::share_object(crowd_walrus);
 
@@ -735,6 +811,7 @@ public fun create_and_share_crowd_walrus(ctx: &mut sui_tx_context::TxContext): s
         policy_registry_id,
         profiles_registry_id,
         badge_config_id,
+        revoked_verify_caps: vec_set::empty(),
     };
     record_token_registry_id(&mut crowd_walrus, token_registry_id);
     transfer::share_object(crowd_walrus);
