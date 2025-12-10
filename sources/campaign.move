@@ -112,7 +112,10 @@ public struct UpdateKey has copy, drop, store {
     sequence: u64,
 }
 
-public struct CampaignOwnerCap has key, store {
+/// Soulbound capability tied to the campaign creator. Lacks the `store`
+/// ability, preventing transfers outside this module via
+/// `transfer::public_transfer`.
+public struct CampaignOwnerCap has key {
     id: object::UID,
     campaign_id: object::ID,
 }
@@ -360,7 +363,16 @@ public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
     campaign_owner_cap.campaign_id
 }
 
-public fun delete_owner_cap(cap: CampaignOwnerCap) {
+/// Internal helper to deliver the owner cap from this module while keeping it
+/// non-transferable elsewhere.
+public(package) fun transfer_owner_cap(cap: CampaignOwnerCap, recipient: address) {
+    transfer::transfer(cap, recipient);
+}
+
+/// Destroy an owner cap (used when tearing down a campaign). This is kept
+/// package-visible to avoid external callers accidentally burning their own
+/// capability and losing control of an active campaign.
+public(package) fun delete_owner_cap(cap: CampaignOwnerCap) {
     let CampaignOwnerCap { id, campaign_id: _ } = cap;
     object::delete(id);
 }
