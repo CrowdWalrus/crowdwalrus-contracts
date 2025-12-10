@@ -66,8 +66,9 @@ public struct AdminCap has key, store {
     crowd_walrus_id: sui_object::ID,
 }
 
-/// Capability for verifying admin operations
-public struct VerifyCap has key, store {
+/// Capability for verifying admin operations.
+/// Does not have `store`, making it soulbound (non-transferable) once issued.
+public struct VerifyCap has key {
     id: sui_object::UID,
     crowd_walrus_id: sui_object::ID,
 }
