@@ -38,6 +38,7 @@ The codebase uses a witness-based authorization pattern throughout:
 1. **CrowdWalrusApp**: Witness type defined in `crowd_walrus.move` that authorizes operations across modules
 2. **AppKey<App>**: Generic authorization key stored as dynamic fields to grant apps access to protected features
 3. Capabilities (`AdminCap`, `VerifyCap`, `CampaignOwnerCap`): Token-based permissions system
+   - `VerifyCap` is soulbound (no `store` ability) so verifiers cannot transfer it
 
 When calling protected functions, modules check authorization via `assert_app_is_authorized<App>()`.
 
@@ -51,7 +52,7 @@ When calling protected functions, modules check authorization via `assert_app_is
 ### Verification System
 
 - `CrowdWalrus` emits verification events; campaigns keep their own `is_verified` flag
-- Only holders of `VerifyCap` can verify/unverify campaigns
+- Only holders of `VerifyCap` can verify/unverify campaigns; the cap is non-transferable once issued
 - Admin can create new `VerifyCap` tokens via `create_verify_cap()`
 - Verification status is stored both in the central registry and on the campaign object itself
 
