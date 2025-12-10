@@ -52,7 +52,7 @@ public struct CampaignCreated has copy, drop {
 // === Structs ===
 
 /// The crowd walrus object
-public struct CrowdWalrus has key, store {
+public struct CrowdWalrus has key {
     id: sui_object::UID,
     /// Shared policy presets registry ObjectID created at publish time.
     policy_registry_id: sui_object::ID,
