@@ -1389,15 +1389,15 @@ public fun test_add_update_duplicate_metadata_keys() {
 }
 
 #[test]
-public fun test_update_author_after_cap_transfer() {
+public fun test_update_author_is_creator() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
     let campaign_id = crowd_walrus_tests::create_test_campaign(
         &mut scenario,
-        utf8(b"Transfer Campaign"),
-        utf8(b"Testing cap transfer"),
-        b"transfer",
+        utf8(b"Soulbound Campaign"),
+        utf8(b"Owner cap stays with creator"),
+        b"soulbound",
         vector::empty(),
         vector::empty(),
         1_000_000,
@@ -1406,22 +1406,16 @@ public fun test_update_author_after_cap_transfer() {
         U64_MAX,
     );
 
-    // Transfer CampaignOwnerCap from USER1 to USER2
     scenario.next_tx(USER1);
-    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
-    sui::transfer::public_transfer(campaign_owner_cap, USER2);
-
-    // USER2 posts update
-    scenario.next_tx(USER2);
     let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
-    let transferred_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
     let clock = scenario.take_shared<Clock>();
 
     crowd_walrus::campaign::add_update(
         &mut campaign_obj,
-        &transferred_cap,
+        &campaign_owner_cap,
         vector[utf8(b"note")],
-        vector[utf8(b"posted by user2")],
+        vector[utf8(b"posted by creator")],
         &clock,
         ts::ctx(&mut scenario),
     );
@@ -1429,14 +1423,14 @@ public fun test_update_author_after_cap_transfer() {
     let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
 
     ts::return_shared(campaign_obj);
-    scenario.return_to_sender(transferred_cap);
+    scenario.return_to_sender(campaign_owner_cap);
     ts::return_shared(clock);
 
-    scenario.next_tx(USER2);
+    scenario.next_tx(USER1);
     let update = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id);
     assert_eq!(
         crowd_walrus::campaign::update_author(&update),
-        USER2
+        USER1
     );
     ts::return_immutable(update);
     scenario.end();
