@@ -273,6 +273,216 @@ public fun test_verify_campaign() {
     sc.end();
 }
 
+#[test, expected_failure(abort_code = crowd_walrus::E_VERIFY_CAP_REVOKED)]
+public fun test_revoke_verify_cap_blocks_verification() {
+    let verifier = USER1;
+    let campaign_owner = USER2;
+
+    let mut sc = test_init(ADMIN);
+
+    // Issue verify cap to verifier
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Fetch cap ID from verifier wallet
+    sc.next_tx(verifier);
+    let verify_cap = sc.take_from_sender<VerifyCap>();
+    let verify_cap_id = sui_object::id(&verify_cap);
+    sc.return_to_sender(verify_cap);
+
+    // Revoke the cap using admin authority
+    {
+        sc.next_tx(ADMIN);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        crowd_walrus::revoke_verify_cap(&mut crowd, &admin_cap, verify_cap_id, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign to attempt verification with revoked cap
+    {
+        sc.next_tx(campaign_owner);
+        create_test_campaign(
+            &mut sc,
+            string::utf8(b"Revoked Cap Campaign"),
+            string::utf8(b""),
+            b"revoked-verify",
+            vector::empty(),
+            vector::empty(),
+            1_000_000,
+            campaign_owner,
+            0,
+            U64_MAX,
+        );
+    };
+
+    // Verification attempt must abort because cap is revoked
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared<Campaign>();
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = crowd_walrus::E_VERIFY_CAP_REVOKED)]
+public fun test_revoke_verify_cap_blocks_unverification() {
+    let verifier = USER1;
+    let campaign_owner = USER2;
+
+    let mut sc = test_init(ADMIN);
+
+    // Issue verify cap
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Create campaign and verify it
+    sc.next_tx(campaign_owner);
+    let campaign_id = create_test_campaign(
+        &mut sc,
+        string::utf8(b"Revoked Unverify"),
+        string::utf8(b""),
+        b"revoked-unverify",
+        vector::empty(),
+        vector::empty(),
+        1_000_000,
+        campaign_owner,
+        0,
+        U64_MAX,
+    );
+
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::verify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Revoke cap
+    sc.next_tx(verifier);
+    let verify_cap = sc.take_from_sender<VerifyCap>();
+    let verify_cap_id = sui_object::id(&verify_cap);
+    sc.return_to_sender(verify_cap);
+
+    {
+        sc.next_tx(ADMIN);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        crowd_walrus::revoke_verify_cap(&mut crowd, &admin_cap, verify_cap_id, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Attempt to unverify with revoked cap should abort
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let mut campaign = sc.take_shared_by_id<Campaign>(campaign_id);
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::unverify_campaign(&crowd, &verify_cap, &mut campaign, ctx(&mut sc));
+        ts::return_shared(campaign);
+        sc.return_to_sender(verify_cap);
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test]
+public fun test_destroy_revoked_verify_cap_allows_cleanup() {
+    let verifier = USER1;
+    let mut sc = test_init(ADMIN);
+
+    // Issue verify cap
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Grab cap id
+    sc.next_tx(verifier);
+    let verify_cap = sc.take_from_sender<VerifyCap>();
+    let verify_cap_id = sui_object::id(&verify_cap);
+    sc.return_to_sender(verify_cap);
+
+    // Revoke cap
+    {
+        sc.next_tx(ADMIN);
+        let mut crowd = sc.take_shared<CrowdWalrus>();
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        crowd_walrus::revoke_verify_cap(&mut crowd, &admin_cap, verify_cap_id, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Holder destroys revoked cap; should succeed without abort
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::destroy_revoked_verify_cap(&crowd, verify_cap, ctx(&mut sc));
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
+#[test, expected_failure(abort_code = crowd_walrus::E_VERIFY_CAP_NOT_REVOKED)]
+public fun test_destroy_unrevoked_verify_cap_rejected() {
+    let verifier = USER1;
+    let mut sc = test_init(ADMIN);
+
+    // Issue verify cap
+    {
+        sc.next_tx(ADMIN);
+        let admin_cap = sc.take_from_sender<AdminCap>();
+        let crowd = sc.take_shared<CrowdWalrus>();
+        crowd_walrus::create_verify_cap(&crowd, &admin_cap, verifier, ctx(&mut sc));
+        sc.return_to_sender(admin_cap);
+        ts::return_shared(crowd);
+    };
+
+    // Holder attempts to destroy without revocation
+    {
+        sc.next_tx(verifier);
+        let crowd = sc.take_shared<CrowdWalrus>();
+        let verify_cap = sc.take_from_sender<VerifyCap>();
+        crowd_walrus::destroy_revoked_verify_cap(&crowd, verify_cap, ctx(&mut sc));
+        ts::return_shared(crowd);
+    };
+
+    sc.end();
+}
+
 #[test]
 public fun test_delete_campaign_happy_path() {
     let owner = USER1;
