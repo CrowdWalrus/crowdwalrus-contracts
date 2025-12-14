@@ -228,7 +228,7 @@ fun test_set_profile_subdomain_happy_path() {
 }
 
 // Owners only: different sender cannot set the subdomain.
-#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus)]
+#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x0::crowd_walrus)]
 fun test_set_profile_subdomain_not_owner_aborts() {
     let mut scenario = sm_tests::test_init(ADMIN);
     authorize_crowd_walrus_app(&mut scenario, ADMIN);
@@ -260,7 +260,7 @@ fun test_set_profile_subdomain_not_owner_aborts() {
 }
 
 // Subdomain is immutable once set for the owner.
-#[test, expected_failure(abort_code = profiles::E_SUBDOMAIN_ALREADY_SET, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::profiles)]
+#[test, expected_failure(abort_code = profiles::E_SUBDOMAIN_ALREADY_SET, location = 0x0::profiles)]
 fun test_set_profile_subdomain_twice_aborts() {
     let mut scenario = sm_tests::test_init(ADMIN);
     authorize_crowd_walrus_app(&mut scenario, ADMIN);
@@ -355,7 +355,7 @@ fun test_remove_profile_subdomain_happy_path() {
 }
 
 // Removing without a set subdomain aborts.
-#[test, expected_failure(abort_code = profiles::E_SUBDOMAIN_NOT_SET, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus)]
+#[test, expected_failure(abort_code = profiles::E_SUBDOMAIN_NOT_SET, location = 0x0::crowd_walrus)]
 fun test_remove_profile_subdomain_not_set_aborts() {
     let mut scenario = sm_tests::test_init(ADMIN);
     authorize_crowd_walrus_app(&mut scenario, ADMIN);

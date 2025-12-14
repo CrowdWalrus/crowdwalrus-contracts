@@ -567,7 +567,7 @@ public fun test_delete_campaign_happy_path() {
     sc.end();
 }
 
-#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
+#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x0::campaign)]
 public fun test_verify_campaign_rejects_deleted_campaign() {
     let owner = USER1;
     let verifier = USER2;
@@ -636,7 +636,7 @@ public fun test_verify_campaign_rejects_deleted_campaign() {
     sc.end();
 }
 
-#[test, expected_failure(abort_code = E_APP_NOT_AUTHORIZED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
+#[test, expected_failure(abort_code = E_APP_NOT_AUTHORIZED, location = 0x0::campaign)]
 public fun test_delete_campaign_requires_matching_cap() {
     let owner = USER1;
     let mut sc = test_init(ADMIN);
@@ -1348,7 +1348,7 @@ public fun test_create_campaign_uses_policy_preset() {
     sc.end();
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0x0::platform_policy)]
 public fun test_create_campaign_with_missing_preset_aborts() {
     let mut sc = test_init(ADMIN);
 
@@ -1369,7 +1369,7 @@ public fun test_create_campaign_with_missing_preset_aborts() {
     sc.end();
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
 public fun test_create_campaign_with_disabled_preset_aborts() {
     let mut sc = test_init(ADMIN);
 
@@ -1422,7 +1422,7 @@ public fun test_create_campaign_with_disabled_preset_aborts() {
     sc.end();
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
 public fun test_create_campaign_with_default_disabled_aborts() {
     let mut sc = test_init(ADMIN);
 

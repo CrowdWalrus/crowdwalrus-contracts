@@ -104,7 +104,7 @@ fun test_update_badge_config_sets_fields_and_emits_event() {
 
 #[test, expected_failure(
     abort_code = badge_rewards::E_BAD_LENGTH,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::badge_rewards
+    location = 0x0::badge_rewards
 )]
 fun test_update_badge_config_requires_five_entries() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -139,7 +139,7 @@ fun test_update_badge_config_requires_five_entries() {
 
 #[test, expected_failure(
     abort_code = badge_rewards::E_NOT_ASCENDING,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::badge_rewards
+    location = 0x0::badge_rewards
 )]
 fun test_update_badge_config_amounts_must_increase() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -174,7 +174,7 @@ fun test_update_badge_config_amounts_must_increase() {
 
 #[test, expected_failure(
     abort_code = badge_rewards::E_NOT_ASCENDING,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::badge_rewards
+    location = 0x0::badge_rewards
 )]
 fun test_update_badge_config_payments_must_increase() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -209,7 +209,7 @@ fun test_update_badge_config_payments_must_increase() {
 
 #[test, expected_failure(
     abort_code = badge_rewards::E_EMPTY_URI,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::badge_rewards
+    location = 0x0::badge_rewards
 )]
 fun test_update_badge_config_requires_non_empty_uris() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -244,7 +244,7 @@ fun test_update_badge_config_requires_non_empty_uris() {
 
 #[test, expected_failure(
     abort_code = crowd_walrus::E_NOT_AUTHORIZED,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::crowd_walrus
+    location = 0x0::crowd_walrus
 )]
 fun test_update_badge_config_requires_matching_admin_cap() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -314,7 +314,7 @@ fun test_mint_badge_transfers_to_owner_with_fields() {
 
 #[test, expected_failure(
     abort_code = badge_rewards::E_BAD_BADGE_LEVEL,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::badge_rewards
+    location = 0x0::badge_rewards
 )]
 fun test_mint_badge_requires_valid_level() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);

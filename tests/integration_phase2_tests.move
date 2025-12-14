@@ -120,7 +120,7 @@ fun test_standalone_profile_creation_emits_event() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = profiles::E_PROFILE_EXISTS, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::profiles)]
+#[test, expected_failure(abort_code = profiles::E_PROFILE_EXISTS, location = 0x0::profiles)]
 fun test_standalone_profile_creation_duplicate_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
@@ -188,7 +188,7 @@ fun test_profile_metadata_update_emits_event() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::profiles)]
+#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x0::profiles)]
 fun test_profile_metadata_update_non_owner_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
@@ -921,7 +921,7 @@ fun test_donation_succeeds_when_slippage_floor_met() {
     donations_tests::cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_SLIPPAGE_EXCEEDED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_SLIPPAGE_EXCEEDED, location = 0x0::donations)]
 fun test_donation_aborts_when_slippage_floor_not_met() {
     let (
         mut scenario,

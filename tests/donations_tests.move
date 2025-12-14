@@ -177,7 +177,7 @@ fun precheck_allows_at_exact_end_time() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = donations::E_CAMPAIGN_INACTIVE, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_INACTIVE, location = 0x0::donations)]
 fun precheck_fails_when_campaign_inactive() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -209,7 +209,7 @@ fun precheck_fails_when_campaign_inactive() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
 fun precheck_fails_when_before_start() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -240,7 +240,7 @@ fun precheck_fails_when_before_start() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::campaign)]
+#[test, expected_failure(abort_code = E_CAMPAIGN_DELETED, location = 0x0::campaign)]
 fun precheck_fails_when_campaign_deleted() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -272,7 +272,7 @@ fun precheck_fails_when_campaign_deleted() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
 fun precheck_fails_when_after_end() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -305,7 +305,7 @@ fun precheck_fails_when_after_end() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x0::donations)]
 fun precheck_fails_when_token_disabled() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -345,7 +345,7 @@ fun precheck_fails_when_token_disabled() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x0::donations)]
 fun precheck_fails_when_token_unregistered() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(OWNER);
@@ -844,7 +844,7 @@ fun donate_and_award_first_time_creates_profile_and_mints_badge() {
 
 #[test, expected_failure(
     abort_code = profiles::E_PROFILE_EXISTS,
-    location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations
+    location = 0x0::donations
 )]
 fun donate_and_award_first_time_aborts_when_profile_exists() {
     let (
@@ -1438,7 +1438,7 @@ fun donate_and_award_repeat_donor_awards_multiple_badges_in_single_donation() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = profiles::E_NOT_PROFILE_OWNER, location = 0x0::donations)]
 fun donate_and_award_aborts_when_profile_owner_mismatch() {
     let (
         mut scenario,
@@ -1526,7 +1526,7 @@ fun donate_and_award_aborts_when_profile_owner_mismatch() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
 fun donate_aborts_before_campaign_start() {
     let (
         mut scenario,
@@ -1680,7 +1680,7 @@ fun donate_succeeds_at_campaign_start_boundary() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_CAMPAIGN_CLOSED, location = 0x0::donations)]
 fun donate_aborts_after_campaign_end() {
     let (
         mut scenario,
@@ -1787,7 +1787,7 @@ fun donate_only_locks_once_across_multiple_donations() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_SLIPPAGE_EXCEEDED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_SLIPPAGE_EXCEEDED, location = 0x0::donations)]
 fun donate_aborts_when_slippage_exceeded() {
     let (
         mut scenario,
@@ -1834,7 +1834,7 @@ fun donate_aborts_when_slippage_exceeded() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_STATS_MISMATCH, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_STATS_MISMATCH, location = 0x0::donations)]
 fun donate_aborts_with_mismatched_stats() {
     let (
         mut scenario,
@@ -1940,7 +1940,7 @@ fun quote_usd_micro_uses_registry_metadata_and_override() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = price_oracle::E_PRICE_STALE, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::price_oracle)]
+#[test, expected_failure(abort_code = price_oracle::E_PRICE_STALE, location = 0x0::price_oracle)]
 fun quote_usd_micro_aborts_when_price_stale() {
     let max_age_ms = 1_000;
     let (mut scenario, mut clock_obj, price_obj, fee_coins) =
@@ -1964,7 +1964,7 @@ fun quote_usd_micro_aborts_when_price_stale() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_TOKEN_DISABLED, location = 0x0::donations)]
 fun quote_usd_micro_aborts_when_token_disabled() {
     let max_age_ms = 2_000;
     let (mut scenario, clock_obj, price_obj, fee_coins) =
@@ -1985,7 +1985,7 @@ fun quote_usd_micro_aborts_when_token_disabled() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = price_oracle::E_FEED_ID_MISMATCH, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::price_oracle)]
+#[test, expected_failure(abort_code = price_oracle::E_FEED_ID_MISMATCH, location = 0x0::price_oracle)]
 fun quote_usd_micro_aborts_when_feed_id_mismatched() {
     let (mut scenario, clock_obj, price_obj, feed_id, fee_coins) = setup_verified_price_info();
     let mut wrong_feed = clone_bytes(&feed_id);
@@ -2016,7 +2016,7 @@ fun quote_usd_micro_aborts_when_feed_id_mismatched() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = donations::E_COIN_NOT_FOUND, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::donations)]
+#[test, expected_failure(abort_code = donations::E_COIN_NOT_FOUND, location = 0x0::donations)]
 fun quote_usd_micro_aborts_when_token_not_in_registry() {
     let max_age_ms = 3_000;
     let (mut scenario, clock_obj, price_obj, fee_coins) =
@@ -2037,7 +2037,7 @@ fun quote_usd_micro_aborts_when_token_not_in_registry() {
     cleanup_quote_scenario(scenario, clock_obj, price_obj, fee_coins);
 }
 
-#[test, expected_failure(abort_code = price_oracle::E_ZERO_AMOUNT, location = 0x5abd06b4c77fca5cdf684f77a2a06c1303218bf85ac27dde3cb07243655a3e9e::price_oracle)]
+#[test, expected_failure(abort_code = price_oracle::E_ZERO_AMOUNT, location = 0x0::price_oracle)]
 fun quote_usd_micro_aborts_on_zero_amount() {
     let max_age_ms = 4_000;
     let (mut scenario, clock_obj, price_obj, fee_coins) =
