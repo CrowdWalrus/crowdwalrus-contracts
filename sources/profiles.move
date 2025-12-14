@@ -160,6 +160,14 @@ entry fun create_profile(
     transfer_to(profile, sender);
 }
 
+/// Transfer an owned Profile to its recorded owner (the transaction sender).
+/// This is useful for PTB flows that create a Profile by value (via
+/// `create_profile_for_sender`) and then compose additional operations before
+/// finally transferring the Profile out.
+public fun transfer_profile_to_sender(profile: Profile, ctx: &tx_ctx::TxContext) {
+    transfer_to(profile, tx_ctx::sender(ctx));
+}
+
 // Clock parameter ensures ProfileMetadataUpdated timestamps remain canonical for indexers.
 entry fun update_profile_metadata(
     profile: &mut Profile,
