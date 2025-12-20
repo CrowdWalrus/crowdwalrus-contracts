@@ -1119,6 +1119,6 @@ Notes on the three external feedback points
 
 F6 ambiguity → Resolved by splitting into G6a (creates Profile internally) and G6b (requires &mut Profile). Frontend chooses based on existence. This removes ambiguity and keeps PTBs clean.
 
-Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in Documentation/last_deploy.md. Acceptance requires build success and lockfile update.
+Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in `deployment.addresses.testnet.json` (or the dated deployment file). Acceptance requires build success and lockfile update.
 
 Publisher setup → Clarified in E2b docs (docs/phase2/PUBLISHER_DISPLAY_SETUP.md) and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.

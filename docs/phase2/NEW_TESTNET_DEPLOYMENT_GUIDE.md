@@ -386,7 +386,7 @@ jq -n \
 cat deployment.addresses.testnet.$(date +%Y-%m-%d).json
 ```
 
-Archive naming pattern keeps the canonical `deployment.addresses.testnet.json` pointing at the prior deployment for reference. Only swap the canonical file if downstream tooling requires the latest version.
+Archive naming pattern keeps a dated file for each deploy, and the canonical `deployment.addresses.testnet.json` points at the latest deployment for tooling. Keep both.
 
 ---
 

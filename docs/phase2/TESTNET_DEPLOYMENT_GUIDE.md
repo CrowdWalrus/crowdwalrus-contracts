@@ -710,7 +710,7 @@ This is complex and best handled by frontend integration. For manual testing, yo
 | Component | Action | Required | Status |
 |-----------|--------|----------|--------|
 | Package | Published to testnet | ✅ CRITICAL | ✅ Completed – Nov 7 2025 |
-| Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployments/deploy-2025-11-07-phase2.md` |
+| Object IDs | All IDs recorded | ✅ CRITICAL | ✅ Logged in `deployment.addresses.testnet.json` |
 | AdminCap | Secured to ops wallet | ⚠️ Recommended | ⬜ |
 | SuiNS NFT | Registered via `set_suins_nft` | ✅ CRITICAL | ✅ Completed – Nov 8 2025 (tx `H24Z9rPKeGJfMaBQAsUQnnmiSQKoTMWKmKEZAZRahSL4`) |
 | Badge Display | Registered via `setup_badge_display` | ⚠️ Recommended | ✅ Completed – Nov 8 2025 (tx `CZWgWxEb318Z728Jt5CSPZSzXEBf9yeRkN6hWFXKeNub`) |
