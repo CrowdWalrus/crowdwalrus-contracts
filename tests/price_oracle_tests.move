@@ -44,7 +44,7 @@ fun test_quote_usd_with_verified_feed() {
 }
 
 #[test]
-#[expected_failure(abort_code = price_oracle::E_FEED_ID_MISMATCH, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::price_oracle)]
+#[expected_failure(abort_code = price_oracle::E_FEED_ID_MISMATCH, location = 0x0::price_oracle)]
 fun test_quote_usd_feed_mismatch_aborts() {
     let (scenario, clock_obj, price_obj, feed_id, fee_coins) = setup_verified_price_info();
     let mut wrong_feed = feed_id;
@@ -64,7 +64,7 @@ fun test_quote_usd_feed_mismatch_aborts() {
 }
 
 #[test]
-#[expected_failure(abort_code = price_oracle::E_ZERO_AMOUNT, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::price_oracle)]
+#[expected_failure(abort_code = price_oracle::E_ZERO_AMOUNT, location = 0x0::price_oracle)]
 fun test_quote_usd_zero_amount_aborts() {
     let (scenario, clock_obj, price_obj, feed_id, fee_coins) = setup_verified_price_info();
     price_oracle::quote_usd<TestCoin>(
@@ -80,7 +80,7 @@ fun test_quote_usd_zero_amount_aborts() {
 }
 
 #[test]
-#[expected_failure(abort_code = price_oracle::E_PRICE_STALE, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::price_oracle)]
+#[expected_failure(abort_code = price_oracle::E_PRICE_STALE, location = 0x0::price_oracle)]
 fun test_quote_usd_stale_price_aborts() {
     let (scenario, mut clock_obj, price_obj, feed_id, fee_coins) = setup_verified_price_info();
 

@@ -20,6 +20,8 @@ const E_EMPTY_VALUE: u64 = 8;
 const E_KEY_TOO_LONG: u64 = 9;
 const E_VALUE_TOO_LONG: u64 = 10;
 const E_TOO_MANY_METADATA_ENTRIES: u64 = 11;
+const E_SUBDOMAIN_ALREADY_SET: u64 = 12;
+const E_SUBDOMAIN_NOT_SET: u64 = 13;
 
 public(package) fun profile_exists_error_code(): u64 {
     E_PROFILE_EXISTS
@@ -27,6 +29,14 @@ public(package) fun profile_exists_error_code(): u64 {
 
 public(package) fun not_profile_owner_error_code(): u64 {
     E_NOT_PROFILE_OWNER
+}
+
+public(package) fun subdomain_already_set_error_code(): u64 {
+    E_SUBDOMAIN_ALREADY_SET
+}
+
+public(package) fun subdomain_not_set_error_code(): u64 {
+    E_SUBDOMAIN_NOT_SET
 }
 
 public struct ProfilesRegistry has key {
@@ -45,6 +55,21 @@ public struct ProfileMetadataUpdated has copy, drop {
     key: String,
     value: String,
     timestamp_ms: u64,
+}
+
+public struct ProfileSubdomainSet has copy, drop {
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+}
+
+public struct ProfileSubdomainRemoved has copy, drop {
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+    removed_by: address,
 }
 
 public struct RegistryKey has copy, drop, store {
@@ -113,14 +138,34 @@ public(package) fun create_or_get_profile_for_sender(
     }
 }
 
+/// PTB-friendly helper that creates and registers a profile for the sender
+/// and returns the owned Profile object so callers can compose additional
+/// operations (metadata updates, subdomain registration, etc.) within the
+/// same transaction before transferring it out.
+public fun create_profile_for_sender(
+    registry: &mut ProfilesRegistry,
+    clock: &Clock,
+    ctx: &mut tx_ctx::TxContext,
+): Profile {
+    create_for(registry, tx_ctx::sender(ctx), clock, ctx)
+}
+
 entry fun create_profile(
     registry: &mut ProfilesRegistry,
     clock: &Clock,
     ctx: &mut tx_ctx::TxContext,
 ) {
     let sender = tx_ctx::sender(ctx);
-    let profile = create_for(registry, sender, clock, ctx);
+    let profile = create_profile_for_sender(registry, clock, ctx);
     transfer_to(profile, sender);
+}
+
+/// Transfer an owned Profile to its recorded owner (the transaction sender).
+/// This is useful for PTB flows that create a Profile by value (via
+/// `create_profile_for_sender`) and then compose additional operations before
+/// finally transferring the Profile out.
+public fun transfer_profile_to_sender(profile: Profile, ctx: &tx_ctx::TxContext) {
+    transfer_to(profile, tx_ctx::sender(ctx));
 }
 
 // Clock parameter ensures ProfileMetadataUpdated timestamps remain canonical for indexers.
@@ -131,21 +176,57 @@ entry fun update_profile_metadata(
     clock: &Clock,
     ctx: &tx_ctx::TxContext,
 ) {
+    upsert_profile_metadata(
+        profile,
+        vector[key],
+        vector[value],
+        clock,
+        ctx,
+    );
+}
+
+/// Batch-capable metadata updater that emits one `ProfileMetadataUpdated` event
+/// per key/value pair. Accepts empty vectors (no-op) so callers can keep a
+/// single PTB structure regardless of whether metadata is provided.
+public fun upsert_profile_metadata(
+    profile: &mut Profile,
+    metadata_keys: vector<String>,
+    metadata_values: vector<String>,
+    clock: &Clock,
+    ctx: &tx_ctx::TxContext,
+) {
     let sender = tx_ctx::sender(ctx);
     assert!(profile.owner == sender, E_NOT_PROFILE_OWNER);
-    assert_valid_metadata_entry(&profile.metadata, &key, &value);
+    assert!(
+        std::vector::length(&metadata_keys) == std::vector::length(&metadata_values),
+        E_KEY_VALUE_MISMATCH,
+    );
 
-    let key_for_event = clone_string(&key);
-    let value_for_event = clone_string(&value);
-    insert_or_update_metadata(&mut profile.metadata, key, value);
+    let len = std::vector::length(&metadata_keys);
+    let mut i = 0;
+    while (i < len) {
+        let key_ref = std::vector::borrow(&metadata_keys, i);
+        let value_ref = std::vector::borrow(&metadata_values, i);
 
-    event::emit(ProfileMetadataUpdated {
-        profile_id: sui_object::id(profile),
-        owner: sender,
-        key: key_for_event,
-        value: value_for_event,
-        timestamp_ms: clock::timestamp_ms(clock),
-    });
+        assert_valid_metadata_entry(&profile.metadata, key_ref, value_ref);
+
+        let key_for_store = *key_ref;
+        let value_for_store = *value_ref;
+        let key_for_event = *key_ref;
+        let value_for_event = *value_ref;
+
+        insert_or_update_metadata(&mut profile.metadata, key_for_store, value_for_store);
+
+        event::emit(ProfileMetadataUpdated {
+            profile_id: sui_object::id(profile),
+            owner: sender,
+            key: key_for_event,
+            value: value_for_event,
+            timestamp_ms: clock::timestamp_ms(clock),
+        });
+
+        i = i + 1;
+    };
 }
 
 #[test_only]
@@ -166,6 +247,7 @@ public struct Profile has key {
     total_usd_micro: u64,
     total_donations_count: u64,
     badge_levels_earned: u16,
+    subdomain_name: std::option::Option<String>,
     metadata: VecMap<String, String>,
 }
 
@@ -187,6 +269,40 @@ public fun badge_levels_earned(profile: &Profile): u16 {
 
 public fun metadata(profile: &Profile): &VecMap<String, String> {
     &profile.metadata
+}
+
+public fun subdomain_name(profile: &Profile): std::option::Option<String> {
+    profile.subdomain_name
+}
+
+public(package) fun emit_profile_subdomain_set(
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+) {
+    event::emit(ProfileSubdomainSet {
+        profile_id,
+        owner,
+        subdomain_name,
+        timestamp_ms,
+    });
+}
+
+public(package) fun emit_profile_subdomain_removed(
+    profile_id: sui_object::ID,
+    owner: address,
+    subdomain_name: String,
+    timestamp_ms: u64,
+    removed_by: address,
+) {
+    event::emit(ProfileSubdomainRemoved {
+        profile_id,
+        owner,
+        subdomain_name,
+        timestamp_ms,
+        removed_by,
+    });
 }
 
 #[test_only]
@@ -228,8 +344,23 @@ public(package) fun create(
         total_usd_micro: 0,
         total_donations_count: 0,
         badge_levels_earned: 0,
+        subdomain_name: std::option::none(),
         metadata,
     }
+}
+
+public(package) fun assert_subdomain_not_set(profile: &Profile) {
+    assert!(std::option::is_none(&profile.subdomain_name), E_SUBDOMAIN_ALREADY_SET);
+}
+
+public(package) fun set_subdomain(profile: &mut Profile, subdomain_name: String) {
+    assert_subdomain_not_set(profile);
+    profile.subdomain_name = std::option::some(subdomain_name);
+}
+
+public(package) fun clear_subdomain(profile: &mut Profile) {
+    assert!(std::option::is_some(&profile.subdomain_name), E_SUBDOMAIN_NOT_SET);
+    profile.subdomain_name = std::option::none();
 }
 
 public(package) fun add_contribution(profile: &mut Profile, amount_micro: u64) {
@@ -329,11 +460,6 @@ fun insert_or_update_metadata(
     };
 }
 
-// Clone string by taking a substring spanning the entire value.
-fun clone_string(value: &String): String {
-    string::substring(value, 0, string::length(value))
-}
-
 public fun profile_metadata_updated_owner(event: &ProfileMetadataUpdated): address {
     event.owner
 }
@@ -345,11 +471,11 @@ public fun profile_metadata_updated_profile_id(
 }
 
 public fun profile_metadata_updated_key(event: &ProfileMetadataUpdated): String {
-    clone_string(&event.key)
+    copy event.key
 }
 
 public fun profile_metadata_updated_value(event: &ProfileMetadataUpdated): String {
-    clone_string(&event.value)
+    copy event.value
 }
 
 public fun profile_metadata_updated_timestamp_ms(event: &ProfileMetadataUpdated): u64 {

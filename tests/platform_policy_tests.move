@@ -55,7 +55,7 @@ fun test_add_policy_persists_enabled_state() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = campaign::E_INVALID_BPS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = campaign::E_INVALID_BPS, location = 0x0::platform_policy)]
 fun test_add_policy_invalid_bps_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -80,7 +80,7 @@ fun test_add_policy_invalid_bps_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0x0::platform_policy)]
 fun test_add_policy_zero_address_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -104,7 +104,7 @@ fun test_add_policy_zero_address_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_EXISTS, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_EXISTS, location = 0x0::platform_policy)]
 fun test_add_policy_duplicate_name_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -136,7 +136,7 @@ fun test_add_policy_duplicate_name_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0x0::platform_policy)]
 fun test_update_policy_missing_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -214,7 +214,7 @@ fun test_update_and_enable_policy() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_NOT_FOUND, location = 0x0::platform_policy)]
 fun test_disable_policy_missing_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -235,7 +235,7 @@ fun test_disable_policy_missing_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
 fun test_disable_policy_twice_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);
@@ -271,7 +271,7 @@ fun test_disable_policy_twice_aborts() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::platform_policy)]
+#[test, expected_failure(abort_code = platform_policy::E_POLICY_DISABLED, location = 0x0::platform_policy)]
 fun test_require_enabled_policy_rejects_disabled() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
     scenario.next_tx(ADMIN);

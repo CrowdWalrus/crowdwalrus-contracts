@@ -1,0 +1,111 @@
+{
+  "network": "testnet",
+  "label": "phase2",
+  "deployedAt": "2025-12-13",
+  "txDigest": "CfDpGggFhbBUhCJGjPwpN9eCkieuzqme9bbJVuZRQB1k",
+  "packageId": "0xdb4e5d943d9eb03e0d7e007da43669d9df2e60f235ad9273bc10577461db0c48",
+  "accounts": {
+    "deployer": "0x4fcb599f85adb345fd608c69040615caa7af84ec8bbf181569a4dbe7368acfbb"
+  },
+  "sharedObjects": {
+    "crowdWalrus": "0x048def4fa97528cd99aa54f8c23e9e6247bc0c30806142a2abb6ff7a470193d1",
+    "suinsManager": "0xec2205b46efe38969c3ef05d11f008cf793848b6459d23906afe27272e3264b3",
+    "policyRegistry": "0xc4a2f48daad8dcc047c29c05d1d5b7560f38fe5d206a6e5799261aeaf37e4397",
+    "profilesRegistry": "0x0194cbab76ab6d440dce3bc2db733ef00432e23197759b32877699a0cf031c23",
+    "badgeConfig": "0x74df0401046c62b069c3fd2f96d8995feac4507688797ff2297acb0715f3e91c",
+    "tokenRegistry": "0x00218984ac8ba171b4116cf17224ccc5885e7fdbf5977dd2ec6f258e37e864c6"
+  },
+  "ownedCaps": {
+    "adminCap": "0x716ae51781e29cc2819eb17a2fdd35b7b34462ff342b6dbf1768ec04c7079b8f",
+    "suinsAdminCap": "0xf06c81ac8623ead713228bf722f635ffedda71936d58dd787decc909cf49c8fd",
+    "publisher": "0x9ac51b2b4420056ccaf372a856824148ec6f8d1962ea127b140c081badcb5bd2",
+    "upgradeCap": "0xe817156c84d621e62f3a84c75891552ff4922643708d412436212ed169c11afb"
+  },
+  "globals": {
+    "clock": "0x6",
+    "pythState": "0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c",
+    "wormholeState": "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790",
+    "suinsPackage": "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93"
+  },
+  "migration": {
+    "suinsRegistration": {
+      "nftId": "0x98dd15073e0b781ca524f7ef102edac6cd4393119a1f2f2b20f24f9056adb6d9",
+      "registeredWithTx": "J4mwAeqbGNABqCxEgt8zsiuvsjQXpaU729yJXj7VXiFr",
+      "newManager": "0xec2205b46efe38969c3ef05d11f008cf793848b6459d23906afe27272e3264b3",
+      "newAdminCap": "0xf06c81ac8623ead713228bf722f635ffedda71936d58dd787decc909cf49c8fd"
+    }
+  },
+  "postConfig": {
+    "display": {
+      "donorBadgeDisplay": "0x57a7dad1dd837c1d1369b7e8bb581929490e79c8b3f276a43c4d89534777df1a",
+      "setupTx": "EtUF3weMC9JYGdP3maMaJUTcTHN4cMegKaHtpFDE66k"
+    },
+    "policies": {
+      "standard": {
+        "bps": 0,
+        "platformAddress": "0x4fcb599f85adb345fd608c69040615caa7af84ec8bbf181569a4dbe7368acfbb",
+        "enabled": true
+      },
+      "commercial": {
+        "bps": 500,
+        "platformAddress": "0x4aa24001f656ee00a56c1d7a16c65973fa65b4b94c0b79adead1cc3b70261f45",
+        "enabled": true,
+        "txDigest": "4hyRziciT4cK1ohgzN6iPSYfD1nrRgERojYTCshDKsVd"
+      }
+    },
+    "tokens": {
+      "0x2::sui::SUI": {
+        "symbol": "SUI",
+        "name": "Sui",
+        "decimals": 9,
+        "feedId": "0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266",
+        "maxAgeMs": 300000,
+        "enabled": true,
+        "addTx": "FYgEw82piTesfxstQ4U3qeH5jckjKQzS7ME4qZCDxnnA",
+        "enableTx": "GPDHwMjq37YHpUA23vkSbsEVKCYD5YE9MVhxDhZoEP2V"
+      },
+      "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC": {
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "decimals": 6,
+        "feedId": "0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722",
+        "maxAgeMs": 300000,
+        "enabled": true,
+        "addTx": "f2uah51kAJYGNG1JpFs8TxT2duu8xRxkMX7K21oUrr8",
+        "enableTx": "7ke5GQa32Ld39qRKjVMBt4udNkywZsmbW472vCLUQnX5"
+      },
+      "0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL": {
+        "symbol": "WAL",
+        "name": "WAL Token",
+        "decimals": 9,
+        "feedId": "0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea",
+        "maxAgeMs": 300000,
+        "enabled": true
+      }
+    },
+    "badges": {
+      "amountThresholdsMicro": [
+        5000000,
+        10000000,
+        15000000,
+        20000000,
+        25000000
+      ],
+      "paymentThresholds": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "imageUris": [
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/i-ArkhoFmAVEpPo2joNwyIJeQb2OLoUJvbu1vaiLXKIBAQCvAA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/wyackOXpxuO2LWIER7V1y-FjJb1GE4KU3bvH7sBKSmYBAQDfAA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/iAbbzsnrzI5UEVLq84FXK_A0JUenilVlyajfmonyAZwBAQD9AA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/URlMKBVMdunHasZyLb5Frdze4PgafqAbr9dUAVyHyuEBAQARAQ",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/_8IRK-y241G88V5QeEjBRQJZjuqSdcVI7YeqwJ-OPYcBAQDGAQ"
+      ],
+      "updateTx": "3tFUZnQb48XTeofb4DLTxyrEreB2dEPQounLsAQkz2oE"
+    }
+  }
+}

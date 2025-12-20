@@ -275,7 +275,7 @@ fun test_create_profile_entry_creates_profile() {
 
 #[test, expected_failure(
     abort_code = profiles::E_PROFILE_EXISTS,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::profiles
+    location = 0x0::profiles
 )]
 fun test_create_profile_entry_duplicate_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(OWNER);
@@ -300,7 +300,7 @@ fun test_create_profile_entry_duplicate_aborts() {
 
 #[test, expected_failure(
     abort_code = profiles::E_PROFILE_EXISTS,
-    location = 0xc762a509c02849b7ca0b63eb4226c1fb87aed519af51258424a3591faaacac10::profiles
+    location = 0x0::profiles
 )]
 fun test_profiles_registry_duplicate_creation_aborts() {
     let mut scenario = crowd_walrus_tests::test_init(OWNER);
@@ -761,6 +761,207 @@ fun test_grant_badge_levels_invalid_mask_aborts() {
     );
     profiles::grant_badge_levels(&mut profile, 0x0020);
     test_utils::destroy(profile);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_create_profile_with_metadata_single_ptb() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    let metadata_events_before =
+        vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let clock = scenario.take_shared<Clock>();
+
+    let mut profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    profiles::upsert_profile_metadata(
+        &mut profile,
+        vector[string::utf8(b"name"), string::utf8(b"bio")],
+        vector[string::utf8(b"Walrus"), string::utf8(b"Sea mammal")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+
+    let metadata_events_after =
+        vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+    assert_eq!(metadata_events_after, metadata_events_before + 2);
+
+    let profile_id = sui_object::id(&profile);
+
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+
+    let _effects = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let registry_after = scenario.take_shared<profiles::ProfilesRegistry>();
+    assert!(profiles::exists(&registry_after, OWNER));
+    assert_eq!(profiles::id_of(&registry_after, OWNER), profile_id);
+    ts::return_shared(registry_after);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let metadata_view = profiles::metadata(&profile_after);
+    assert_eq!(metadata_view.length(), 2);
+    assert_eq!(
+        *metadata_view.get(&string::utf8(b"name")),
+        string::utf8(b"Walrus"),
+    );
+    assert_eq!(
+        *metadata_view.get(&string::utf8(b"bio")),
+        string::utf8(b"Sea mammal"),
+    );
+    ts::return_to_address(OWNER, profile_after);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_create_profile_then_add_metadata_later() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let clock = scenario.take_shared<Clock>();
+    let profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    let profile_id = sui_object::id(&profile);
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_update = scenario.take_shared<Clock>();
+    let mut profile_obj = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    profiles::upsert_profile_metadata(
+        &mut profile_obj,
+        vector[string::utf8(b"display_name")],
+        vector[string::utf8(b"Captain")],
+        &clock_update,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_to_address(OWNER, profile_obj);
+    ts::return_shared(clock_update);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let metadata_view = profiles::metadata(&profile_after);
+    assert_eq!(metadata_view.length(), 1);
+    assert_eq!(
+        *metadata_view.get(&string::utf8(b"display_name")),
+        string::utf8(b"Captain"),
+    );
+    assert_eq!(sui_object::id(&profile_after), profile_id);
+    ts::return_to_address(OWNER, profile_after);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_upsert_profile_metadata_overwrites_existing_key() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let clock = scenario.take_shared<Clock>();
+    let mut profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    profiles::upsert_profile_metadata(
+        &mut profile,
+        vector[string::utf8(b"name")],
+        vector[string::utf8(b"First")],
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let clock_update = scenario.take_shared<Clock>();
+    let mut profile_obj = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    profiles::upsert_profile_metadata(
+        &mut profile_obj,
+        vector[string::utf8(b"name"), string::utf8(b"role")],
+        vector[string::utf8(b"Updated"), string::utf8(b"Supporter")],
+        &clock_update,
+        ts::ctx(&mut scenario),
+    );
+    ts::return_to_address(OWNER, profile_obj);
+    ts::return_shared(clock_update);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    scenario.next_tx(OWNER);
+    let profile_after = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    let metadata = profiles::metadata(&profile_after);
+    assert_eq!(metadata.length(), 2);
+    assert_eq!(
+        *metadata.get(&string::utf8(b"name")),
+        string::utf8(b"Updated"),
+    );
+    assert_eq!(
+        *metadata.get(&string::utf8(b"role")),
+        string::utf8(b"Supporter"),
+    );
+    ts::return_to_address(OWNER, profile_after);
+
+    ts::end(scenario);
+}
+
+#[test]
+fun test_upsert_profile_metadata_empty_vectors_noop() {
+    let mut scenario = crowd_walrus_tests::test_init(OWNER);
+
+    scenario.next_tx(OWNER);
+    let mut registry = scenario.take_shared<profiles::ProfilesRegistry>();
+    let clock = scenario.take_shared<Clock>();
+    let profile = profiles::create_profile_for_sender(
+        &mut registry,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    profiles::transfer_to(profile, OWNER);
+    ts::return_shared(registry);
+    ts::return_shared(clock);
+    let _ = ts::next_tx(&mut scenario, OWNER);
+
+    let events_before = vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+
+    scenario.next_tx(OWNER);
+    let clock_update = scenario.take_shared<Clock>();
+    let mut profile_obj = ts::take_from_address<profiles::Profile>(&scenario, OWNER);
+    profiles::upsert_profile_metadata(
+        &mut profile_obj,
+        vector::empty(),
+        vector::empty(),
+        &clock_update,
+        ts::ctx(&mut scenario),
+    );
+    let metadata_after = profiles::metadata(&profile_obj);
+    assert_eq!(metadata_after.length(), 0);
+    ts::return_to_address(OWNER, profile_obj);
+    ts::return_shared(clock_update);
+
+    let events_after = vector::length(&event::events_by_type<profiles::ProfileMetadataUpdated>());
+    assert_eq!(events_after, events_before);
+
     ts::end(scenario);
 }
 
