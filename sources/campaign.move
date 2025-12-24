@@ -1,6 +1,6 @@
 module crowd_walrus::campaign;
 
-use std::string::String;
+use std::string::{Self as string, String};
 
 use sui::clock::{Self as clock, Clock};
 use sui::dynamic_field as df;
@@ -16,25 +16,83 @@ const E_FUNDING_GOAL_IMMUTABLE: u64 = 8;
 const E_RECIPIENT_ADDRESS_INVALID: u64 = 9;
 const E_RECIPIENT_ADDRESS_IMMUTABLE: u64 = 10;
 const E_CAMPAIGN_DELETED: u64 = 11;
+const E_INVALID_BPS: u64 = 12;
+const E_ZERO_ADDRESS: u64 = 13;
+const E_STATS_ALREADY_SET: u64 = 14;
+const E_PARAMETERS_LOCKED: u64 = 15;
+const E_EMPTY_KEY: u64 = 16;
+const E_EMPTY_VALUE: u64 = 17;
+const E_KEY_TOO_LONG: u64 = 18;
+const E_VALUE_TOO_LONG: u64 = 19;
+const E_TOO_MANY_METADATA_ENTRIES: u64 = 20;
+
+const MAX_METADATA_KEY_LENGTH: u64 = 64;
+const MAX_METADATA_VALUE_LENGTH: u64 = 2048;
+const MAX_METADATA_ENTRIES: u64 = 100;
 
 // === Error Code Accessors ===
 public fun e_start_date_in_past(): u64 { E_START_DATE_IN_PAST }
+public fun e_invalid_bps(): u64 { E_INVALID_BPS }
+public fun e_zero_address(): u64 { E_ZERO_ADDRESS }
 public fun e_campaign_deleted(): u64 { E_CAMPAIGN_DELETED }
+public fun e_recipient_address_invalid(): u64 { E_RECIPIENT_ADDRESS_INVALID }
+public fun e_parameters_locked(): u64 { E_PARAMETERS_LOCKED }
+public fun e_empty_key(): u64 { E_EMPTY_KEY }
+public fun e_empty_value(): u64 { E_EMPTY_VALUE }
+public fun e_key_too_long(): u64 { E_KEY_TOO_LONG }
+public fun e_value_too_long(): u64 { E_VALUE_TOO_LONG }
+public fun e_too_many_metadata_entries(): u64 { E_TOO_MANY_METADATA_ENTRIES }
 
-public struct Campaign has key, store {
+public struct PayoutPolicy has copy, drop, store {
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+}
+
+public fun new_payout_policy(
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+): PayoutPolicy {
+    assert_valid_payout_policy_fields(platform_bps, platform_address, recipient_address);
+    PayoutPolicy { platform_bps, platform_address, recipient_address }
+}
+
+fun assert_valid_payout_policy(policy: &PayoutPolicy) {
+    assert_valid_payout_policy_fields(
+        policy.platform_bps,
+        policy.platform_address,
+        policy.recipient_address,
+    );
+}
+
+fun assert_valid_payout_policy_fields(
+    platform_bps: u16,
+    platform_address: address,
+    recipient_address: address,
+) {
+    assert!(platform_bps <= 10_000, E_INVALID_BPS);
+    assert!(platform_address != @0x0, E_ZERO_ADDRESS);
+    assert!(recipient_address != @0x0, E_ZERO_ADDRESS);
+}
+
+public struct Campaign has key {
     id: object::UID,
     admin_id: object::ID,
     name: String,
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
-    recipient_address: address, // Immutable - where donations are sent
-    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open
-    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close
+    funding_goal_usd_micro: u64, // Immutable: set at creation
+    payout_policy: PayoutPolicy, // Immutable: set at creation
+    stats_id: object::ID,
+    start_date: u64,        // Unix timestamp in milliseconds (UTC) when donations open; immutable
+    end_date: u64,          // Unix timestamp in milliseconds (UTC) when donations close; immutable
     created_at_ms: u64,     // Unix timestamp in milliseconds (UTC) recorded at creation
     is_verified: bool,
     is_active: bool,
     is_deleted: bool,
+    parameters_locked: bool,
     deleted_at_ms: std::option::Option<u64>,
     // BREAKING CHANGE (2025-01): Removed updates: vector<CampaignUpdate>
     // Updates now stored as frozen objects referenced via dynamic fields.
@@ -54,7 +112,10 @@ public struct UpdateKey has copy, drop, store {
     sequence: u64,
 }
 
-public struct CampaignOwnerCap has key, store {
+/// Soulbound capability tied to the campaign creator. Lacks the `store`
+/// ability, preventing transfers outside this module via
+/// `transfer::public_transfer`.
+public struct CampaignOwnerCap has key {
     id: object::UID,
     campaign_id: object::ID,
 }
@@ -89,6 +150,32 @@ public struct CampaignStatusChanged has copy, drop {
     editor: address,
     timestamp_ms: u64,
     new_status: bool,
+}
+
+public struct CampaignUnverified has copy, drop {
+    campaign_id: object::ID,
+    unverifier: address,
+}
+
+public(package) fun emit_campaign_unverified(
+    campaign: &Campaign,
+    actor: address,
+) {
+    event::emit(CampaignUnverified {
+        campaign_id: object::id(campaign),
+        unverifier: actor,
+    });
+}
+
+public struct CampaignParametersLocked has copy, drop {
+    campaign_id: object::ID,
+    timestamp_ms: u64,
+}
+
+public(package) fun unpack_parameters_locked_event(
+    event: &CampaignParametersLocked,
+): (object::ID, u64) {
+    (event.campaign_id, event.timestamp_ms)
 }
 
 // === App Auth ===
@@ -129,12 +216,10 @@ public fun assert_app_is_authorized<App: drop>(self: &Campaign) {
 
 /// Create a new campaign
 ///
-/// Validation: Only enforces date range (start < end). No validation for:
-/// - String lengths (name, short_description) - frontend handles
-/// - Metadata size limits - frontend handles
-/// - Recipient address non-zero - frontend handles
-///
-/// This is intentional to maximize flexibility.
+/// Validation:
+/// - Enforces date range (start < end) and start not in past
+/// - Validates payout policy fields
+/// - Enforces metadata key/value size limits consistent with updates
 public(package) fun new<App: drop>(
     _: &App,
     admin_id: object::ID,
@@ -142,17 +227,19 @@ public(package) fun new<App: drop>(
     short_description: String,
     subdomain_name: String,
     metadata: VecMap<String, String>,
-    recipient_address: address,
+    funding_goal_usd_micro: u64,
+    payout_policy: PayoutPolicy,
     start_date: u64,
     end_date: u64,
     clock: &Clock,
     ctx: &mut tx_context::TxContext,
-): (object::ID, CampaignOwnerCap) {
+): (Campaign, CampaignOwnerCap) {
     let creation_time_ms = clock::timestamp_ms(clock);
     // Check date range
     assert!(start_date < end_date, E_INVALID_DATE_RANGE);
-    assert!(recipient_address != @0x0, E_RECIPIENT_ADDRESS_INVALID);
     assert!(start_date >= creation_time_ms, E_START_DATE_IN_PAST);
+    assert_valid_payout_policy(&payout_policy);
+    assert_valid_metadata(&metadata);
 
     let mut campaign = Campaign {
         id: object::new(ctx),
@@ -161,13 +248,16 @@ public(package) fun new<App: drop>(
         short_description,
         subdomain_name,
         metadata,
-        recipient_address,
+        funding_goal_usd_micro,
+        payout_policy,
+        stats_id: object::id_from_address(@0x0),
         start_date,
         end_date,
         created_at_ms: creation_time_ms,
         is_verified: false,
         is_active: true,
         is_deleted: false,
+        parameters_locked: false,
         deleted_at_ms: std::option::none(),
         next_update_seq: 0,
     };
@@ -181,23 +271,108 @@ public(package) fun new<App: drop>(
     // Authorize the passed app
     df::add(&mut campaign.id, AppKey<App> {}, true);
 
+    (campaign, campaign_owner_cap)
+}
+
+public(package) fun share(campaign: Campaign) {
     transfer::share_object(campaign);
-    (campaign_id, campaign_owner_cap)
+}
+
+public(package) fun set_stats_id(campaign: &mut Campaign, stats_id: object::ID) {
+    assert!(object::id_to_address(&campaign.stats_id) == @0x0, E_STATS_ALREADY_SET);
+    campaign.stats_id = stats_id;
 }
 
 public fun subdomain_name(campaign: &Campaign): String {
     campaign.subdomain_name
 }
 
+public fun funding_goal_usd_micro(campaign: &Campaign): u64 {
+    campaign.funding_goal_usd_micro
+}
+
 public fun metadata(campaign: &Campaign): VecMap<String, String> {
     campaign.metadata
+}
+
+public fun payout_policy(campaign: &Campaign): &PayoutPolicy {
+    &campaign.payout_policy
+}
+
+public fun payout_platform_bps(campaign: &Campaign): u16 {
+    campaign.payout_policy.platform_bps
+}
+
+public fun payout_platform_address(campaign: &Campaign): address {
+    campaign.payout_policy.platform_address
+}
+
+public fun payout_recipient_address(campaign: &Campaign): address {
+    campaign.payout_policy.recipient_address
+}
+
+public fun payout_policy_platform_bps(policy: &PayoutPolicy): u16 {
+    policy.platform_bps
+}
+
+public fun payout_policy_platform_address(policy: &PayoutPolicy): address {
+    policy.platform_address
+}
+
+public fun payout_policy_recipient_address(policy: &PayoutPolicy): address {
+    policy.recipient_address
+}
+
+public fun stats_id(campaign: &Campaign): object::ID {
+    campaign.stats_id
+}
+
+public fun start_date(campaign: &Campaign): u64 {
+    campaign.start_date
+}
+
+public fun end_date(campaign: &Campaign): u64 {
+    campaign.end_date
+}
+
+public fun parameters_locked(campaign: &Campaign): bool {
+    campaign.parameters_locked
+}
+
+public fun assert_parameters_unlocked(campaign: &Campaign) {
+    assert!(!campaign.parameters_locked, E_PARAMETERS_LOCKED);
+}
+
+public(package) fun lock_parameters_if_unlocked(
+    campaign: &mut Campaign,
+    clock: &Clock,
+): bool {
+    if (campaign.parameters_locked) {
+        return false
+    };
+    campaign.parameters_locked = true;
+    let timestamp_ms = clock::timestamp_ms(clock);
+    event::emit(CampaignParametersLocked {
+        campaign_id: object::id(campaign),
+        timestamp_ms,
+    });
+    true
 }
 
 public fun campaign_id(campaign_owner_cap: &CampaignOwnerCap): object::ID {
     campaign_owner_cap.campaign_id
 }
 
-public fun delete_owner_cap(cap: CampaignOwnerCap) {
+/// Internal helper to deliver the owner cap from this module while keeping it
+/// non-transferable elsewhere.
+public(package) fun transfer_owner_cap(cap: CampaignOwnerCap, recipient: address) {
+    transfer::transfer(cap, recipient);
+}
+
+/// Destroy an owner cap (used when tearing down a campaign). This is kept
+/// package-visible to avoid external callers accidentally burning their own
+/// capability and losing control of an active campaign.
+public(package) fun delete_owner_cap(cap: CampaignOwnerCap) {
     let CampaignOwnerCap { id, campaign_id: _ } = cap;
     object::delete(id);
 }
@@ -340,17 +515,29 @@ entry fun update_campaign_basics(
 ) {
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
     let mut name_updated = false;
     let mut description_updated = false;
     if(std::option::is_some(&new_name)) {
         let new_name = std::option::destroy_some(new_name);
-        campaign.name = new_name;
-        name_updated = true;
+        let current_name = &campaign.name;
+        if (*current_name != new_name) {
+            campaign.name = new_name;
+            name_updated = true;
+        };
     };
     if(std::option::is_some(&new_description)) {
         let new_description = std::option::destroy_some(new_description);
-        campaign.short_description = new_description;
-        description_updated = true;
+        let current_description = &campaign.short_description;
+        if (*current_description != new_description) {
+            campaign.short_description = new_description;
+            description_updated = true;
+        };
+    };
+    if (name_updated || description_updated) {
+        if (was_verified) {
+            campaign.is_verified = false;
+        };
     };
     let timestamp_ms = clock::timestamp_ms(clock);
     event::emit(CampaignBasicsUpdated {
@@ -360,14 +547,49 @@ entry fun update_campaign_basics(
         name_updated,
         description_updated,
     });
+    if (was_verified && !campaign.is_verified) {
+        emit_campaign_unverified(campaign, tx_context::sender(ctx));
+    };
+}
+
+fun assert_valid_metadata_entry(
+    metadata: &VecMap<String, String>,
+    key: &String,
+    value: &String,
+) {
+    let key_len = string::length(key);
+    let value_len = string::length(value);
+    assert!(key_len > 0, E_EMPTY_KEY);
+    assert!(value_len > 0, E_EMPTY_VALUE);
+    assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+    assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+    if (!vec_map::contains(metadata, key)) {
+        assert!(vec_map::length(metadata) < MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    };
+}
+
+fun assert_valid_metadata(metadata: &VecMap<String, String>) {
+    let len = vec_map::length(metadata);
+    assert!(len <= MAX_METADATA_ENTRIES, E_TOO_MANY_METADATA_ENTRIES);
+    let mut i = 0;
+    while (i < len) {
+        let (key_ref, value_ref) = vec_map::get_entry_by_idx(metadata, i);
+        let key_len = string::length(key_ref);
+        let value_len = string::length(value_ref);
+        assert!(key_len > 0, E_EMPTY_KEY);
+        assert!(value_len > 0, E_EMPTY_VALUE);
+        assert!(key_len <= MAX_METADATA_KEY_LENGTH, E_KEY_TOO_LONG);
+        assert!(value_len <= MAX_METADATA_VALUE_LENGTH, E_VALUE_TOO_LONG);
+        i = i + 1;
+    };
 }
 
 /// Update campaign metadata (key-value pairs)
-/// Funding goal is immutable and cannot be changed
-///
-/// No limits on metadata size or number of keys - frontend handles validation.
-/// This is intentional to maximize flexibility. VecMap updates use get_mut()
-/// to preserve insertion order for existing keys.
+/// Funding goal and recipient address remain immutable.
+/// Keys and values must be non-empty UTF-8 strings with <= 64-byte keys,
+/// <= 2048-byte values, and metadata is limited to 100 entries (updates to
+/// existing keys are always allowed). VecMap updates use get_mut() to preserve
+/// insertion order for existing keys.
 entry fun update_campaign_metadata(
     campaign: &mut Campaign,
     cap: &CampaignOwnerCap,
@@ -379,31 +601,43 @@ entry fun update_campaign_metadata(
     // Verify ownership
     assert_owner(campaign, cap);
     assert_not_deleted(campaign);
+    let was_verified = campaign.is_verified;
 
     // Verify keys and values have same length
     assert!(vector::length(&keys) == vector::length(&values), E_KEY_VALUE_MISMATCH);
 
     let mut i = 0;
+    let mut metadata_mutated = false;
     while(i < vector::length(&keys)) {
         let key = *vector::borrow(&keys, i);
+        let value = *vector::borrow(&values, i);
+
+        assert_valid_metadata_entry(&campaign.metadata, &key, &value);
 
         // Prevent funding_goal modification
         assert!(key != std::string::utf8(b"funding_goal"), E_FUNDING_GOAL_IMMUTABLE);
         assert!(key != std::string::utf8(b"recipient_address"), E_RECIPIENT_ADDRESS_IMMUTABLE);
 
-        let value = *vector::borrow(&values, i);
-
         // Update existing key or insert new key
         // Use get_mut to preserve insertion order for existing keys
         if (vec_map::contains(&campaign.metadata, &key)) {
             let value_ref = vec_map::get_mut(&mut campaign.metadata, &key);
-            *value_ref = value;
+            if (*value_ref != value) {
+                *value_ref = value;
+                metadata_mutated = true;
+            };
         } else {
-            // New key - insert at end
             vec_map::insert(&mut campaign.metadata, key, value);
+            metadata_mutated = true;
         };
 
         i = i + 1;
+    };
+
+    if (metadata_mutated) {
+        if (was_verified) {
+            campaign.is_verified = false;
+        };
     };
 
     let timestamp_ms = clock::timestamp_ms(clock);
@@ -413,6 +647,9 @@ entry fun update_campaign_metadata(
         timestamp_ms,
         keys_updated: keys,
     });
+    if (was_verified && !campaign.is_verified) {
+        emit_campaign_unverified(campaign, tx_context::sender(ctx));
+    };
 }
 
 // === View Functions ===

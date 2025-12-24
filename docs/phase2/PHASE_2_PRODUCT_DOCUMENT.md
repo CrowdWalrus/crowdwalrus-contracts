@@ -38,7 +38,7 @@ Lock critical campaign parameters after first donation.
 
 2.2 Non‑Goals
 
-Holding/withdrawing funds (we route direct to sinks).
+Holding/withdrawing funds (we route direct to addresses).
 
 Off‑chain storage design (beyond Walrus image URIs and indexer guidance).
 
@@ -62,7 +62,7 @@ Create Campaign (Owner)
 
 Owner calls create_campaign with:
 
-Split preset (e.g., Non‑profit 0% platform, Commercial 5% platform) or explicit PayoutPolicy.
+Split preset name (e.g., Standard 0% platform, Commercial 5% platform). Omitting the name applies the seeded `"standard"` preset automatically (initially 0% platform fee pointing to the deployer's address, but admins can update it later); custom payout values are not accepted.
 
 funding_goal_usd_micro, start/end dates, recipient address.
 
@@ -80,7 +80,7 @@ Donor signs a PTB that:
 
 Includes a fresh Pyth update.
 
-Calls donate_and_award_first_time<T>: creates Profile internally, registers in ProfilesRegistry, performs donation (prechecks, USD valuation, split & send, stats update, lock campaign params if first donation to campaign), awards badges, transfers Profile to donor.
+Calls donate_and_award_first_time<T>: creates Profile internally, registers in ProfilesRegistry, performs donation (prechecks, USD valuation using the verified PriceInfoObject, split & send, stats update, lock campaign params if first donation to campaign), awards badges, transfers Profile to donor.
 
 Emits ProfileCreated, DonationReceived, and BadgeMinted (if threshold crossed) events.
 
@@ -92,7 +92,7 @@ Donor signs a PTB that:
 
 Includes owned Profile object reference and fresh Pyth update.
 
-Calls donate_and_award<T> with &mut Profile: performs donation, updates profile totals, awards additional badges if thresholds crossed.
+Calls donate_and_award<T> with &mut Profile: performs donation (consuming the verified PriceInfoObject), updates profile totals, awards additional badges if thresholds crossed.
 
 Emits DonationReceived and BadgeMinted (if new level) events.
 
@@ -109,15 +109,18 @@ Updates BadgeConfig (thresholds + image URIs).
 
 Typed Funding Goal: funding_goal_usd_micro: u64 stored in Campaign; immutable after creation.
 
-PayoutPolicy (per campaign): {platform_bps, platform_sink, recipient_sink}; validated at creation; locks on first donation.
+PayoutPolicy (per campaign): {platform_bps, platform_address, recipient_address}; validated at creation; locks on first donation.
 
-Parameter Locking: On first donation, set parameters_locked = true. After this, cannot change: start/end times, funding goal, payout policy; can change: name/description (emit events). Recipient address stays immutable.
+Parameter Locking: On first donation, set parameters_locked = true to signal that economic terms are live. Core fields (start/end dates, funding goal, payout policy) are immutable from creation; metadata and descriptive fields remain editable.
+
+Edit Re-Verification: Whenever an owner edits campaign basics or metadata, call the `campaign::update_campaign_basics` / `campaign::update_campaign_metadata` entry functions. They clear `is_verified` on the campaign and emit `CampaignUnverified` so admins must re-approve; publishing campaign updates via add_update does not affect verification. Off-chain indexers should treat the event stream + on-campaign flag as canonical (the legacy CrowdWalrus.registry cache is deprecated and may contain stale entries until the next verification cycle).
+Metadata Guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, a 100-entry cap for new keys, and continues to protect `funding_goal` and `recipient_address`. Campaign creation (`campaign::new`) now invokes the same validation so oversized metadata aborts before storing. Violations abort with E_EMPTY_KEY (16), E_EMPTY_VALUE (17), E_KEY_TOO_LONG (18), E_VALUE_TOO_LONG (19), or E_TOO_MANY_METADATA_ENTRIES (20).
 
 Auto-Profile Creation: If campaign owner has no profile in ProfilesRegistry, create_campaign creates one internally and transfers to owner.
 
 Acceptance Criteria
 
-Creating a campaign with invalid bps (>10_000) or zero sinks fails.
+Creating a campaign with invalid bps (>10_000) or zero addresses fails.
 
 After first donation, attempts to change locked fields abort with explicit error.
 
@@ -129,7 +132,7 @@ Profile is auto-created for campaign owner if they don't have one; ProfileCreate
 
 TokenRegistry (shared): For each Coin<T>, store {symbol, name, decimals, pyth_feed_id (32 bytes), enabled, max_age_ms}.
 
-PriceOracle: quote_usd<T>(amount_raw, decimals, feed_id, clock, pyth_update, max_age_ms) → u64 (micro‑USD). Uses u128 intermediates, floor rounding, staleness check.
+PriceOracle: quote_usd<T>(amount_raw, decimals, feed_id, price_info_object, clock, max_age_ms) → u64 (micro‑USD). Consumes the verified Pyth PriceInfoObject produced earlier in the PTB, uses u128 intermediates, floor rounding, feed-id matching, and staleness checks.
 
 Per‑Token Staleness: Use min(registry.max_age_ms, donor.max_age_ms?).
 
@@ -139,7 +142,9 @@ Zero Amount: Abort on zero donation amount.
 
 Acceptance Criteria
 
-Disabled token or stale update aborts.
+Disabled token or stale price data aborts.
+
+Feed ID mismatch between registry metadata and PriceInfoObject aborts.
 
 Correct decimal scaling verified by tests.
 
@@ -147,7 +152,7 @@ Donation aborts if usd < expected_min_usd_micro.
 
 5.3 Campaign Aggregates (Hot Path)
 
-CampaignStats (shared, one per campaign) stores total_usd_micro and parent link.
+CampaignStats (shared, one per campaign) stores total_usd_micro, total_donations_count, and parent link.
 
 Per‑coin stats via dynamic object fields under CampaignStats:
 
@@ -165,9 +170,9 @@ CampaignStatsCreated includes campaign_id and stats_id.
 
 precheck: campaign active, not deleted, within dates; token enabled.
 
-split_and_send: basis‑points split; recipient gets remainder; immediate transfers to sinks.
+split_and_send: basis‑points split; recipient gets remainder; immediate transfers to addresses.
 
-donate<T>: precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms.
+donate<T> (internal helper): precheck → USD valuation → split & send → stats → DonationReceived event. Accepts expected_min_usd_micro, optional donor_max_age_ms. This function is `public(package)`; external callers must use one of the award entry points below so every donation is profile-aware.
 
 **Two donation + award entry points:**
 
@@ -179,7 +184,7 @@ donate_and_award<T>: For repeat donors. Requires &mut Profile parameter (user's 
 
 Event Requirements
 
-DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms.
+DonationReceived includes: campaign_id, donor, coin_type_canonical (from std::type_name::get_with_original_ids<T>()), coin_symbol (from registry), amount_raw, amount_usd_micro, platform_amount_raw, recipient_amount_raw, platform_amount_usd_micro, recipient_amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms. Split fields must equal the total amounts so indexers can sum without reapplying payout math.
 
 Acceptance Criteria
 
@@ -193,7 +198,7 @@ First-time donation creates and transfers profile; repeat donation uses existing
 
 ProfilesRegistry (shared): address → profile_id mapping; enforces 1:1 uniqueness; emits ProfileCreated.
 
-Profile (owned): owner, total_usd_micro, badge_levels_earned (bitset, u16), metadata (VecMap).
+Profile (owned): owner, total_usd_micro, total_donations_count, badge_levels_earned (bitset, u16), metadata (VecMap). Profiles omit the `store` ability so they cannot be moved outside the module; only creation helpers inside profiles.move perform the initial transfer to the wallet.
 
 **Profile Creation Patterns:**
 
@@ -212,17 +217,19 @@ Profile is auto-created on campaign creation if owner doesn't have one.
 
 Only owner can update profile metadata (enforced via ownership checks).
 
+Profile metadata guardrails: keys must be 1–64 bytes, values 1–2048 bytes, and inserting a new key past 100 entries aborts with E_TOO_MANY_METADATA_ENTRIES; empty or oversized inputs reuse E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, and E_VALUE_TOO_LONG. Profile creation helpers call the same validation so invalid metadata never lands on-chain.
+
 Totals increment and persist across donations.
 
 ProfilesRegistry prevents duplicate profiles per address.
 
 5.6 Badge Rewards (Soulbound)
 
-BadgeConfig (shared, admin‑managed): 5 ascending thresholds_micro with image_uris (Walrus).
+BadgeConfig (shared, admin‑managed): 5 ascending amount_thresholds_micro paired with 5 ascending payment_thresholds plus image_uris (Walrus).
 
-DonorBadge (owned, no transfer functions): level, owner, image_uri, issued_at_ms. Display template registered via admin entry; must render in wallets.
+DonorBadge (owned, no transfer functions): level, owner, image_uri, issued_at_ms. Display template registered via admin entry with standard Sui fields (name, image_url, description, link); must render in wallets. Deployment steps are captured in `docs/phase2/PUBLISHER_DISPLAY_SETUP.md`.
 
-maybe_award_badges: compares old_total → new_total, sets bitset, mints any newly crossed levels; emits BadgeMinted.
+maybe_award_badges: compares old→new totals and payment counts, mints levels only when both thresholds are crossed; emits BadgeMinted.
 
 Acceptance Criteria
 
@@ -230,13 +237,13 @@ No duplicate badge mints per level (bitset enforces).
 
 Wallets display badges using configured Display fields.
 
-BadgeConfig validation (lengths equal, ascending).
+BadgeConfig validation (lengths equal across amount/payment/image vectors; each ascending).
 
 5.7 Split Policy Presets (Admin, Future Campaigns)
 
-SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_sink}) managed by AdminCap.
+SplitPolicyRegistry (shared): Named presets (name → {platform_bps, platform_address}) managed by AdminCap.
 
-Create Campaign: Accept either policy_name to snapshot a preset OR explicit PayoutPolicy.
+Create Campaign: Accept policy_name to snapshot a preset. If policy_name is omitted, snapshot the seeded `"standard"` preset (initially 0 bps with platform_address set to the deployer). Explicit custom payout values are not accepted.
 
 Snapshots are copied into campaign and locked on first donation; later changes in presets affect only future campaigns.
 
@@ -244,18 +251,20 @@ Acceptance Criteria
 
 Admin can add/update/disable presets.
 
-Creating with preset resolves to stored values; existing campaigns remain unaffected by later changes.
+Creating with preset (or the default when omitted) resolves to stored values; existing campaigns remain unaffected by later changes.
+
+Omitting policy_name resolves to the `"standard"` preset; creation aborts if that preset is missing or disabled.
 
 6) Events (for Indexer)
 Event	When	Fields (required)
 CampaignStatsCreated	On stats creation	campaign_id, stats_id, timestamp_ms
 CampaignParametersLocked	First donation	campaign_id, timestamp_ms
-DonationReceived	Each donation	campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms
+DonationReceived	Each donation	campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms
 ProfileCreated	Profile first creation	owner, profile_id, timestamp_ms
 ProfileMetadataUpdated	User updates profile	profile_id, owner, key, value, timestamp_ms
 BadgeConfigUpdated	Admin change	thresholds_micro, image_uris, timestamp_ms
 BadgeMinted	On award	owner, level, profile_id, timestamp_ms
-PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_name, platform_bps, platform_sink, timestamp_ms
+PolicyAdded/PolicyUpdated/PolicyDisabled	Preset changes	policy_name, platform_bps, platform_address, timestamp_ms
 TokenAdded/TokenUpdated/TokenEnabled/TokenDisabled	Registry changes	symbol, decimals, feed_id, max_age_ms, enabled, timestamp_ms
 
 Indexer Guidance
@@ -296,7 +305,7 @@ Badges: Soulbound via no transfer functions + Sui Display; do not freeze badges.
 
 Sui Framework compatible with our repo; pinned to testnet channel.
 
-Pyth Crosschain Contracts for Sui; Pyth price update must be included in the same PTB as donate*.
+Pyth Crosschain Contracts for Sui; each PTB must first refresh the relevant PriceInfoObject via `pyth::update_single_price_feed` (or equivalent) before invoking donate* with that PriceInfoObject reference so our contracts read verified price data.
 
 Walrus Storage used for badge images (URIs stored in BadgeConfig).
 
@@ -305,7 +314,7 @@ Indexer available to consume events and provide feeds/search/leaderboards.
 10) Risks & Mitigations
 Risk	Mitigation
 Oracle staleness or missing update	Enforce staleness; require expected_min_usd_micro; abort if invalid.
-Admin misconfiguration (bad bps/sinks)	Strict validation; capability‑gated; event logs; presets only affect new campaigns.
+Admin misconfiguration (bad bps/addresses)	Strict validation; capability‑gated; event logs; presets only affect new campaigns.
 Rounding disputes	Document rule ("recipient gets remainder") and include bps + amounts in events.
 Shared object contention on popular campaigns	Separate CampaignStats object; admin edits don't lock donation path.
 Symbol drift vs canonical type	Emit both canonical and human symbol in events.
@@ -363,7 +372,7 @@ All unit & integration tests pass; documentation updated.
 
 Campaign: core metadata; funding_goal_usd_micro, payout_policy, stats_id, parameters_locked.
 
-CampaignStats (shared): parent_id, total_usd_micro; DOFs: PerCoinStats<T>.
+CampaignStats (shared): parent_id, total_usd_micro, total_donations_count; DOFs: PerCoinStats<T>.
 
 TokenRegistry (shared): Coin<T> → {symbol, name, decimals, feed_id, enabled, max_age_ms}.
 
@@ -380,7 +389,7 @@ SplitPolicyRegistry (shared): presets for future campaigns.
 16) Event Schemas (Reference)
 
 DonationReceived
-campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms
+campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms
 
 BadgeMinted
 owner, level, profile_id, timestamp_ms
@@ -401,7 +410,7 @@ BadgeConfigUpdated
 thresholds_micro, image_uris, timestamp_ms
 
 PolicyAdded / PolicyUpdated / PolicyDisabled
-policy_name, platform_bps, platform_sink, enabled, timestamp_ms
+policy_name, platform_bps, platform_address, enabled, timestamp_ms
 
 TokenAdded / TokenUpdated / TokenEnabled / TokenDisabled
 symbol, name, decimals, feed_id, max_age_ms, enabled, timestamp_ms

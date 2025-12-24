@@ -38,6 +38,7 @@ The codebase uses a witness-based authorization pattern throughout:
 1. **CrowdWalrusApp**: Witness type defined in `crowd_walrus.move` that authorizes operations across modules
 2. **AppKey<App>**: Generic authorization key stored as dynamic fields to grant apps access to protected features
 3. Capabilities (`AdminCap`, `VerifyCap`, `CampaignOwnerCap`): Token-based permissions system
+   - `VerifyCap` and `CampaignOwnerCap` are soulbound (no `store` ability) so holders cannot transfer them
 
 When calling protected functions, modules check authorization via `assert_app_is_authorized<App>()`.
 
@@ -46,12 +47,12 @@ When calling protected functions, modules check authorization via `assert_app_is
 1. User calls `create_campaign()` in `crowd_walrus.move` with campaign details
 2. New `Campaign` object is created via `campaign::new()` with `CrowdWalrusApp` authorization
 3. SuiNS subdomain is registered via `suins_manager.register_subdomain()` pointing to campaign's address
-4. `CampaignOwnerCap` is transferred to creator for future operations
+4. `CampaignOwnerCap` is issued to the creator for future operations and cannot be transferred
 
 ### Verification System
 
-- `CrowdWalrus` maintains a `verified_maps` table and `verified_campaigns_list` vector
-- Only holders of `VerifyCap` can verify/unverify campaigns
+- `CrowdWalrus` emits verification events; campaigns keep their own `is_verified` flag
+- Only holders of `VerifyCap` can verify/unverify campaigns; the cap is non-transferable once issued
 - Admin can create new `VerifyCap` tokens via `create_verify_cap()`
 - Verification status is stored both in the central registry and on the campaign object itself
 

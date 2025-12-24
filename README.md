@@ -1,186 +1,84 @@
 # CrowdWalrus Smart Contracts
 
-A Sui Move smart contract system for managing crowdfunding campaigns with SuiNS subdomain integration.
+CrowdWalrus delivers a non-custodial crowdfunding platform on Sui with real-time USD valuation, profile-driven loyalty, and badge rewards. Phase 2 focuses on transparent donations, configurable platform fees, and analytics-friendly events.
 
-## Overview
+## Phase 2 Highlights
+- Multi-token donations: accept any Coin<T> the platform enables in the shared `TokenRegistry`.
+- On-chain USD pricing: each donation is valued in micro-USD via Pyth price feeds with staleness and donor slippage safeguards.
+- Typed campaign goals and payout policies: platform and recipient addresses plus basis points are embedded in every campaign and locked after the first donation.
+- Live aggregates: `CampaignStats` tracks total USD and per-coin totals while profiles aggregate lifetime donor activity.
+- Soulbound badges: five badge levels celebrate donor progress with wallet-renderable Display metadata.
+- Platform fee presets: admins seed named platform policies that campaign creators can adopt without re-auditing math.
 
-CrowdWalrus is a decentralized crowdfunding platform built on Sui blockchain that integrates with SuiNS (Sui Name Service) to provide subdomain management for campaigns. The system consists of three main modules:
+## Key User Flows
+**Campaign owners**
+- Call `crowd_walrus::create_campaign` with dates, funding_goal_usd_micro, and optional platform policy preset name.
+- If no profile exists, the system auto-creates one, links a new `CampaignStats` object, and emits `ProfileCreated` and `CampaignStatsCreated` events.
 
-- **crowd_walrus**: Main contract managing the platform and validation system
-- **campaign**: Handles crowdfunding campaign logic and lifecycle
-- **suins_manager**: Integrates with SuiNS for subdomain registration and management
+**First-time donors**
+- Submit a PTB that refreshes the relevant Pyth price feed and calls `donations::donate_and_award_first_time<T>`.
+- Contracts create and transfer a profile, value the donation in USD, split funds per the campaign policy, lock campaign parameters, update stats, and mint the first badge level if thresholds are met.
 
-## Prerequisites
+**Repeat donors**
+- Reuse their owned `Profile` object with `donations::donate_and_award<T>` to compound totals and unlock higher badges; no new objects are created.
 
-Before deploying, ensure you have:
+**Platform admins**
+- Manage accepted tokens, fee presets, and badge configuration using the AdminCap provided at package publish.
+- Events surface every change (`TokenAdded`, `PolicyUpdated`, `BadgeConfigUpdated`) so downstream systems stay in sync.
 
-1. **Sui CLI**: Install the latest version from [Sui documentation](https://docs.sui.io/guides/developer/getting-started/sui-install)
-2. **Active Sui Address**: Set up with sufficient SUI tokens for gas fees
-3. **Network Access**: Configure for testnet, devnet, or mainnet deployment
+## Admin Controls & Guardrails
+- `token_registry.move`: define coin symbol, name, decimals, enabled flag, Pyth feed id, and max allowable staleness (ms).
+- `platform_policy.move`: curate named platform fee presets (including the seeded "standard" default) and enforce that critical parameters lock after first donation.
+- `badge_rewards.move`: configure donation amount and count thresholds plus Walrus-hosted image URIs; register wallet Display metadata once per deployment.
+- All arithmetic is checked, USD rounding floors in favor of recipients, and the remainder of splits always routes to the campaign recipient.
 
-## Installation
+## Data & Analytics
+- `DonationReceived` events capture canonical coin type, human-readable symbol, raw amounts, USD valuations, fee split, and timestamp—everything needed for dashboards without recomputing math. See `docs/phase2/EVENT_SCHEMAS.md` for full field definitions.
+- Profiles and campaigns expose read-only getters for cumulative USD, donation counts, and per-coin totals, eliminating the need to replay history.
+- Parameter lock events (`CampaignParametersLocked`) provide an indexer-friendly milestone when fundraising terms go live.
 
-1. Clone the repository:
+## Modules at a Glance
+- `crowd_walrus.move`: package init, shared object bootstrap, campaign creation entry.
+- `campaign.move`: campaign struct, payout policy validation, metadata management, parameter locking.
+- `donations.move`: donation flows, slippage enforcement, price oracle integration, profile updates, badge minting.
+- `price_oracle.move`: USD valuation helper with feed validation and staleness checks.
+- `campaign_stats.move`: shared aggregates plus per-coin dynamic fields.
+- `profiles.move`: registry, owned profile object, metadata updates, auto-create helper.
+- `badge_rewards.move`: badge config, DonorBadge minting, Display registration.
+- `platform_policy.move`: named platform fee presets and global defaults.
+- `token_registry.move`: accepted token metadata and freshness policy.
 
+## Quick Start
 ```bash
+# Clone and build
 git clone <repository-url>
-cd crowdwalrus-contracts
-```
-
-2. Install dependencies (optional, for formatting):
-
-```bash
-npm install
-# or
-bun install
-```
-
-## Building the Contracts
-
-Build the Move contracts before deployment:
-
-```bash
+cd crowd-walrus-contracts
 sui move build
-```
 
-This will compile all modules and generate the build artifacts in the `build/` directory.
-
-## Testing
-
-Run the test suite to ensure everything works correctly:
-
-```bash
+# Run tests
 sui move test
-```
 
-The test files are located in the `tests/` directory and include:
-
-- `crowd_walrus_tests.move`
-- `campaign_tests.move`
-- `suins_manager_tests.move`
-
-## Deployment
-
-### 1. Configure Network
-
-Set your Sui CLI to the desired network:
-
-```bash
-# For testnet
+# (Optional) deploy to testnet
 sui client switch --env testnet
-
-# For devnet
-sui client switch --env devnet
-
-# For mainnet
-sui client switch --env mainnet
+sui client publish --gas-budget 500000000
 ```
 
-### 2. Check Active Address
+After publish, follow the [post-deployment checklist](#post-deployment-checklist) to wire SuiNS, tokens, badges, and platform policies.
 
-Verify your active address and balance:
+## Working With The Contracts
+- Build and test locally with `sui move build` and `sui move test`.
+- Developer-focused PTB recipes, admin runbooks, and price feed guidance live in `docs/phase2/PHASE_2_DEV_DOCUMENT.md` and `docs/phase2/POST_DEPLOYMENT_CONFIG.md`.
+- Deployment outputs include the shared object IDs for TokenRegistry, ProfilesRegistry, PlatformPolicy, BadgeConfig, and the AdminCap—record them for frontend and ops tooling.
 
-```bash
-sui client active-address
-sui client gas
-```
+## Post-Deployment Checklist
+- Capture the shared object IDs emitted at publish (CrowdWalrus, TokenRegistry, ProfilesRegistry, PolicyRegistry, BadgeConfig, SuiNSManager) and store them for frontend/indexer configs.
+- Transfer the `AdminCap` to the operations wallet, then configure platform policy presets (update the seeded "standard" entry and add/enable others as needed).
+- Wire SuiNS subdomains by calling `crowd_walrus::set_suins_nft` with the production `SuinsRegistration` NFT.
+- Populate `TokenRegistry` entries for every supported Coin<T> with symbol/name/decimals, Pyth feed IDs, default staleness, then enable each token.
+- Seed badge thresholds and Walrus image URIs through `crowd_walrus::update_badge_config` so donor milestones mint correctly.
+- Follow the full operational checklist in `docs/phase2/POST_DEPLOYMENT_CONFIG.md` for detailed command sequences and validation steps.
 
-### 3. Deploy the Package
-
-Deploy the smart contracts to the network:
-
-```bash
-sui client publish
-```
-
-**Important**: Save the output from this command as it contains:
-
-- Package ID
-- Object IDs for created objects
-- Transaction digest
-
-### 3.1. Set SuiNS NFT on SuiNSManager
-
-In order to register subdomains when creating campaigns, you need to set the SuiNS NFT on SuiNSManager. To do that, you need to call the `set_suins_nft` function on SuiNSManager.
-In test environment, we did create crowdwalrus-test.sui domain and set its NFT (`0x98dd15073e0b781ca524f7ef102edac6cd4393119a1f2f2b20f24f9056adb6d9`) object on SuiNSManager.
-
-**NOTE**: The set SuiNS NFT will be used for all campaigns created in the future. It defines the base domain newly created campaigns will be registered on. For example, if you set the SuiNS NFT to `crowdwalrus-test.sui`, all campaigns will be registered on `crowdwalrus-test.sui` domain, e.g. campaign1.crowdwalrus-test.sui, campaign2.crowdwalrus-test.sui, etc.
-
-**NOTE**: If you want to change the SuiNS NFT, you need to call the `remove_suins_nft` function on SuiNSManager to remove the old SuiNS NFT and then call the `set_suins_nft` function to set the new SuiNS NFT. The `remove_suins_nft` last parameter will define who will receive the old SuiNS NFT, which normally must be an account address.
-
-**NOTE**: In case you want to deploy a new version of the SuiNSManager, you need to set the new SuiNS NFT on the new SuiNSManager. You need to do that manually in two steps:
-
-1. Remove the old SuiNS NFT from the old SuiNSManager and send it to an account address which holds SuinsManager::AdminCap object.
-
-2. Set the new SuiNS NFT on the new SuiNSManager using `set_suins_nft` function. That must be called by an account address which holds SuinsManager::AdminCap object on the new SuiNSManager.
-
-Example:
-
-```bash
-sui client call --package PACKAGE_ID --module suins_manager --function set_suins_nft --args 0x98dd15073e0b781ca524f7ef102edac6cd4393119a1f2f2b20f24f9056adb6d9
-```
-
-### 4. Environment Setup
-
-After successful deployment, update the package address in `Move.toml`:
-
-```toml
-[addresses]
-crowd_walrus = "YOUR_DEPLOYED_PACKAGE_ID"
-```
-
-### 5. Initialize the System
-
-After deployment, you'll need to initialize the CrowdWalrus system by calling the initialization functions with the appropriate parameters.
-
-## Configuration
-
-### Dependencies
-
-The package uses the following dependencies:
-
-- **Sui Framework**: Latest mainnet framework from MystenLabs
-- **SuiNS Core**: Testnet core v2 for name service integration
-- **SuiNS Subdomains**: Testnet subdomain management v2
-- **SuiNS Denylist**: Testnet denylist management v2
-
-All hosted on https://github.com/aminlatifi/suins-contracts/tree/crowdwalrus-testnet-core-v2 to work with suins version deployed on testnet.
-
-### Network-Specific Notes
-
-- **Testnet**: Uses SuiNS testnet contracts for subdomain functionality
-- **Mainnet**: Requires updating SuiNS dependencies to mainnet versions
-- **Devnet**: Suitable for development and testing
-
-## Usage Examples
-
-After deployment, you can interact with the contracts using:
-
-```bash
-# Call contract functions
-sui client call --package PACKAGE_ID --module MODULE_NAME --function FUNCTION_NAME --args ARG1 ARG2
-
-# Query objects
-sui client object OBJECT_ID
-```
-
-## Repository Structure
-
-```
-crowdwalrus-contracts/
-├── sources/           # Move source files
-│   ├── crowd_walrus.move
-│   ├── campaign.move
-│   └── suins_manager.move
-├── tests/            # Test files
-├── build/            # Compiled artifacts
-├── Move.toml         # Package configuration
-└── README.md         # This file
-```
-
-### Getting Help
-
-- Check CrowdWalrus documentation: https://github.com/CrowdWalrus/Docs
-- Check Sui documentation: https://docs.sui.io
-- Review Move language reference: https://move-language.github.io/move/
-- SuiNS documentation: https://suins.io/docs
+## Additional Resources
+- Product requirements: `docs/phase2/PHASE_2_PRODUCT_DOCUMENT.md`
+- Post-deployment configuration playbook: `docs/phase2/POST_DEPLOYMENT_CONFIG.md`
+- Badge display setup: `docs/phase2/PUBLISHER_DISPLAY_SETUP.md`

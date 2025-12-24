@@ -3,10 +3,13 @@
 module crowd_walrus::campaign_tests;
 
 use crowd_walrus::campaign::{Self as campaign, Campaign, CampaignOwnerCap, CampaignUpdate};
+use crowd_walrus::crowd_walrus::CrowdWalrusApp;
 use crowd_walrus::crowd_walrus_tests as crowd_walrus_tests;
+use crowd_walrus::platform_policy;
 use std::string::{String, utf8};
 use std::unit_test::assert_eq;
 use sui::clock::Clock;
+use sui::event;
 use sui::test_scenario as ts;
 use sui::vec_map as vec_map;
 
@@ -14,6 +17,7 @@ const ADMIN: address = @0xA;
 const USER1: address = @0xB;
 const USER2: address = @0xC;
 
+const DEFAULT_PLATFORM_BPS: u16 = 0;
 const TEST_DOMAIN_NAME: vector<u8> = b"test.sui";
 
 const U64_MAX: u64 = 0xFFFFFFFFFFFFFFFF;
@@ -32,10 +36,25 @@ public fun test_set_is_active() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
     );
+
+    {
+        scenario.next_tx(campaign_owner);
+
+        let campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+
+        assert_eq!(campaign::payout_platform_bps(&campaign), DEFAULT_PLATFORM_BPS);
+        assert_eq!(campaign::payout_platform_address(&campaign), ADMIN);
+        assert_eq!(campaign::payout_recipient_address(&campaign), USER1);
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+    };
 
     {
         scenario.next_tx(campaign_owner);
@@ -66,6 +85,59 @@ public fun test_set_is_active() {
     scenario.end();
 }
 
+#[test]
+public fun test_payout_policy_custom_values() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+    let platform_address = USER2;
+    let recipient_address_policy = USER1;
+    let custom_bps: u16 = 1_234;
+
+    scenario.next_tx(ADMIN);
+    let mut policy_registry = scenario.take_shared<platform_policy::PolicyRegistry>();
+    let admin_cap = scenario.take_from_sender<crowd_walrus::crowd_walrus::AdminCap>();
+    let clock = scenario.take_shared<Clock>();
+    crowd_walrus::crowd_walrus::add_platform_policy_internal(
+        &mut policy_registry,
+        &admin_cap,
+        utf8(b"custompolicy"),
+        custom_bps,
+        platform_address,
+        &clock,
+    );
+    ts::return_shared(policy_registry);
+    ts::return_shared(clock);
+    scenario.return_to_sender(admin_cap);
+    ts::next_tx(&mut scenario, ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign_with_policy(
+        &mut scenario,
+        utf8(b"Custom Policy"),
+        utf8(b"Custom payout policy"),
+        b"custompolicy",
+        vector::empty(),
+        vector::empty(),
+        2_000_000,
+        recipient_address_policy,
+        option::some(utf8(b"custompolicy")),
+        0,
+        U64_MAX,
+    );
+
+    scenario.next_tx(campaign_owner);
+    let campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+    let owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+
+    assert_eq!(campaign::payout_platform_bps(&campaign), custom_bps);
+    assert_eq!(campaign::payout_platform_address(&campaign), platform_address);
+    assert_eq!(campaign::payout_recipient_address(&campaign), recipient_address_policy);
+
+    ts::return_shared(campaign);
+    scenario.return_to_sender(owner_cap);
+    scenario.end();
+}
+
 // === New Edit Feature Tests ===
 
 /// Test updating campaign name and description successfully
@@ -83,6 +155,7 @@ public fun test_update_campaign_basics_happy_path() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -95,6 +168,13 @@ public fun test_update_campaign_basics_happy_path() {
         let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
         let clock = scenario.take_shared<sui::clock::Clock>();
 
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
         // Call the update function with both new values
         crowd_walrus::campaign::update_campaign_basics(
             &mut campaign,
@@ -104,6 +184,17 @@ public fun test_update_campaign_basics_happy_path() {
             &clock,
             ts::ctx(&mut scenario),
         );
+
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        assert!(!campaign::is_verified(&campaign));
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len + 1);
 
         // Verify the changes (we'd need getter functions to check, but for now we trust it worked)
         // In a real scenario, you'd add public getter functions to verify the state
@@ -120,6 +211,13 @@ public fun test_update_campaign_basics_happy_path() {
         let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
         let clock = scenario.take_shared<sui::clock::Clock>();
 
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
         crowd_walrus::campaign::update_campaign_basics(
             &mut campaign,
             &campaign_owner_cap,
@@ -128,6 +226,13 @@ public fun test_update_campaign_basics_happy_path() {
             &clock,
             ts::ctx(&mut scenario),
         );
+
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        assert!(!campaign::is_verified(&campaign));
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len + 1);
 
         ts::return_shared(campaign);
         scenario.return_to_sender(campaign_owner_cap);
@@ -141,6 +246,13 @@ public fun test_update_campaign_basics_happy_path() {
         let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
         let clock = scenario.take_shared<sui::clock::Clock>();
 
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
         crowd_walrus::campaign::update_campaign_basics(
             &mut campaign,
             &campaign_owner_cap,
@@ -150,9 +262,90 @@ public fun test_update_campaign_basics_happy_path() {
             ts::ctx(&mut scenario),
         );
 
+        assert!(!campaign::is_verified(&campaign));
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len + 1);
+
         ts::return_shared(campaign);
         scenario.return_to_sender(campaign_owner_cap);
         ts::return_shared(clock);
+    };
+
+    // No event emitted when values identical and campaign stays verified
+    {
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<sui::clock::Clock>();
+
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
+        crowd_walrus::campaign::update_campaign_basics(
+            &mut campaign,
+            &campaign_owner_cap,
+            option::some(utf8(b"Another Name")),
+            option::none(),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len);
+        assert!(campaign::is_verified(&campaign));
+
+        // description unchanged path
+        crowd_walrus::campaign::update_campaign_basics(
+            &mut campaign,
+            &campaign_owner_cap,
+            option::none(),
+            option::some(utf8(b"Yet Another Description")),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+        let final_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&final_events), before_len);
+        assert!(campaign::is_verified(&campaign));
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    // No event emitted when campaign was already unverified
+    {
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<sui::clock::Clock>();
+
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        assert!(!campaign::is_verified(&campaign));
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
+        crowd_walrus::campaign::update_campaign_basics(
+            &mut campaign,
+            &campaign_owner_cap,
+            option::none(),
+            option::none(),
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len);
+        assert!(!campaign::is_verified(&campaign));
+
+    ts::return_shared(campaign);
+    scenario.return_to_sender(campaign_owner_cap);
+    ts::return_shared(clock);
     };
 
     scenario.end();
@@ -172,6 +365,7 @@ public fun test_update_campaign_metadata_happy_path() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -184,6 +378,13 @@ public fun test_update_campaign_metadata_happy_path() {
         let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
         let clock = scenario.take_shared<sui::clock::Clock>();
 
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
         // Update category, add new social_twitter
         crowd_walrus::campaign::update_campaign_metadata(
             &mut campaign,
@@ -194,32 +395,187 @@ public fun test_update_campaign_metadata_happy_path() {
             ts::ctx(&mut scenario),
         );
 
+        assert!(!campaign::is_verified(&campaign));
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len + 1);
+
         ts::return_shared(campaign);
         scenario.return_to_sender(campaign_owner_cap);
         ts::return_shared(clock);
     };
 
-    // Update with empty string (allowed per requirements)
+    // No event emitted when metadata unchanged and campaign stays verified
     {
         scenario.next_tx(campaign_owner);
         let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
         let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
         let clock = scenario.take_shared<sui::clock::Clock>();
 
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, true);
+        assert!(campaign::is_verified(&campaign));
+
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
         crowd_walrus::campaign::update_campaign_metadata(
             &mut campaign,
             &campaign_owner_cap,
-            vector[utf8(b"social_twitter")],
-            vector[utf8(b"")], // Empty string is valid
+            vector[utf8(b"category")],
+            vector[utf8(b"education")],
             &clock,
             ts::ctx(&mut scenario),
         );
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len);
+        assert!(campaign::is_verified(&campaign));
 
         ts::return_shared(campaign);
         scenario.return_to_sender(campaign_owner_cap);
         ts::return_shared(clock);
     };
 
+    // No event emitted when campaign already unverified
+    {
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<sui::clock::Clock>();
+
+        let app = crowd_walrus::crowd_walrus::get_app();
+        campaign::set_verified<CrowdWalrusApp>(&mut campaign, &app, false);
+        assert!(!campaign::is_verified(&campaign));
+        let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        let before_len = vector::length(&before_events);
+
+        crowd_walrus::campaign::update_campaign_metadata(
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[utf8(b"category")],
+            vector[utf8(b"education")],
+            &clock,
+            ts::ctx(&mut scenario),
+        );
+
+        let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+        assert_eq!(vector::length(&after_events), before_len);
+        assert!(!campaign::is_verified(&campaign));
+
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
+    };
+
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = campaign::E_INVALID_BPS, location = 0x0::campaign)]
+public fun test_new_payout_policy_rejects_excess_bps() {
+    let _policy = campaign::new_payout_policy(10_001, ADMIN, USER1);
+}
+
+#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0x0::campaign)]
+public fun test_new_payout_policy_rejects_zero_platform_address() {
+    let _policy = campaign::new_payout_policy(100, @0x0, USER1);
+}
+
+#[test, expected_failure(abort_code = campaign::E_ZERO_ADDRESS, location = 0x0::campaign)]
+public fun test_new_payout_policy_rejects_zero_recipient_address() {
+    let _policy = campaign::new_payout_policy(100, ADMIN, @0x0);
+}
+
+#[test]
+public fun test_campaign_funding_goal_getter() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let campaign_id = crowd_walrus_tests::create_test_campaign(
+        &mut scenario,
+        utf8(b"Funding Goal Check"),
+        utf8(b"Ensure typed goal stored"),
+        b"goalcheck",
+        vector::empty(),
+        vector::empty(),
+        2_500_000,
+        USER1,
+        0,
+        U64_MAX,
+    );
+
+    {
+        scenario.next_tx(campaign_owner);
+        let campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        assert_eq!(campaign::funding_goal_usd_micro(&campaign), 2_500_000);
+        ts::return_shared(campaign);
+    };
+
+    scenario.end();
+}
+
+#[test]
+public fun test_campaign_stats_id_defaults_and_setter() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let (mut campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        utf8(b"Stats Link"),
+        utf8(b"Verify stats linkage defaults"),
+        b"statslink",
+        vector::empty(),
+        vector::empty(),
+        1_000,
+        USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+    );
+
+    ts::return_shared(clock);
+    assert!(!campaign::parameters_locked(&campaign));
+    assert_eq!(object::id_to_address(&campaign::stats_id(&campaign)), @0x0);
+
+    let expected_stats_id = object::id_from_address(@0x123);
+    campaign::set_stats_id(&mut campaign, expected_stats_id);
+    assert_eq!(campaign::stats_id(&campaign), expected_stats_id);
+
+    campaign::share(campaign);
+    campaign::delete_owner_cap(owner_cap);
+    scenario.end();
+}
+
+#[test, expected_failure(abort_code = campaign::E_STATS_ALREADY_SET, location = 0x0::campaign)]
+public fun test_campaign_stats_id_double_set_fails() {
+    let campaign_owner = USER1;
+    let mut scenario = crowd_walrus_tests::test_init(ADMIN);
+
+    scenario.next_tx(campaign_owner);
+    let (mut campaign, owner_cap, clock) = crowd_walrus_tests::create_unshared_campaign(
+        &mut scenario,
+        utf8(b"Stats Write Once"),
+        utf8(b"Ensure stats id cannot reset"),
+        b"stats-write-once",
+        vector::empty(),
+        vector::empty(),
+        1_000,
+        USER1,
+        DEFAULT_PLATFORM_BPS,
+        ADMIN,
+        0,
+        U64_MAX,
+    );
+
+    ts::return_shared(clock);
+    campaign::set_stats_id(&mut campaign, object::id_from_address(@0x111));
+    campaign::delete_owner_cap(owner_cap);
+    campaign::set_stats_id(&mut campaign, object::id_from_address(@0x222));
+
+    ts::return_shared(campaign);
     scenario.end();
 }
 
@@ -241,6 +597,7 @@ public fun test_update_campaign_metadata_funding_goal_immutable() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -249,23 +606,23 @@ public fun test_update_campaign_metadata_funding_goal_immutable() {
     // Update the campaign metadata
     {
 
-    scenario.next_tx(campaign_owner);
-    let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
-    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
-    let clock = scenario.take_shared<sui::clock::Clock>();
+        scenario.next_tx(campaign_owner);
+        let mut campaign = scenario.take_shared_by_id<Campaign>(campaign_id);
+        let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
+        let clock = scenario.take_shared<sui::clock::Clock>();
 
-    crowd_walrus::campaign::update_campaign_metadata(
-        &mut campaign,
-        &campaign_owner_cap,
-        vector[utf8(b"funding_goal")],
-        vector[utf8(b"1000000")],
-        &clock,
-        ts::ctx(&mut scenario),
-    );
+        crowd_walrus::campaign::update_campaign_metadata(
+            &mut campaign,
+            &campaign_owner_cap,
+            vector[utf8(b"funding_goal")],
+            vector[utf8(b"1000000")],
+            &clock,
+            ts::ctx(&mut scenario),
+        );
 
-    ts::return_shared(campaign);
-    scenario.return_to_sender(campaign_owner_cap);
-    ts::return_shared(clock);
+        ts::return_shared(campaign);
+        scenario.return_to_sender(campaign_owner_cap);
+        ts::return_shared(clock);
     };
     scenario.end();
 }
@@ -283,6 +640,7 @@ public fun test_update_campaign_metadata_recipient_address_immutable() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -324,6 +682,7 @@ public fun test_update_campaign_metadata_key_value_mismatch() {
         b"sub",
         vector[utf8(b"category"), utf8(b"walrus_quilt_id")],
         vector[utf8(b"technology"), utf8(b"123456")],
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -365,6 +724,7 @@ public fun test_update_active_status_changes() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -434,6 +794,7 @@ public fun test_update_active_status_no_op() {
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1, // recipient_address
         0,
         U64_MAX,
@@ -479,6 +840,7 @@ public fun test_mark_deleted_sets_flags() {
         b"markdeleted",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         campaign_owner,
         0,
         U64_MAX,
@@ -515,6 +877,7 @@ public fun test_add_update_rejects_deleted_campaign() {
         b"noupdates",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         campaign_owner,
         0,
         U64_MAX,
@@ -544,7 +907,7 @@ public fun test_add_update_rejects_deleted_campaign() {
 // === Campaign Creation Validation Tests ===
 // Note: These tests verify validation rules enforced during campaign creation
 
-#[test, expected_failure(abort_code = 6, location = crowd_walrus::crowd_walrus)] // E_START_DATE_IN_PAST
+#[test, expected_failure(abort_code = 6, location = 0x0::crowd_walrus)] // E_START_DATE_IN_PAST
 public fun test_create_campaign_start_date_in_past() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -567,6 +930,7 @@ public fun test_create_campaign_start_date_in_past() {
             b"sub",
             vector::empty(),
             vector::empty(),
+            1_000_000,
             USER1, // recipient_address
             0,  // This is now in the past since we advanced the clock
             U64_MAX,
@@ -588,6 +952,7 @@ public fun test_create_campaign_invalid_date_range() {
         b"invalid_date_range",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         100,
         50,
@@ -596,20 +961,22 @@ public fun test_create_campaign_invalid_date_range() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = crowd_walrus::campaign::E_RECIPIENT_ADDRESS_INVALID)]
+#[test, expected_failure(abort_code = crowd_walrus::campaign::E_RECIPIENT_ADDRESS_INVALID, location = 0x0::crowd_walrus)]
 public fun test_create_campaign_invalid_recipient_address() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(campaign_owner);
-    crowd_walrus_tests::create_test_campaign(
+    crowd_walrus_tests::create_test_campaign_with_policy(
         &mut scenario,
         utf8(b"Invalid Recipient Campaign"),
         utf8(b"Recipient address must not be zero"),
         b"sub",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         @0x0,
+        option::none(),
         0,
         U64_MAX,
     );
@@ -632,6 +999,7 @@ public fun test_add_update_happy_path() {
         b"update",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -641,6 +1009,13 @@ public fun test_add_update_happy_path() {
     let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
     let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
     let clock = scenario.take_shared<Clock>();
+
+    let app = crowd_walrus::crowd_walrus::get_app();
+    campaign::set_verified<CrowdWalrusApp>(&mut campaign_obj, &app, true);
+    assert!(campaign::is_verified(&campaign_obj));
+
+    let before_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+    let before_len = vector::length(&before_events);
 
     crowd_walrus::campaign::add_update(
         &mut campaign_obj,
@@ -657,6 +1032,10 @@ public fun test_add_update_happy_path() {
     );
     assert!(crowd_walrus::campaign::has_update(&campaign_obj, 0));
     assert!(!crowd_walrus::campaign::has_update(&campaign_obj, 1));
+    assert!(campaign::is_verified(&campaign_obj));
+
+    let after_events = event::events_by_type<crowd_walrus::campaign::CampaignUnverified>();
+    assert_eq!(vector::length(&after_events), before_len);
 
     let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
 
@@ -724,6 +1103,7 @@ public fun test_add_multiple_updates_sequences() {
         b"multi",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -827,6 +1207,7 @@ public fun test_add_update_empty_metadata_allowed() {
         b"empty",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -879,6 +1260,7 @@ public fun test_add_update_wrong_cap_fails() {
         b"companya",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -892,6 +1274,7 @@ public fun test_add_update_wrong_cap_fails() {
         b"companyb",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER2,
         0,
         U64_MAX,
@@ -933,6 +1316,7 @@ public fun test_add_update_key_value_mismatch() {
         b"mismatch",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -975,6 +1359,7 @@ public fun test_add_update_duplicate_metadata_keys() {
         b"dup",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1004,38 +1389,33 @@ public fun test_add_update_duplicate_metadata_keys() {
 }
 
 #[test]
-public fun test_update_author_after_cap_transfer() {
+public fun test_update_author_is_creator() {
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
 
     scenario.next_tx(USER1);
     let campaign_id = crowd_walrus_tests::create_test_campaign(
         &mut scenario,
-        utf8(b"Transfer Campaign"),
-        utf8(b"Testing cap transfer"),
-        b"transfer",
+        utf8(b"Soulbound Campaign"),
+        utf8(b"Owner cap stays with creator"),
+        b"soulbound",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
     );
 
-    // Transfer CampaignOwnerCap from USER1 to USER2
     scenario.next_tx(USER1);
-    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
-    sui::transfer::public_transfer(campaign_owner_cap, USER2);
-
-    // USER2 posts update
-    scenario.next_tx(USER2);
     let mut campaign_obj = scenario.take_shared_by_id<Campaign>(campaign_id);
-    let transferred_cap = scenario.take_from_sender<CampaignOwnerCap>();
+    let campaign_owner_cap = scenario.take_from_sender<CampaignOwnerCap>();
     let clock = scenario.take_shared<Clock>();
 
     crowd_walrus::campaign::add_update(
         &mut campaign_obj,
-        &transferred_cap,
+        &campaign_owner_cap,
         vector[utf8(b"note")],
-        vector[utf8(b"posted by user2")],
+        vector[utf8(b"posted by creator")],
         &clock,
         ts::ctx(&mut scenario),
     );
@@ -1043,14 +1423,14 @@ public fun test_update_author_after_cap_transfer() {
     let update_id = crowd_walrus::campaign::get_update_id(&campaign_obj, 0);
 
     ts::return_shared(campaign_obj);
-    scenario.return_to_sender(transferred_cap);
+    scenario.return_to_sender(campaign_owner_cap);
     ts::return_shared(clock);
 
-    scenario.next_tx(USER2);
+    scenario.next_tx(USER1);
     let update = ts::take_immutable_by_id<CampaignUpdate>(&scenario, update_id);
     assert_eq!(
         crowd_walrus::campaign::update_author(&update),
-        USER2
+        USER1
     );
     ts::return_immutable(update);
     scenario.end();
@@ -1069,6 +1449,7 @@ public fun test_update_try_get_missing_returns_none() {
         b"none",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1084,7 +1465,7 @@ public fun test_update_try_get_missing_returns_none() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist, location = sui::dynamic_field)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist, location = 0x2::dynamic_field)]
 public fun test_get_update_id_missing_sequence_aborts() {
     let campaign_owner = USER1;
     let mut scenario = crowd_walrus_tests::test_init(ADMIN);
@@ -1097,6 +1478,7 @@ public fun test_get_update_id_missing_sequence_aborts() {
         b"noupdates",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,
@@ -1122,6 +1504,7 @@ public fun test_add_update_emits_event() {
         b"event",
         vector::empty(),
         vector::empty(),
+        1_000_000,
         USER1,
         0,
         U64_MAX,

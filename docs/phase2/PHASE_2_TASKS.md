@@ -3,7 +3,8 @@ Phase 2 — Updated Implementation Task List (Sui Move)
 Global conventions (apply to all tasks)
 • USD unit: micro‑USD (u64), floor rounding.
 • Split rule: recipient gets remainder.
-• Locking: parameters_locked = true on first donation; after that, start/end/funding_goal/payout_policy cannot change; metadata can.
+• Locking: parameters_locked = true on first donation. Core parameters (start/end/funding_goal/payout_policy) are immutable from creation; metadata can still change.
+• Metadata: Profile and Campaign metadata use VecMap with 100-entry caps; keys must be 1–64 bytes, values 1–2048 bytes, updates to existing keys bypass the cap. Creation helpers (`campaign::new`, `profiles::create`) now run the same guardrails so oversized metadata aborts at creation time instead of relying on frontend filtering.
 • Oracle freshness: effective_max_age_ms = min(registry.max_age_ms_for_T, donor_override if provided).
 • Events: include canonical type (std::type_name::get_with_original_ids<T>()) and human symbol (from TokenRegistry).
 • Safety: checked arithmetic; abort on overflow; clear error codes.
@@ -13,6 +14,8 @@ Global conventions (apply to all tasks)
 
 B0) Build & Dependencies (new upfront)
 B0. Add Pyth dependency in Move.toml
+
+✅ COMPLETED (Oct 23, 2025) — Wormhole auto-resolved as transitive dependency. See docs/phase2/DEPENDENCIES.md.
 
 File/Module: Move.toml (package manifest)
 
@@ -32,17 +35,19 @@ Postconditions: Project builds with Pyth imported.
 
 Move patterns: External package pinning; reproducible builds.
 
-Security/Edges: Pin to a stable commit; record the exact revision in Documentation/last_deploy.md.
+Security/Edges: Pin to a stable commit; record the exact revision in docs/phase2/DEPENDENCIES.md.
 
 Tests: sui move build succeeds; Pyth modules resolvable by other tasks.
 
-Acceptance: Build green; Move.lock updated; Documentation/last_deploy.md lists the pinned revision.
+Acceptance: Build green; Move.lock updated; docs/phase2/DEPENDENCIES.md lists the pinned revision.
 
 Deps: None.
 
 Err codes: N/A.
 
 B0a. Publish-time shared object bootstrap
+
+✅ COMPLETED (Nov 3, 2025) — `init` now provisions TokenRegistry, ProfilesRegistry, PlatformPolicy, and BadgeConfig with events + stored IDs; tests cover bootstrap wiring.
 
 File/Module: sources/crowd_walrus.move (init) + respective module inits
 
@@ -74,6 +79,7 @@ Err codes: Reuse module-specific duplicate errors if init rerun.
 
 A) Campaign schema & lifecycle (existing files)
 A1. Typed funding goal on Campaign
+✅ COMPLETED (Oct 23, 2025) — Field + getter wired; tests updated; Sui dependency pinned to mainnet-v1.57.3 for toolchain parity.
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
@@ -102,6 +108,7 @@ Acceptance: Field set/read; no mutation path.
 Deps: A5.
 
 A2. Typed PayoutPolicy on Campaign
+✅ COMPLETED (Oct 23, 2025) — PayoutPolicy struct stored immutably with validation + getters for platform split fields.
 
 File/Module: sources/campaign.move / crowd_walrus::campaign
 
@@ -109,13 +116,15 @@ Product intent: Trustworthy on‑chain split commitment.
 
 Implement:
 
-PayoutPolicy { platform_bps: u16, platform_sink: address, recipient_sink: address }.
+PayoutPolicy { platform_bps: u16, platform_address: address, recipient_address: address }.
 
-Field payout_policy + getters; creation validation (bps ≤ 10_000, sinks ≠ zero).
+Field payout_policy + getters; creation validation (bps ≤ 10_000, addresses ≠ zero).
 
-Preconditions: Valid bps/sinks.
+Preconditions: Valid bps/addresses.
 
 Postconditions: Policy stored; later locked (A4).
+
+Notes: Recipient payout address now lives only inside PayoutPolicy for canonical storage.
 
 Patterns: Basis‑points; strong typing.
 
@@ -127,9 +136,11 @@ Acceptance: Validated; getters return expected.
 
 Deps: A5, G2.
 
-Err codes: E_INVALID_BPS, E_ZERO_SINK.
+Err codes: E_INVALID_BPS, E_ZERO_ADDRESS.
 
 A3. stats_id + parameters_locked
+
+✅ COMPLETED (Oct 23, 2025) — Added write-once stats link + lock flag with unit tests.
 
 File/Module: sources/campaign.move
 
@@ -157,17 +168,18 @@ Deps: A5.
 
 Err codes: E_STATS_ALREADY_SET.
 
-A4. Lock critical params after first donation
+A4. Parameter lock milestone after first donation
+✅ COMPLETED (Oct 30, 2025) — parameters_locked milestone emits event on first donation and donate<T> now asserts stats ownership.
 
 File/Module: sources/campaign.move + toggle in donations (G5/G6a/G6b)
 
-Product intent: Prevent fee/date rug‑pulls.
+Product intent: Prevent fee/date rug-pulls.
 
 Implement:
 
 In donations, if not locked, set locked and emit CampaignParametersLocked { campaign_id, timestamp_ms }.
 
-In campaign updaters: assert unlocked when changing start_date, end_date, funding_goal_usd_micro, payout_policy; keep metadata editable.
+start_date, end_date, funding_goal_usd_micro, and payout_policy are immutable from creation in the current product scope. The parameters_locked flag and event provide an indexer-friendly signal that donations have begun; metadata remains editable.
 
 Preconditions: First donation detection.
 
@@ -175,9 +187,9 @@ Postconditions: Protected updates abort thereafter.
 
 Patterns: One‑way toggle; idempotent.
 
-Security/Edges: Concurrent updates fail correctly.
+Security/Edges: Concurrent updates fail correctly; donors cannot attach mismatched CampaignStats (E_STATS_MISMATCH).
 
-Tests: Pre‑donation updates succeed; post‑donation abort; single lock event.
+Tests: Single lock event emitted on first donation; parameters_locked flag set; metadata edits continue to function.
 
 Acceptance: Enforced & event present.
 
@@ -186,6 +198,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_PARAMETERS_LOCKED.
 
 A5. create_campaign wiring (fields + stats + profile)
+✅ COMPLETED (Oct 26, 2025) — create_campaign now wires stats + auto-profiles with integration tests for both fresh and existing owners.
 
 File/Module: sources/crowd_walrus.move / crowd_walrus::crowd_walrus
 
@@ -197,7 +210,7 @@ Extend to accept funding_goal_usd_micro and PayoutPolicy or preset (H2).
 
 Call profiles::create_or_get_profile_for_sender (E5) to handle registry lookup and conditional creation; this avoids duplicating logic.
 
-After campaign::new, call campaign_stats::create_for_campaign and set stats_id. Emit CampaignStatsCreated.
+After campaign::new, call campaign_stats::create_for_campaign (returns shared stats_id and sets it internally). Emit CampaignStatsCreated.
 
 Preconditions: Valid time & policy; ProfilesRegistry available.
 
@@ -207,16 +220,18 @@ Patterns: Constructor composition; conditional profile creation (same pattern as
 
 Security/Edges: Profile uniqueness enforced by registry; validation aborts propagate.
 
-Tests: Happy path with existing profile (no ProfileCreated event); happy path without profile (ProfileCreated emitted); invalid policy/time aborts.
+Tests: Verified via create_campaign integration tests covering new and existing profile owners; invalid policy/time aborts.
 
 Acceptance: Correct linking; profile auto-creation works; events present.
 
 Deps: C1 (CampaignStats), E1-E2 and E5 (ProfilesRegistry + Profile + helper), H1 (platform_policy for preset resolution - see H2 for implementation details).
 
-Err codes: E_INVALID_BPS, E_ZERO_SINK, time validation errors.
+Err codes: E_INVALID_BPS, E_ZERO_ADDRESS, time validation errors.
 
 B) Token & oracle infrastructure
-B1. TokenRegistry (per‑token metadata & staleness)
+B1. TokenRegistry (per-token metadata & staleness)
+
+✅ COMPLETED (Oct 26, 2025) — Shared registry + admin flows merged; migration entry guards legacy deployments.
 
 File/Module: sources/token_registry.move / crowd_walrus::token_registry
 
@@ -251,6 +266,7 @@ Deps: B0 (Pyth added).
 Err codes: E_COIN_EXISTS, E_COIN_NOT_FOUND, E_BAD_FEED_ID.
 
 B2. Effective staleness helper
+✅ COMPLETED (Oct 27, 2025) — Helper computes min(registry max-age, donor override) with zero treated as no override; covered by unit tests.
 
 File/Module: sources/donations.move / crowd_walrus::donations
 
@@ -276,6 +292,7 @@ Deps: B1.
 
 C) PriceOracle
 C1. quote_usd<T> valuation (staleness + floor)
+✅ COMPLETED (Oct 27, 2025) — quote_usd now reads verified PriceInfoObjects with feed-ID validation and staleness enforcement.
 
 File/Module: sources/price_oracle.move / crowd_walrus::price_oracle
 
@@ -283,19 +300,19 @@ Product intent: Deterministic USD valuation for receipts, badges, stats.
 
 Implement:
 
-Inputs: amount_raw (u128), decimals (u8), feed_id (vector<u8>), clock, pyth_update (vector<u8>), max_age_ms (u64).
+Inputs: amount_raw (u128), decimals (u8), feed_id (vector<u8>), price_info_object (&PriceInfoObject), clock, max_age_ms (u64).
 
 Use u128 math; apply exponent; floor to micro‑USD; checked downcast to u64.
 
-Reject zero amounts; stale/invalid update.
+Reject zero amounts; stale price info; mismatched feed IDs.
 
-Preconditions: Fresh Pyth update in the same PTB.
+Preconditions: Caller must have updated the referenced PriceInfoObject via a verified Pyth update (same PTB).
 
 Postconditions: Returns micro‑USD or abort.
 
-Patterns: Stateless; pull‑update.
+Patterns: Stateless reader; update‑then‑consume.
 
-Security/Edges: Exponent sanity; staleness.
+Security/Edges: Exponent sanity; staleness; enforce PriceInfoObject feed matches registry metadata; no raw byte parsing.
 
 Tests: Decimals (6/9/18); stale abort; zero abort.
 
@@ -304,7 +321,11 @@ Acceptance: Correct outputs; tests pass.
 Deps: B0, B1.
 
 D) Campaign aggregates
+
 D1. CampaignStats creation + event
+
+✅ COMPLETED (Oct 25, 2025) — CampaignStats now stores total USD and donation counts with creation event.
+
 
 File/Module: sources/campaign_stats.move / crowd_walrus::campaign_stats
 
@@ -312,19 +333,19 @@ Product intent: Live totals without scanning events.
 
 Implement:
 
-Shared CampaignStats { parent_id, total_usd_micro }.
+Shared CampaignStats { parent_id, total_usd_micro, total_donations_count } (has key only).
 
-create_for_campaign(&Campaign, &mut TxContext) -> CampaignStats; emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
+create_for_campaign(&mut Campaign, &Clock, &mut TxContext) -> object::ID; share internally and emit CampaignStatsCreated { campaign_id, stats_id, timestamp_ms }.
 
 Preconditions: Not previously created.
 
-Postconditions: Shared stats exists & is linked in A5.
+Postconditions: Shared stats exists & is linked in A5 with zeroed totals/counts.
 
 Patterns: Separate shared object.
 
 Security/Edges: Enforce one‑per‑campaign via A3 setter.
 
-Tests: Created; event correct.
+Tests: Created; event correct; initial totals/counts zero.
 
 Acceptance: Pass.
 
@@ -332,7 +353,9 @@ Deps: A5.
 
 Err codes: Optional E_STATS_ALREADY_EXISTS.
 
-D2. Per‑coin stats via DOF
+D2. Per-coin stats via DOF
+
+✅ COMPLETED (Oct 27, 2025) — Per-coin totals tracked with overflow-safe helpers and tests.
 
 File/Module: sources/campaign_stats.move
 
@@ -342,7 +365,7 @@ Implement:
 
 DOF PerCoinStats<T> { total_raw: u128, donation_count: u64 }.
 
-Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro and per‑coin stats with overflow checks.
+Helpers ensure_per_coin<T>(...) and add_donation<T>(raw, usd_micro); increment total_usd_micro, total_donations_count, and per‑coin stats with overflow checks.
 
 Preconditions: Stats exist.
 
@@ -361,6 +384,7 @@ Deps: G5/G6a/G6b.
 Err codes: E_OVERFLOW.
 
 D3. Views for stats
+✅ COMPLETED (Oct 27, 2025) — Added O(1) view helpers exposing total and per-coin aggregates.
 
 File/Module: sources/campaign_stats.move
 
@@ -368,7 +392,7 @@ Product intent: Lightweight UIs without indexer.
 
 Implement:
 
-Views: total_usd_micro, per_coin_total_raw<T>, per_coin_donation_count<T>.
+Views: total_usd_micro, total_donations_count, per_coin_total_raw<T>, per_coin_donation_count<T>.
 
 Preconditions: —
 
@@ -386,6 +410,7 @@ Deps: D2.
 
 E) Profiles (owned)
 E1. ProfilesRegistry (address → profile_id)
+✅ COMPLETED (Oct 25, 2025) — Shared registry + ProfileCreated event landed; publish-time init hook remains tracked under B0a.
 
 File/Module: sources/profiles.move / crowd_walrus::profiles
 
@@ -416,6 +441,7 @@ Deps: E2.
 Err codes: E_PROFILE_EXISTS, E_NOT_PROFILE_OWNER.
 
 E2. Profile object + bitset + metadata
+✅ COMPLETED (Oct 25, 2025) — Profiles track USD totals and donation counts with soulbound enforcement.
 
 File/Module: sources/profiles.move
 
@@ -423,19 +449,19 @@ Product intent: Lifetime giving + badges per user.
 
 Implement:
 
-Owned Profile { owner, total_usd_micro: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
+Owned Profile { owner, total_usd_micro: u64, total_donations_count: u64, badge_levels_earned: u16, metadata: VecMap<String,String> }.
 
-add_usd(u64) with overflow check; set_metadata (owner‑only); getters.
+add_contribution(amount_micro: u64) with overflow checks; increments both total_usd_micro and total_donations_count; set_metadata (owner‑only); getters exposed for both totals.
 
 Preconditions: Owned by signer for mutators.
 
-Postconditions: Totals and bitset persist.
+Postconditions: Totals, donation count, and bitset persist; donation count reflects number of distinct payments contributing to totals.
 
-Patterns: Owned object with strict owner checks.
+Patterns: Owned object with strict owner checks; true soulbound (Profile omits `store`, no transfer after creation).
 
-Security/Edges: Overflow; KV length mismatch.
+Security/Edges: Overflow; KV length mismatch; ensure donation count increments exactly once per contribution.
 
-Tests: Owner vs non‑owner; totals add; metadata changes.
+Tests: Owner vs non‑owner; totals add; donation count increments; metadata changes.
 
 Acceptance: Pass.
 
@@ -444,8 +470,9 @@ Deps: E1.
 Err codes: E_NOT_PROFILE_OWNER, E_KEY_VALUE_MISMATCH, E_OVERFLOW.
 
 E2b. Publisher handling for Display setup (clarification)
+✅ COMPLETED (Oct 28, 2025) — Publisher & Display deployer runbook captured in docs/phase2/PUBLISHER_DISPLAY_SETUP.md; matches badge_rewards::setup_badge_display implementation.
 
-File/Module: UPDATE_IMPLEMENTATION.md + sources/badge_rewards.move
+File/Module: docs/phase2/PUBLISHER_DISPLAY_SETUP.md + sources/badge_rewards.move
 
 Product intent: Ensure we can call Display registration with the correct Publisher.
 
@@ -455,7 +482,7 @@ Document how deployer obtains the sui::package::Publisher at publish time and pa
 
 Add an admin entry in badge_rewards that accepts &Publisher and registers templates.
 
-No object “claiming” is required in init; the deployer simply supplies the Publisher to the entry when configuring display.
+Init now calls `sui::package::claim_and_keep`, so the deployer automatically receives the Publisher and can supply it to the display entry.
 
 Preconditions: Package published; Publisher available to deployer.
 
@@ -472,6 +499,7 @@ Acceptance: Docs + callable entry present.
 Deps: F2.
 
 E3. Standalone create_profile entry function
+✅ COMPLETED (Nov 2, 2025) — Entry now accepts Clock for timestamped events; tests cover happy path and duplicate abort.
 
 File/Module: sources/profiles.move
 
@@ -479,7 +507,7 @@ Product intent: Users can create profiles before any other action (optional, imp
 
 Implement:
 
-Public entry fun create_profile(registry: &mut ProfilesRegistry, ctx: &mut TxContext).
+entry fun create_profile(registry: &mut ProfilesRegistry, clock: &Clock, ctx: &mut TxContext).
 
 Check ProfilesRegistry; if sender already has profile, abort with E_PROFILE_EXISTS.
 
@@ -502,6 +530,7 @@ Deps: E1, E2.
 Err codes: E_PROFILE_EXISTS.
 
 E4. update_profile_metadata entry function
+✅ COMPLETED (Nov 2, 2025) — Entry enforces owner-only updates, 64/2048 length bounds, and emits ProfileMetadataUpdated.
 
 File/Module: sources/profiles.move
 
@@ -509,13 +538,13 @@ Product intent: Users can update their profile information (name, bio, avatar UR
 
 Implement:
 
-Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, ctx: &mut TxContext).
+Public entry fun update_profile_metadata(profile: &mut Profile, key: String, value: String, clock: &Clock, ctx: &mut TxContext).
 
 Verify tx_context::sender(ctx) == profile.owner (E_NOT_PROFILE_OWNER).
 
 Update metadata VecMap with new key-value pair (insert_or_update).
 
-Guard against empty strings and overlong keys/values (define max lengths; abort when exceeded).
+Guard against empty strings and overlong keys/values (1–64 byte keys, 1–2048 byte values) and enforce a 100-entry cap when inserting new keys (E_TOO_MANY_METADATA_ENTRIES).
 
 Emit ProfileMetadataUpdated { profile_id, owner, key, value, timestamp_ms }.
 
@@ -536,6 +565,7 @@ Deps: E2.
 Err codes: E_NOT_PROFILE_OWNER, E_EMPTY_KEY.
 
 E5. Helper: create_or_get_profile_for_sender (internal helper)
+✅ COMPLETED (Oct 25, 2025) — Helper now auto-mints or reuses profiles with test coverage for both paths.
 
 File/Module: sources/profiles.move
 
@@ -561,6 +591,7 @@ Deps: E1/E2; Used by: A5, G6a.
 
 F) Badge rewards (soulbound)
 F1. BadgeConfig (thresholds + URIs)
+✅ COMPLETED (Oct 28, 2025) — Shared config object, admin setter validation, focused tests.
 
 File/Module: sources/badge_rewards.move
 
@@ -568,7 +599,7 @@ Product intent: Marketing controls milestones & art.
 
 Implement:
 
-Shared BadgeConfig { thresholds_micro (len=5, ascending), image_uris (len=5) }.
+Shared BadgeConfig { amount_thresholds_micro (len=5, ascending), payment_thresholds (len=5, ascending), image_uris (len=5) }.
 
 Admin setters with validation; emit BadgeConfigUpdated.
 
@@ -578,9 +609,9 @@ Preconditions: AdminCap only.
 
 Postconditions: Config stored.
 
-Patterns: Cap‑gated; strict validation.
+Patterns: Cap‑gated; strict validation across both threshold vectors (length match, monotonic growth) + URIs.
 
-Security/Edges: Length/order enforced; URIs non‑empty.
+Security/Edges: Length/order enforced; URIs non‑empty; supports future threshold tuning without code change.
 
 Tests: Invalid shapes abort; valid emits event.
 
@@ -589,6 +620,7 @@ Acceptance: Pass.
 Deps: I2.
 
 F2. DonorBadge (soulbound) + Display setup entry
+✅ COMPLETED (Oct 28, 2025) — DonorBadge minted via package-only helper and display registered with standard name/image_url/description/link templates.
 
 File/Module: sources/badge_rewards.move
 
@@ -598,7 +630,7 @@ Implement:
 
 Owned DonorBadge { level, owner, image_uri, issued_at_ms } with no transfer API.
 
-Admin entry setup_badge_display(pub:&Publisher, ctx) to register Display templates (name, image, description, link) using badge fields.
+Admin entry setup_badge_display(pub:&Publisher, ctx) to register Display templates (name, image_url, description, link) using badge fields.
 
 Preconditions: Level within 1..5.
 
@@ -617,6 +649,7 @@ Deps: F1, E2b.
 Err codes: E_BAD_BADGE_LEVEL.
 
 F3. Award logic with bitset & events
+✅ COMPLETED (Oct 31, 2025) — maybe_award_badges now emits BadgeMinted per level with exhaustive threshold tests.
 
 File/Module: sources/badge_rewards.move
 
@@ -624,17 +657,17 @@ Product intent: Instant recognition when donors cross milestones.
 
 Implement:
 
-maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_total:u64, new_total:u64, clock) sets bits for newly crossed levels, mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector of u8).
+maybe_award_badges(profile:&mut Profile, config:&BadgeConfig, old_amount:u64, old_count:u64, new_amount:u64, new_count:u64, clock) sets bits for newly satisfied levels (both amount + payment thresholds), mints badges, emits BadgeMinted { owner, level, profile_id, timestamp_ms }. Returns minted levels (vector<u8>).
 
-Preconditions: Config set; profile owned by signer.
+Preconditions: Config set; profile owned by signer; caller supplies pre/post totals and counts.
 
-Postconditions: New badges minted exactly once per level.
+Postconditions: New badges minted exactly once per level; both thresholds satisfied before mint.
 
-Patterns: Idempotent; multi‑level crossing.
+Patterns: Idempotent; multi‑level crossing; evaluates amount and payment thresholds together.
 
-Security/Edges: Boundary equality mints once; no duplicates.
+Security/Edges: Boundary equality (amount OR payments alone) does not mint; requires satisfying both; no duplicates.
 
-Tests: 0→L1; L1→L3; re‑donate no duplicate; exact boundary.
+Tests: Amount-only increase (no mint); payment-only increase (no mint); 0→L1 with both satisfied; L1→L3 jump meeting both; repeat call no duplicate; exact dual-boundary.
 
 Acceptance: Pass.
 
@@ -642,6 +675,8 @@ Deps: E2, F1, F2.
 
 G) Donations (non‑custodial orchestration)
 G1. Precheck (time/status/token)
+
+✅ COMPLETED (Oct 29, 2025) — Added donation precheck validations and boundary/negative path tests.
 
 File/Module: sources/donations.move / crowd_walrus::donations
 
@@ -668,6 +703,7 @@ Deps: B1, A1–A4.
 Err codes: E_CAMPAIGN_INACTIVE, E_CAMPAIGN_CLOSED, E_TOKEN_DISABLED.
 
 G2. Split & direct transfer
+✅ COMPLETED (Oct 29, 2025) — Added split_and_transfer helper with fee rounding tests.
 
 File/Module: sources/donations.move
 
@@ -677,7 +713,7 @@ Implement:
 
 Compute platform and recipient per basis points; transfer; return sent amounts.
 
-Preconditions: Nonzero amount; sinks valid.
+Preconditions: Nonzero amount; addresses valid.
 
 Postconditions: Funds routed; no custody.
 
@@ -694,6 +730,8 @@ Deps: A2.
 Err codes: E_ZERO_DONATION.
 
 G3. USD valuation helper (registry + oracle + override)
+✅ COMPLETED (Oct 29, 2025) — Added quote_usd_micro helper with feed/staleness/zero guard tests.
+
 
 File/Module: sources/donations.move
 
@@ -701,9 +739,9 @@ Product intent: Accurate receipt value & badge basis.
 
 Implement:
 
-Lookup token metadata; compute effective max age (B2); call PriceOracle to get micro‑USD.
+Lookup token metadata; compute effective max age (B2); validate that the supplied PriceInfoObject matches the feed; call PriceOracle to get micro‑USD.
 
-Preconditions: Token exists and enabled; update present.
+Preconditions: Token exists and enabled; caller has updated the PriceInfoObject earlier in the PTB.
 
 Postconditions: Returns micro‑USD or abort.
 
@@ -720,6 +758,7 @@ Deps: B1, B2, C1.
 Err codes: E_COIN_NOT_FOUND (if missing), E_TOKEN_DISABLED.
 
 G4. DonationReceived event (canonical + symbol)
+✅ COMPLETED (Oct 30, 2025) — Event now includes split amounts with invariants + tests.
 
 File/Module: sources/donations.move
 
@@ -727,41 +766,44 @@ Product intent: Indexer uses a single event to power donation feeds.
 
 Implement:
 
-Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_bps, platform_sink, recipient_sink, timestamp_ms.
+Emit event with fields: campaign_id, donor, coin_type_canonical, coin_symbol, amount_raw, amount_usd_micro, platform_amount_raw, recipient_amount_raw, platform_amount_usd_micro, recipient_amount_usd_micro, platform_bps, platform_address, recipient_address, timestamp_ms.
 
 Preconditions: Values computed.
 
 Postconditions: One event per donation.
 
-Patterns: Canonical + human labels.
+Patterns: Canonical + human labels; event records actual split results so indexer does not recompute.
 
 Security/Edges: No PII beyond addresses.
 
-Tests: Fields exact.
+Tests: Fields exact; split amounts sum back to totals.
 
 Acceptance: Pass.
 
 Deps: B1, A2.
 
-G5. donate<T> entry (core; slippage + locking)
+G5. donate<T> helper (core; slippage + locking)
+✅ COMPLETED (Oct 30, 2025) — donate<T> now enforces stats ownership (E_STATS_MISMATCH), emits DonationReceived, locks params, and boundary/slippage tests cover all edges.
 
 File/Module: sources/donations.move
 
-Product intent: Core donation API for integrators.
+Product intent: Core donation pipeline reused internally by profile-aware entry points.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &Clock, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
 Flow: G1 → G3 → assert slippage floor → G2 → D2 add_donation → if first donation then A4 lock → G4 event → return micro‑USD.
 
-Preconditions: Valid inputs.
+Preconditions: Valid inputs; PriceInfoObject already refreshed this PTB via Pyth update.
 
 Postconditions: Funds routed; stats updated; event emitted; maybe locked.
 
 Patterns: Atomic orchestration.
 
 Security/Edges: Overflow checks; idempotent lock.
+
+Related invariants: Owner-driven campaign edit entry functions (e.g., `campaign::update_campaign_basics`, `campaign::update_campaign_metadata`) must clear `is_verified` and emit `CampaignUnverified`; campaign update postings (add_update) never do. Indexers should rely on the event + `Campaign` flag (the legacy CrowdWalrus registry cache is deprecated). Metadata guardrails: `campaign::update_campaign_metadata` enforces non-empty keys/values, 1–64 byte keys, 1–2048 byte values, and a 100-entry cap for new keys (errors E_EMPTY_KEY, E_EMPTY_VALUE, E_KEY_TOO_LONG, E_VALUE_TOO_LONG, E_TOO_MANY_METADATA_ENTRIES).
 
 Tests: Happy/slippage/boundary times/remainder.
 
@@ -772,6 +814,8 @@ Deps: A2–A4, B1–B2, C1, D1–D2, G1–G4.
 Err codes: E_SLIPPAGE_EXCEEDED.
 
 G6a. donate_and_award_first_time<T> entry (creates Profile internally)
+✅ COMPLETED (Nov 1, 2025) — Entry auto-mints profile, updates stats, mints badges, and returns outcome struct with tests for edge cases.
+
 
 File/Module: sources/donations.move
 
@@ -779,11 +823,11 @@ Product intent: Truly one‑tap first donation—no separate profile step.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &ProfilesRegistry, &Clock, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
-Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T>; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
+Flow: create Profile inside this entry (map in registry, create owned object, set owner); call G5 donate<T> helper with the verified PriceInfoObject; update profile total; call F3 maybe_award_badges; transfer the newly created Profile to the sender (ensure it ends owned by the donor); return { usd_micro, minted_levels }.
 
-Preconditions: Sender has no existing profile (abort if exists to avoid duplicates).
+Preconditions: Sender has no existing profile (abort if exists to avoid duplicates); caller supplies a freshly updated PriceInfoObject.
 
 Postconditions: Donation processed; profile minted to sender; badges minted if eligible.
 
@@ -801,17 +845,19 @@ Err codes: Surface E_PROFILE_EXISTS if already mapped.
 
 G6b. donate_and_award<T> entry (requires &mut Profile)
 
+✅ COMPLETED (Nov 1, 2025) — Documented repeat donor entry; tests cover multi-level badge unlocks.
+
 File/Module: sources/donations.move
 
 Product intent: Efficient repeat donations with existing Profile.
 
 Implement:
 
-Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, pyth_update: vector<u8>, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
+Inputs: &mut Campaign, &mut CampaignStats, &TokenRegistry, &BadgeConfig, &Clock, &mut Profile, Coin<T>, &PriceInfoObject, expected_min_usd_micro: u64, opt_max_age_ms: Option<u64>, &mut TxContext.
 
-Flow: call G5 donate<T>; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
+Flow: call G5 donate<T> helper; update profile totals; call F3 awards; return { usd_micro, minted_levels }.
 
-Preconditions: Caller owns Profile (enforce owner).
+Preconditions: Caller owns Profile (enforce owner) and provides a recently updated PriceInfoObject.
 
 Postconditions: Donation processed; badges minted as needed.
 
@@ -829,6 +875,7 @@ Err codes: Propagate underlying + E_NOT_PROFILE_OWNER on misuse.
 
 H) Platform split presets (admin; future campaigns)
 H1. platform_policy presets registry
+✅ COMPLETED (Oct 25, 2025)
 
 File/Module: sources/platform_policy.move / crowd_walrus::platform_policy
 
@@ -836,49 +883,50 @@ Product intent: Business can add/adjust defaults (e.g., 5%→10%) for new campai
 
 Implement:
 
-Shared registry name -> { platform_bps, platform_sink, enabled } with AdminCap-gated add/update/enable/disable.
+Shared registry name -> { platform_bps, platform_address, enabled } with AdminCap-gated add/update/enable/disable.
 
 Events: PolicyAdded, PolicyUpdated, PolicyDisabled.
 
 Hook into B0a bootstrap so the registry is created and shared exactly once during package init.
 
-Preconditions: Valid bps & sink; unique name.
+Preconditions: Valid bps & address; unique name.
 
-Postconditions: Presets set for future campaigns.
+Postconditions: Presets set for future campaigns; registry ID persisted on CrowdWalrus and emitted at init for discovery.
 
 Patterns: Snapshot at creation (H2); existing campaigns unaffected.
 
 Security/Edges: Duplicate names abort; bounds enforced.
 
-Tests: Admin ops; errors; events.
+Tests: Admin ops; errors; events (incl. invalid bps/address, missing/disabled policy).
 
-Acceptance: Pass.
+Acceptance: Pass — entry functions callable by PTBs, registry discoverable via stored field/event.
 
 Deps: I1.
 
-Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_SINK.
+Err codes: E_POLICY_EXISTS, E_POLICY_NOT_FOUND, E_POLICY_DISABLED, reuse E_INVALID_BPS, E_ZERO_ADDRESS.
 
-H2. create_campaign supports preset or explicit policy
+H2. create_campaign snapshots preset policies only
+✅ COMPLETED (Oct 26, 2025) — seeded `"standard"` fallback preset and removed explicit policy inputs.
 
 File/Module: sources/crowd_walrus.move
 
-Product intent: Simple creation (choose preset) with preserved immutability post‑first donation.
+Product intent: Campaign creators must pick an admin-owned preset; omitting a name auto-selects the seeded `"standard"` preset so they cannot inject custom splits.
 
 Implement:
 
-Branch: if policy_name provided, resolve from platform_policy and copy into PayoutPolicy; else accept explicit PayoutPolicy.
+Bootstrap the `"standard"` preset during `crowd_walrus::init` (0 bps to start, platform address = publisher) so fallback is always present. Branch: if policy_name provided, resolve from platform_policy and copy into PayoutPolicy; else resolve the default preset and copy its values. No direct parameters for custom bps/address.
 
 This extends A5's create_campaign implementation (resolved policy is passed to campaign::new along with stats creation and profile creation).
 
-Preconditions: Enabled preset exists if referenced.
+Preconditions: Enabled preset exists if referenced; default preset is bootstrapped on init but must remain enabled (abort otherwise).
 
 Postconditions: Campaign stores snapshot; later preset changes don't affect it.
 
-Patterns: Resolve‑and‑copy; not a pointer.
+Patterns: Resolve‑and‑copy; default resolver fetches `"standard"` preset seeded with 0 bps and the publisher's address.
 
-Security/Edges: Missing/disabled preset abort; still validate.
+Security/Edges: Missing/disabled preset abort; default preset missing/disabled aborts and blocks creation (ops must restore preset).
 
-Tests: Preset and explicit paths; disabled preset abort.
+Tests: Preset path; default preset path (no policy name); missing/disabled presets abort.
 
 Acceptance: Pass.
 
@@ -886,6 +934,7 @@ Deps: H1 (platform_policy registry); Extends: A5 (this is part of A5 implementat
 
 I) Admin surfaces
 I1. Cap‑gate TokenRegistry & PlatformPolicy
+✅ COMPLETED (Nov 3, 2025) — All token/policy mutators now funnel through crowd_walrus AdminCap guards with positive/negative tests.
 
 File/Module: sources/token_registry.move, sources/platform_policy.move
 
@@ -912,6 +961,7 @@ Deps: Existing AdminCap.
 Err codes: Reuse E_NOT_AUTHORIZED.
 
 I2. Cap‑gate BadgeConfig updates
+✅ COMPLETED (Nov 3, 2025) — BadgeConfig setters gated by AdminCap wrapper in crowd_walrus; tests assert unauthorized caps abort.
 
 File/Module: sources/badge_rewards.move
 
@@ -938,7 +988,9 @@ Deps: AdminCap.
 J) Events & Docs
 J1. Finalize & document event schemas
 
-File/Module: All relevant modules; Documentation/UPDATE_IMPLEMENTATION.md
+✅ COMPLETED (Nov 3, 2025) — Canonical event schemas documented in docs/phase2/EVENT_SCHEMAS.md and linked from PHASE_2_DEV_DOCUMENT.md (stub to be expanded during L1 for full workflow guidance).
+
+File/Module: All relevant modules; docs/phase2/EVENT_SCHEMAS.md (referenced via PHASE_2_DEV_DOCUMENT.md)
 
 Product intent: Indexer has a single, authoritative reference.
 
@@ -964,6 +1016,7 @@ Deps: All event producers.
 
 K) Tests
 K1. Unit tests per module
+✅ COMPLETED (Nov 3, 2025) — Module suites now assert event payloads, auth guards, and multi-coin scenarios; full test run green.
 
 Files:
 
@@ -996,6 +1049,7 @@ Security/Edges: Boundary timestamps; dust; double‑mint; double profile; disabl
 Acceptance: All pass.
 
 K2. Integration scenarios (targeted)
+✅ COMPLETED (Nov 3, 2025) — End-to-end scenarios now covered by targeted integration tests; badge progression, multi-coin stats, and slippage guards verified.
 
 File: tests/integration_phase2_tests.move
 
@@ -1026,15 +1080,18 @@ Slippage floor: success when met; abort when not.
 Acceptance: All scenarios pass with correct events and state.
 
 L) Documentation & DevEx
-L1. Update UPDATE_IMPLEMENTATION.md (developer‑facing)
+L1. Update PHASE_2_DEV_DOCUMENT.md (developer-facing)
+✅ COMPLETED (Nov 3, 2025) — Guide now covers PTB recipes, admin setup, Pyth integration, and profile auto-creation touchpoints.
 
-File: Documentation/UPDATE_IMPLEMENTATION.md
+File: PHASE_2_DEV_DOCUMENT.md
+
+Notes: Added short admin ops section per post-review feedback; no code changes required.
 
 Product intent: Engineers can assemble PTBs and admin workflows without reading code.
 
 Implement:
 
-PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset vs explicit campaign creation, Display registration using Publisher; include the Display template keys (name, image, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
+PTB patterns for: campaign creation (auto-creates profile if missing), first-time donor (call G6a only), repeat donor (call G6b with &mut Profile), preset selection or default seeded campaign creation (initially 0 bps), Display registration using Publisher; include the Display template keys (name, image_url, description, link) and remind readers to call display::update_version after setup_badge_display(pub, ctx).
 
 Explain how integrators fetch Pyth price updates off-chain (e.g., via Pyth SDK) and attach them to the same PTB, clarifying staleness semantics and donor overrides.
 
@@ -1045,6 +1102,8 @@ List entry function inputs (object refs required), rounding, slippage, staleness
 Acceptance: Clear, stepwise, unambiguous; profile auto-creation documented for both flows.
 
 L2. Update README.md (product overview)
+
+✅ COMPLETED (Nov 3, 2025) — README now highlights Phase 2 feature set, user flows, admin controls, a post-deploy checklist, and links to supporting docs.
 
 File: Documentation/README.md
 
@@ -1060,6 +1119,6 @@ Notes on the three external feedback points
 
 F6 ambiguity → Resolved by splitting into G6a (creates Profile internally) and G6b (requires &mut Profile). Frontend chooses based on existence. This removes ambiguity and keeps PTBs clean.
 
-Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in Documentation/last_deploy.md. Acceptance requires build success and lockfile update.
+Pyth dependency → Added B0 with best practice: pin to a specific commit hash (preferred) or compatible tag, avoid floating main, and capture the revision in `deployment.addresses.testnet.json` (or the dated deployment file). Acceptance requires build success and lockfile update.
 
-Publisher setup → Clarified in E2b and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
+Publisher setup → Clarified in E2b docs (docs/phase2/PUBLISHER_DISPLAY_SETUP.md) and L1 docs: use the Publisher object obtained at publish time by the deployer to call the setup_badge_display entry. No special “claiming” via OTW is required; just pass &Publisher to the admin entry that registers Display.
