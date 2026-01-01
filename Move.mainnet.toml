@@ -1,0 +1,20 @@
+[package]
+name = "crowd_walrus"
+edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+# license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
+# authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+
+[dependencies]
+Pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-mainnet" }
+# Mainnet SuiNS: use upstream `main` (release branch keeps subdomains/denylist at 0x0).
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "main" }
+suins_subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "main" }
+suins_denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "main" }
+
+[addresses]
+crowd_walrus = "0x0"
+sui = "0x2"
+# Upstream `suins` uses 0x0 with automated address management; keep it to avoid conflicts.
+suins = "0x0"
+suins_subdomains = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430"
+suins_denylist = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b"
