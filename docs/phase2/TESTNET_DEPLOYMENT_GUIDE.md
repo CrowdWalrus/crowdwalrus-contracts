@@ -103,10 +103,11 @@ sui move test
 
 Confirm these are in your `Move.toml`:
 - ✅ Sui Framework: implicit (no explicit Sui dependency; CLI resolves the correct framework for Testnet)
-- ✅ Pyth: `sui-contract-testnet`
-- ✅ SuiNS: `crowdwalrus-testnet-core-v2`
-- ✅ Subdomains: `crowdwalrus-testnet-core-v2`
-- ✅ Denylist: `crowdwalrus-testnet-core-v2`
+- ✅ Pyth: pinned commit (see `Move.toml`)
+- ✅ Wormhole: pinned commit (see `Move.toml`)
+- ✅ SuiNS: `releases/testnet/core/v2`
+- ✅ Subdomains: `releases/testnet/core/v2`
+- ✅ Denylist: `releases/testnet/core/v2`
 
 ---
 
@@ -117,6 +118,12 @@ Confirm these are in your `Move.toml`:
 ```bash
 # Deploy to testnet with adequate gas
 sui client publish --gas-budget 500000000
+```
+
+If you already have a `Published.toml` entry for testnet and need a **fresh** publish (not an upgrade), use the unpublished environment:
+
+```bash
+sui client publish --environment testnet_unpublished --gas-budget 500000000
 ```
 
 **Expected outputs:**
@@ -258,16 +265,15 @@ jq -n \
 cat deployment.addresses.testnet.json
 ```
 
-### Optional: Update Move.toml for Local Builds
+### Optional: Update Published.toml for Local Builds
 
-After deployment, update your `Move.toml` to reference the published package for future local builds:
+`Published.toml` should reflect the latest testnet package. The CLI writes this automatically for the environment you used to publish.
+
+- If you published with `testnet_unpublished`, copy that entry into `[published.testnet]`.
+- If you published with `testnet`, verify the `testnet` entry matches your new package ID.
 
 ```bash
-# Update the crowd_walrus address in Move.toml
-sed -i.bak "s/crowd_walrus = \"0x0\"/crowd_walrus = \"$PACKAGE_ID\"/" Move.toml
-
-# Verify the change
-grep "crowd_walrus =" Move.toml
+cat Published.toml
 ```
 
 ---

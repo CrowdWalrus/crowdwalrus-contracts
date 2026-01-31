@@ -4,28 +4,30 @@ This document tracks external dependency revisions for reproducible builds as re
 
 ---
 
-## Pyth Network Oracle Dependency
+## Pyth + Wormhole Oracle Dependencies
 
 **Added:** October 23, 2025 (Task B0)
 
 **Purpose:** On-chain USD price valuation for donations, badges, and campaign statistics.
 
-### Dependency Configuration
+### Dependency Configuration (current)
 
 ```toml
-[dependencies.Pyth]
-git = "https://github.com/pyth-network/pyth-crosschain.git"
-subdir = "target_chains/sui/contracts"
-rev = "sui-contract-testnet"
+[dependencies]
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "3bd1262dcba9518a6901aa6a15f04072799bfb37" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "b71be5cbb9537c4aac8e23e74371affa3825efcd" }
+
+[dep-replacements.testnet]
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "1b1cb69e809e0e7081cf1bf9b2779c41c14fc7f0" }
 ```
 
 ### Details
 
-- **Repository:** https://github.com/pyth-network/pyth-crosschain
-- **Subdirectory:** `target_chains/sui/contracts`
-- **Revision:** `sui-contract-testnet` (git tag)
-- **Network:** Sui Testnet
-- **Date Pinned:** October 23, 2025
+- **Repositories:** https://github.com/pyth-network/pyth-crosschain, https://github.com/wormhole-foundation/wormhole
+- **Subdirectories:** `target_chains/sui/contracts`, `sui/wormhole`
+- **Revisions:** pinned commit hashes (mainnet + testnet overrides)
+- **Date Pinned:** January 2026
 
 ### Testnet Runtime Addresses
 
@@ -36,9 +38,19 @@ These state IDs are used at runtime in PTBs (Programmable Transaction Blocks), n
 
 ### Architecture Notes
 
-- **Pyth** provides the oracle contract for price feeds
-- **Wormhole** is an internal dependency of Pyth (transitive dependency - not declared in our Move.toml)
-- **Hermes** is the off-chain service for fetching price updates (frontend integration)
+- **Pyth** provides the oracle contract for price feeds.
+- **Wormhole** is an internal dependency of Pyth, but we pin it explicitly for deterministic builds.
+- **Hermes** is the off-chain service for fetching price updates (frontend integration).
+
+### Why commit hashes (not tags)
+
+- **Reproducibility:** tags/branches can move; commit hashes are immutable.
+- **Audits/debugging:** lockfiles and published bytecode can be traced back to an exact source tree.
+
+### Why testnet commits differ from mainnet
+
+- **Networks upgrade on different schedules.** Testnet often runs ahead/behind mainnet, and published packages can lag different commits.
+- **Match the chain, not the other network.** We pin testnet commits that reflect testnet-published packages.
 
 ### Integration Pattern
 
@@ -50,12 +62,12 @@ These state IDs are used at runtime in PTBs (Programmable Transaction Blocks), n
 
 ## Verification
 
-This revision was verified to build successfully with:
-- Sui Framework: `framework/mainnet`
-- Edition: `2024.beta`
-- Other dependencies: SuiNS testnet packages (crowdwalrus-testnet-core-v2)
+This config was verified to build and test with:
+- Sui CLI: mainnet 1.64.2 and testnet 1.64.1
+- Move edition: `2024`
+- SuiNS dependencies: mainnet v3 / testnet v2 via `dep-replacements`
 
-**Build Status:** ✅ Confirmed - `sui move build` succeeded (Oct 23, 2025)
+**Build Status:** ✅ Confirmed - `sui move build` + `sui move test` (Jan 2026)
 
 ---
 

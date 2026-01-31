@@ -1,7 +1,7 @@
 module crowd_walrus::suins_manager;
 
 use std::string::String;
-use suins_subdomains::subdomains::{new_leaf, remove_leaf};
+use subdomains::subdomains::{new_leaf, remove_leaf};
 use sui::clock::Clock;
 use sui::dynamic_field as df;
 use sui::dynamic_object_field as dof;

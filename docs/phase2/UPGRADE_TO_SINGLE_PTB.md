@@ -90,16 +90,12 @@ node scripts/resolve-beta-priceinfo.js 0x50c67b3fd225db8912a424dd4baed60ffdde625
 
 After this change, the donation call will not fail at argument binding. It may still abort on business rules (e.g., campaign window) until you complete the upgrade below.
 
-## 0.2) Temporarily set `crowd_walrus = "0x0"` in `Move.toml`
+## 0.2) Move 2024 package manager note (no `[addresses]` edits)
 
-The Sui toolchain requires every module in a publish/upgrade build to use address `0x0`. Before running `sui move build` or `sui client upgrade`, edit `Move.toml` so the package line reads:
+With the Move 2024 package manager, **do not** edit `Move.toml` addresses. Address management is handled via `Published.toml` and the selected build environment.
 
-```
-[addresses]
-crowd_walrus = "0x0"
-```
-
-After the upgrade succeeds and you have the new package ID, change the line back to `crowd_walrus = "$PKG_NEW"` so local dev/CLI commands reference the latest deployment.
+- Use `--environment testnet` for upgrades (published package).
+- Use `--environment testnet_unpublished` only for local unpublished builds/tests.
 
 ## 1) Build (sanity)
 
@@ -206,7 +202,7 @@ If something needs adjusting, you can temporarily point the dapp back to `$PKG_O
 ## Notes
 
 - Do not re-create TokenRegistry, BadgeConfig, ProfilesRegistry, or existing Campaign/Stats objects for an upgrade. They continue to work after you switch your moveCall targets to `$PKG_NEW`.
-- Keep the `addresses.crowd_walrus` named address in `Move.toml` as-is; the toolchain manages upgrade metadata in `Move.lock`.
+- With Move 2024, do not edit `Move.toml` addresses; keep `Published.toml` updated for the active environment.
 
 ## 10) Post-upgrade Pyth switch (frontend)
 

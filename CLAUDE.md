@@ -27,7 +27,7 @@ sui move test
 sui client publish --gas-budget 100000000
 ```
 
-After deployment, update `Move.toml` with the deployed package ID in the `[addresses]` section.
+After deployment, `Published.toml` is updated for the active environment. Commit it along with your deployment records (no `Move.toml` address edits under the new package manager).
 
 ## Architecture
 
@@ -65,11 +65,8 @@ When calling protected functions, modules check authorization via `assert_app_is
 
 ## Dependencies
 
-- **Sui Framework**: Mainnet version from MystenLabs
-- **SuiNS Core**: Testnet v2 (from `releases/testnet/core/v2`)
-- **Subdomains**: Testnet v2 (from `releases/testnet/core/v2`)
-
-For mainnet deployment, update SuiNS dependencies to mainnet versions.
+- **Sui Framework**: System dependency controlled by the active Sui CLI/environment.
+- **SuiNS Core/Subdomains/Denylist**: Mainnet v3 by default, with testnet v2 overrides via `dep-replacements`.
 
 ## Code Conventions
 

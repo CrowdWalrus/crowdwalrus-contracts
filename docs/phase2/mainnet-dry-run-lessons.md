@@ -10,20 +10,19 @@ This document captures the key lessons, decisions, and configuration changes fro
 - **Impact:** Pyth, Wormhole, and SuiNS on-chain packages currently **do not match** the git sources we can pull (even from official docs).
 - **Outcome:** For now, we accept **non‑verified publishes** (no forks), and document the risk.
 
-### 2) SuiNS address conflicts are caused by mixed address sources
+### 2) Address conflicts are caused by mixed address sources
 - **Problem:** Build failures like:
   `Conflicting assignments for address 'suins' ...` or `suins_denylist ...`
-- **Reason:** The consuming package set addresses in `[addresses]` that **conflicted** with addresses declared inside the SuiNS dependency itself.
-- **Fix:** **Remove SuiNS address overrides** from `[addresses]`. Let the dependency define them.
+- **Reason:** The consuming package set addresses in `[addresses]` that **conflicted** with addresses declared inside dependencies.
+- **Fix:** **Remove `[addresses]` entirely** under the new package manager. Let the package system and dependencies define addresses.
 
-### 3) Framework version conflicts require a global override
+### 3) Framework version conflicts require a single toolchain
 - **Problem:** MoveStdlib conflicts between Pyth (pinned to a specific framework rev) and SuiNS.
-- **Fix:** Force a **single Sui framework** for all deps using `override = true`.
-- **Why:** Our code + SuiNS depend on newer stdlib APIs (vector methods, vec_map helpers, etc.), so we aligned everything to `framework/mainnet`.
+- **Fix:** Use a single Sui CLI/toolchain per environment (mainnet or testnet). The framework is a **system dependency** now, so avoid explicit overrides.
 
-### 4) Use SuiNS `main` for newer source, avoid address overrides
-- We switched SuiNS dependencies back to `main` (newer than `releases/main`).
-- We **removed SuiNS addresses** in `[addresses]` so the dependency controls them.
+### 4) Pin SuiNS release tags with published addresses
+- We now pin `releases/mainnet/core/v3` and `releases/testnet/core/v2` with `published-at` metadata.
+- SuiNS addresses are managed by the dependency, not by `[addresses]`.
 
 ### 5) Dry-run publish gas (mainnet)
 - **Publish dry‑run gas:** `0.3464908 SUI`
@@ -31,26 +30,37 @@ This document captures the key lessons, decisions, and configuration changes fro
   - storageCost: `343,960,800 MIST`
   - rebate: `0`
 
-## Current configuration (Move.toml / Move.mainnet.toml)
+## Current configuration (single Move.toml + dep-replacements)
 
-### Dependencies (mainnet)
+### Dependencies (mainnet base + testnet overrides)
+Note: the Sui framework is now a system dependency, so it is not listed explicitly.
 ```toml
 [dependencies]
-Pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-mainnet" }
-Wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "sui/mainnet" }
-Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/mainnet", override = true }
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "3bd1262dcba9518a6901aa6a15f04072799bfb37" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "b71be5cbb9537c4aac8e23e74371affa3825efcd" }
 
-suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "main" }
-suins_subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "main" }
-suins_denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "main" }
-```
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/mainnet/core/v3", original-id = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0", published-at = "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5" }
+subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/mainnet/core/v3", published-at = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430" }
+denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/mainnet/core/v3", published-at = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b" }
 
-### Addresses
-We keep only the core addresses and **omit SuiNS overrides**:
-```toml
-[addresses]
-crowd_walrus = "0x0"
-sui = "0x2"
+[dep-replacements.testnet]
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "1b1cb69e809e0e7081cf1bf9b2779c41c14fc7f0" }
+
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/testnet/core/v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
+subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/testnet/core/v2", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
+denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/testnet/core/v2", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
+
+[dep-replacements.testnet_unpublished]
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "1b1cb69e809e0e7081cf1bf9b2779c41c14fc7f0" }
+
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/testnet/core/v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
+subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/testnet/core/v2", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
+denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/testnet/core/v2", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
+
+[environments]
+testnet_unpublished = "4c78adac"
 ```
 
 ## Commands used (reference)

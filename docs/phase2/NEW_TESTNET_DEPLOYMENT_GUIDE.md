@@ -27,19 +27,16 @@ echo "Deployer: $DEPLOYER_ADDRESS"
 
 ---
 
-## 1) Prepare Build Addresses
+## 1) Prepare Build Environment (Move 2024)
 
-Temporarily set the package address to `0x0` for a fresh publish.
+Do **not** edit `Move.toml` addresses. The Move 2024 package manager uses `Published.toml` + `--environment`.
+
+If `Published.toml` already has a `testnet` entry and you want a **fresh publish** (not an upgrade), use the unpublished environment for the build/publish:
 
 ```bash
-# Set the package address to 0x0 for publish (portable)
-sed -i.bak 's/^crowd_walrus = ".*"/crowd_walrus = "0x0"/' Move.toml
-
-# Sanity check
-grep -E '^crowd_walrus[[:space:]]*=[[:space:]]*"' Move.toml
+# Sanity check the unpublished build environment
+sui move build --environment testnet_unpublished
 ```
-
-Note: After successful publish, we will set this back to the new package ID.
 
 ---
 
@@ -50,8 +47,9 @@ Note: After successful publish, we will set this back to the new package ID.
 sui client active-env
 sui client gas
 
-# Publish the package
-sui client publish --gas-budget 500000000
+# Publish the package (fresh publish)
+# Use testnet_unpublished to avoid compiling against an existing published package address.
+sui client publish --environment testnet_unpublished --gas-budget 500000000
 ```
 
 Copy the following from the publish output (Created Objects and Events):
@@ -390,13 +388,12 @@ Archive naming pattern keeps a dated file for each deploy, and the canonical `de
 
 ---
 
-## 10) Update Move.toml Back to New Package
+## 10) Update Published.toml (testnet)
+
+The CLI updates `Published.toml` for the environment you used to publish. If you published with `testnet_unpublished`, copy the generated entry into `[published.testnet]` (or replace the existing `testnet` entry) so normal testnet builds use the new package ID.
 
 ```bash
-sed -i.bak "s/^crowd_walrus = \"0x0\"/crowd_walrus = \"$PACKAGE_ID\"/" Move.toml
-
-# Verify
-grep -E '^crowd_walrus[[:space:]]*=[[:space:]]*"' Move.toml
+cat Published.toml
 ```
 
 ---

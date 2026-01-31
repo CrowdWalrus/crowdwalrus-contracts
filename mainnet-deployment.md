@@ -46,13 +46,9 @@ Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and 
 **Files:** `Move.toml`, `Move.lock`
 1. Update **Pyth** dependency to a **mainnet** revision (currently `sui-contract-testnet`).
 2. Update **SuiNS** dependencies to a **mainnet** release (not the testnet fork).
-3. Update `[addresses]` in `Move.toml`:
-   - `suins`
-   - `subdomains`
-   - `denylist`
+3. Ensure `published-at` metadata is set for SuiNS mainnet packages in `Move.toml` (no `[addresses]` overrides under the new package manager).
 4. If the official SuiNS mainnet release has **address conflicts**, apply the workaround from `docs/SUINS_DEPENDENCY_ISSUE.md` (fork or `--with-unpublished-dependencies`).
-5. Keep `crowd_walrus = "0x0"` until after publish (fresh mainnet publish).
-6. Run `sui move build` to regenerate `Move.lock` with mainnet dependencies.
+5. Run `sui move build` to regenerate `Move.lock` with mainnet dependencies.
 
 ---
 
@@ -98,9 +94,7 @@ Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and 
    - `globals.pythState` (mainnet)
    - `globals.wormholeState` (mainnet)
    - `globals.suinsPackage` (mainnet)
-4. Update `Move.toml` **after publish**:
-   - set `crowd_walrus = "<NEW_PACKAGE_ID>"`
-5. Commit deployment records + `Move.toml` changes.
+4. `Published.toml` is updated by the CLI for the active environment; commit it alongside deployment records.
 
 ---
 
@@ -232,4 +226,3 @@ Follow `docs/operational_runbook.md` + `docs/aws_deployment.md`.
 - Indexer:
   - `config/indexer.toml`
   - `/etc/crowdwalrus/indexer-mainnet.env` (production host)
-

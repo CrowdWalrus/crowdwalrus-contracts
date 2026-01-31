@@ -10,6 +10,8 @@ Conflicting assignments for address 'suins': '0x...' and '0x0'
 
 This occurs because Sui Move's dependency system cannot override addresses from git dependencies when those dependencies specify their own addresses in their `Move.toml` files.
 
+> **Move 2024 note:** With the new package manager, you should **not** set `[addresses]` in your consuming package. Address resolution now uses dependency metadata (including `published-at`) plus `Published.toml`. The examples below referencing `[addresses]` are kept for historical context.
+
 ## Root Cause
 
 ### Incomplete Testnet Release Configuration
@@ -43,9 +45,9 @@ denylist = "0x0"
 
 This appears to be an **oversight** in the official release branch rather than an intentional design.
 
-### Sui Move Limitation
+### Sui Move Limitation (still relevant)
 
-Sui Move's build system does not allow you to override a dependency's address assignment from your consuming package's `Move.toml` unless:
+Sui Move's build system does not allow you to override a dependency's address assignment from your consuming package unless:
 - The dependency sets its address to `"_"` (unassigned)
 - The dependency uses automated address management properly
 - You use `addr_subst` (which also fails in this case due to timing of conflict detection)
@@ -61,12 +63,12 @@ suins = { git = "...", addr_subst = { "suins" = "0x..." } }
 ```
 **Result**: Still throws "Conflicting assignments" error because conflict is detected before substitution occurs.
 
-### ❌ Overriding in `[addresses]` section
+### ❌ Overriding in `[addresses]` section (legacy pre‑Move‑2024)
 ```toml
 [addresses]
 suins = "0x..."
 ```
-**Result**: Creates conflict with the dependency's own `Move.toml` address setting.
+**Result**: Creates conflict with the dependency's own `Move.toml` address setting (and is no longer supported in the Move 2024 flow).
 
 ### ❌ Using `override = true`
 ```toml
@@ -105,6 +107,10 @@ denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir =
 ```
 
 **Note**: The fork uses package names `subdomains` and `denylist` (not `suins_subdomains` and `suins_denylist`).
+
+### ✅ Solution 1b: Use official releases with `published-at`
+
+If the official release tags include correct `published-at` metadata, prefer those tags directly in your `Move.toml`. This aligns with the Move 2024 package manager and avoids local address overrides.
 
 ### ✅ Solution 2: Use `--with-unpublished-dependencies` Flag
 
