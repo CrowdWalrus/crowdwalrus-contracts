@@ -1,41 +1,48 @@
 [package]
 name = "crowd_walrus"
-# "2024" is the Move edition name (not the calendar year). It enables the
-# modern package manager used by Sui CLI 1.6x and later.
+# "2024" is the Move edition label (not the calendar year). It enables the
+# modern Sui package manager used by the Sui Move toolchain.
 edition = "2024" # edition = "legacy" to use legacy (pre-2024) Move
 # license = ""           # e.g., "MIT", "GPL", "Apache 2.0"
 # authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
 
 [dependencies]
 # Sui framework is a system dependency; version is controlled by the active Sui CLI/environment.
-# Pyth + Wormhole pinned to commit hashes for reproducible builds (tags/branches can move).
-pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "3bd1262dcba9518a6901aa6a15f04072799bfb37" }
-wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "b71be5cbb9537c4aac8e23e74371affa3825efcd" }
+# Pyth + Wormhole use upstream "stable" branches; Move.lock pins the exact commit for reproducibility.
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-mainnet" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "sui/mainnet" }
 
-# SuiNS mainnet (core v3) with published addresses.
-suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/mainnet/core/v3", original-id = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0", published-at = "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5" }
-subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/mainnet/core/v3", published-at = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430" }
-denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/mainnet/core/v3", published-at = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b" }
+# SuiNS mainnet is Core V3; testnet is Core V2. Use the upstream main branch
+# because it includes the renamed packages and published-at metadata needed for
+# `sui client publish --dry-run` without --with-unpublished-dependencies.
+# original-id matches the on-chain "original" package; published-at is the
+# on-chain package ID used by this dependency branch (verified via `sui client object`).
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "main", original-id = "0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0", published-at = "0x71af035413ed499710980ed8adb010bbf2cc5cacf4ab37c7710a4bb87eb58ba5" }
+suins_subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "main", original-id = "0xe177697e191327901637f8d2c5ffbbde8b1aaac27ec1024c4b62d1ebd1cd7430", published-at = "0xe0108df96c8dfac6d285e5b8afbeafc9a205002a3ec7807329929c8b4d53a8a0" }
+suins_denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "main", original-id = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b", published-at = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b" }
 
 [dep-replacements.testnet]
-# Testnet deps are not always at the same commit as mainnet; pin to the
-# versions that match testnet-published packages.
-pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
-wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "1b1cb69e809e0e7081cf1bf9b2779c41c14fc7f0" }
+# Testnet deps are not always at the same commit as mainnet; use the
+# upstream testnet branches that match published package IDs.
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-testnet" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "sui/testnet" }
 
-suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/testnet/core/v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
-subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/testnet/core/v2", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
-denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/testnet/core/v2", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
+# Use forked testnet branch with corrected addresses (no unpublished deps).
+# The fork uses package names `subdomains`/`denylist`, so we keep `suins_*`
+# names in our code and use `rename-from` to map them.
+suins = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/suins", rev = "crowdwalrus-testnet-core-v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
+suins_subdomains = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/subdomains", rev = "crowdwalrus-testnet-core-v2", rename-from = "subdomains", original-id = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
+suins_denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/denylist", rev = "crowdwalrus-testnet-core-v2", rename-from = "denylist", original-id = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
 
 [dep-replacements.testnet_unpublished]
-# Unpublished testnet build env for local tests/builds. Keeps deps aligned with
-# testnet while avoiding a published package address binding.
-pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "62c7a5bc0fc857ba6417ad780190552d4919ceca" }
-wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "1b1cb69e809e0e7081cf1bf9b2779c41c14fc7f0" }
+# Local-only testnet env to keep Published.toml separate while still using
+# published dependencies (no unpublished deps required).
+pyth = { git = "https://github.com/pyth-network/pyth-crosschain.git", subdir = "target_chains/sui/contracts", rev = "sui-contract-testnet" }
+wormhole = { git = "https://github.com/wormhole-foundation/wormhole.git", subdir = "sui/wormhole", rev = "sui/testnet" }
 
-suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "releases/testnet/core/v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
-subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "releases/testnet/core/v2", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
-denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "releases/testnet/core/v2", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
+suins = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/suins", rev = "crowdwalrus-testnet-core-v2", original-id = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
+suins_subdomains = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/subdomains", rev = "crowdwalrus-testnet-core-v2", rename-from = "subdomains", original-id = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
+suins_denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/denylist", rev = "crowdwalrus-testnet-core-v2", rename-from = "denylist", original-id = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
 
 [environments]
 # Custom env uses the testnet chain-id but is separate in Published.toml so

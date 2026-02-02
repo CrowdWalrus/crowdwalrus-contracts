@@ -25,7 +25,7 @@
 Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and internal product decisions:
 1. **Sui CLI mainnet release** to pin with `suiup`.
 2. **Pyth mainnet dependency revision** (for `Move.toml`).
-3. **SuiNS mainnet package revisions** for `suins`, `subdomains`, `denylist` (and their **mainnet published addresses**).
+3. **SuiNS mainnet package revisions** for `suins`, `suins_subdomains`, `suins_denylist` (and their **mainnet published addresses**).
 4. **SuiNS shared object ID** (`suins::suins::SuiNS`) for **mainnet** (not the package ID).
 5. **SuiNS Registration NFT ID** for the production domain (`crowdwalrus.sui`).
 6. **Pyth mainnet state IDs**:
@@ -44,10 +44,10 @@ Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and 
 
 ## 3) Contracts: update dependencies for mainnet (branch `phase2`)
 **Files:** `Move.toml`, `Move.lock`
-1. Update **Pyth** dependency to a **mainnet** revision (currently `sui-contract-testnet`).
-2. Update **SuiNS** dependencies to a **mainnet** release (not the testnet fork).
+1. Ensure **Pyth** dependency uses the **mainnet** branch (`sui-contract-mainnet`).
+2. Update **SuiNS** dependencies to the **main** branch (`suins_*` packages with `published-at`).
 3. Ensure `published-at` metadata is set for SuiNS mainnet packages in `Move.toml` (no `[addresses]` overrides under the new package manager).
-4. If the official SuiNS mainnet release has **address conflicts**, apply the workaround from `docs/SUINS_DEPENDENCY_ISSUE.md` (fork or `--with-unpublished-dependencies`).
+4. If SuiNS upstream changes create **address conflicts**, follow `docs/SUINS_DEPENDENCY_ISSUE.md`. **Do not** use `--with-unpublished-dependencies`.
 5. Run `sui move build` to regenerate `Move.lock` with mainnet dependencies.
 
 ---
@@ -62,15 +62,15 @@ Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and 
    - `sui client active-address`
    - `sui client gas` (ensure enough SUI for publish + admin calls)
 5. Build & test:
-   - `sui move build`
-   - `sui move test`
+   - `sui move build --environment mainnet`
+   - `sui move test --environment mainnet`
 
 ---
 
 ## 5) Contracts: publish package to mainnet (branch `phase2`)
 1. Publish (fresh):
-   - `sui client publish --gas-budget 500000000`  
-   - If SuiNS dep conflict exists, add `--with-unpublished-dependencies`.
+   - `sui client publish --gas-budget 500000000`
+   - If a dependency issue appears, fix `Move.toml`/`published-at` instead of using `--with-unpublished-dependencies`.
 2. Capture **all created IDs** from the publish output:
    - **Package ID**
    - **Shared objects**: CrowdWalrus, PolicyRegistry, ProfilesRegistry, TokenRegistry, BadgeConfig, SuiNSManager

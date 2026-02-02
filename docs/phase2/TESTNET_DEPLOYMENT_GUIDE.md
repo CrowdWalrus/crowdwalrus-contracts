@@ -14,7 +14,7 @@ This guide covers **fresh publish**. For upgrades, see the [Upgrade Path](#upgra
 
 ## Prerequisites: Sui & Tooling
 
-As of November 7, 2025, the latest Sui Testnet release is `testnet-v1.60.0`. Update your CLI to the exact Testnet release before deploying to avoid protocol/version mismatches.
+Pin your CLI to the current Testnet release before deploying to avoid protocol/version mismatches. Use `suiup list` to find the latest build instead of hardcoding versions in docs.
 
 ### A. Install or Update `suiup`
 
@@ -31,12 +31,17 @@ source ~/.zshrc
 command -v suiup && suiup list
 ```
 
-### B. Pin Sui CLI to Testnet `1.60.0`
+### B. Pin Sui CLI to the current Testnet build
 
 ```bash
-# Install the exact Testnet build and set it default
-suiup install sui@testnet-1.60.0 -y
-suiup default set sui@testnet-1.60.0
+# See available builds
+suiup list
+
+# Install the latest Testnet build (or pick a specific version from the list)
+suiup install sui@testnet -y
+
+# Set the version you installed as default
+suiup default set sui@testnet-<version>
 
 # Verify version and path
 sui --version
@@ -44,11 +49,7 @@ suiup which sui
 which -a sui   # Ensure the suiup path is first
 ```
 
-Tip: To always get the newest Testnet build when this guide becomes stale, you can run:
-
-```bash
-suiup install sui@testnet -y
-```
+Tip: If you want to pin an exact version for reproducibility, record the version string in your deployment notes.
 
 ### C. Optional: Install/Update Walrus CLI
 
@@ -92,11 +93,12 @@ sui client gas
 ```bash
 cd /Users/alireza/Codes/crowd-walrus-contracts
 
-# Clean build
-sui move build
+# Clean build (published testnet deps)
+sui move build --environment testnet
 
-# Run all tests to ensure everything passes
-sui move test
+# Tests should run in the unpublished env to avoid Published.toml conflicts
+sui move build --environment testnet_unpublished
+sui move test  --environment testnet_unpublished
 ```
 
 ### 3. Review Dependencies
@@ -105,9 +107,8 @@ Confirm these are in your `Move.toml`:
 - ✅ Sui Framework: implicit (no explicit Sui dependency; CLI resolves the correct framework for Testnet)
 - ✅ Pyth: pinned commit (see `Move.toml`)
 - ✅ Wormhole: pinned commit (see `Move.toml`)
-- ✅ SuiNS: `releases/testnet/core/v2`
-- ✅ Subdomains: `releases/testnet/core/v2`
-- ✅ Denylist: `releases/testnet/core/v2`
+- ✅ SuiNS: `suins_*` packages with `published-at` metadata
+- ✅ Testnet SuiNS: forked core v2 packages with corrected addresses (`rename-from`)
 
 ---
 
@@ -120,10 +121,13 @@ Confirm these are in your `Move.toml`:
 sui client publish --gas-budget 500000000
 ```
 
+If you hit dependency errors, fix `Move.toml` (`published-at` / dep replacements) instead of using `--with-unpublished-dependencies`.
+
 If you already have a `Published.toml` entry for testnet and need a **fresh** publish (not an upgrade), use the unpublished environment:
 
 ```bash
-sui client publish --environment testnet_unpublished --gas-budget 500000000
+sui client switch --env testnet_unpublished
+sui client publish --gas-budget 500000000
 ```
 
 **Expected outputs:**
@@ -740,8 +744,8 @@ sui client upgrade \
   --upgrade-capability $EXISTING_UPGRADE_CAP_ID \
   --gas-budget 500000000
 
-# If you have unpublished dependencies, add:
-# --with-unpublished-dependencies
+# Do not use --with-unpublished-dependencies. Ensure all deps are published-at
+# and the environment uses the correct testnet branches.
 
 # Note: After a successful upgrade, the CLI prints a new package ID.
 # Set it for subsequent admin calls (e.g., migrations):

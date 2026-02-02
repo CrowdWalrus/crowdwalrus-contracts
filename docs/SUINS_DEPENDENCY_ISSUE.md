@@ -12,6 +12,31 @@ This occurs because Sui Move's dependency system cannot override addresses from 
 
 > **Move 2024 note:** With the new package manager, you should **not** set `[addresses]` in your consuming package. Address resolution now uses dependency metadata (including `published-at`) plus `Published.toml`. The examples below referencing `[addresses]` are kept for historical context.
 
+## Current Fix (Jan 2026)
+
+We no longer use the `releases/*` branches for SuiNS. The `main` branch includes
+the renamed packages (`suins_subdomains`, `suins_denylist`) and the `published-at`
+metadata needed for `sui client publish --dry-run` without
+`--with-unpublished-dependencies`. The upstream `testnet` branch still leaves
+`denylist` at `0x0`, so we use a fork with corrected addresses for testnet and
+map package names with `rename-from`.
+
+**Move.toml (summary):**
+
+```toml
+[dependencies]
+suins = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/suins", rev = "main", published-at = "0x71af035413ed499710980ed8adb010bbf2cc5cacf4ab37c7710a4bb87eb58ba5" }
+suins_subdomains = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/subdomains", rev = "main", published-at = "0xe0108df96c8dfac6d285e5b8afbeafc9a205002a3ec7807329929c8b4d53a8a0" }
+suins_denylist = { git = "https://github.com/MystenLabs/suins-contracts.git", subdir = "packages/denylist", rev = "main", published-at = "0xc967b7862d926720761ee15fbd0254a975afa928712abcaa4f7c17bb2b38d38b" }
+
+[dep-replacements.testnet]
+suins = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/suins", rev = "crowdwalrus-testnet-core-v2", published-at = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" }
+suins_subdomains = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/subdomains", rev = "crowdwalrus-testnet-core-v2", rename-from = "subdomains", published-at = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636" }
+suins_denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/denylist", rev = "crowdwalrus-testnet-core-v2", rename-from = "denylist", published-at = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49" }
+```
+
+This is the approach used in this repo today (see `Move.toml`).
+
 ## Root Cause
 
 ### Incomplete Testnet Release Configuration
@@ -85,9 +110,9 @@ suins_subdomains = { r.mvr = "@suins/subnames", override = true }
 ```
 **Result**: Version conflicts between core (v5) and subdomains (requires v2 core).
 
-## Working Solutions
+## Solutions
 
-### ✅ Solution 1: Use a Fork with Fixed Addresses (Recommended)
+### ✅ Solution 1: Use a Fork with Fixed Addresses (Current)
 
 Use a fork of the official repository that has properly uncommented the testnet addresses for ALL packages (not just `suins`).
 
@@ -107,20 +132,21 @@ denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir =
 ```
 
 **Note**: The fork uses package names `subdomains` and `denylist` (not `suins_subdomains` and `suins_denylist`).
+We keep `suins_*` names in our code and map them with `rename-from`:
+
+```toml
+suins_subdomains = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/subdomains", rev = "crowdwalrus-testnet-core-v2", rename-from = "subdomains" }
+suins_denylist = { git = "https://github.com/aminlatifi/suins-contracts.git", subdir = "packages/denylist", rev = "crowdwalrus-testnet-core-v2", rename-from = "denylist" }
+```
 
 ### ✅ Solution 1b: Use official releases with `published-at`
 
 If the official release tags include correct `published-at` metadata, prefer those tags directly in your `Move.toml`. This aligns with the Move 2024 package manager and avoids local address overrides.
 
-### ✅ Solution 2: Use `--with-unpublished-dependencies` Flag
+### 🚫 Disallowed: `--with-unpublished-dependencies`
 
-When publishing, use this flag to treat dependencies as unpublished:
-
-```bash
-sui client publish --with-unpublished-dependencies --gas-budget 100000000
-```
-
-This was introduced in Devnet 0.23.0 specifically to address this issue.
+We **do not** use `--with-unpublished-dependencies`. All dependencies must be
+published on-chain and referenced with correct `published-at` metadata.
 
 ### ✅ Solution 3: Create Your Own Fork
 
@@ -157,7 +183,7 @@ denylist = "0x0"
 denylist = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49"
 ```
 
-## Package Name Differences
+## Package Name Differences (still relevant)
 
 **Official MystenLabs packages** (mainnet releases):
 - `suins` → package name: `suins`
@@ -188,16 +214,20 @@ use suins_subdomains::subdomain_tests as subdomain_tests;
 For reference, these are the testnet addresses as of core v2:
 
 ```toml
-suins = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93"
-subdomains = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636"
-denylist = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49"
+suins = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93" # original-id
+suins_published = "0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1" # published-at used by core v2 branch
+suins_subdomains = "0x3c272bc45f9157b7818ece4f7411bdfa8af46303b071aca4e18c03119c9ff636"
+suins_denylist = "0xa86c05fbc6371788eb31260dc5085f4bfeab8b95c95d9092c9eb86e63fae3d49"
 ```
+
+Note: A newer SuiNS package exists on testnet, but the core v2 fork pins the
+`published-at` shown above, so we keep it aligned with that branch.
 
 ## Should This Be Reported to MystenLabs?
 
 **Yes, potentially.** The inconsistent address configuration in `releases/testnet/core/v2` could be:
 - An oversight that should be fixed
-- Or an intentional state if they expect users to use `--with-unpublished-dependencies`
+- Or an intentional state if they expect users to use unpublished deps (not allowed for us)
 
 You could open an issue on [MystenLabs/suins-contracts](https://github.com/MystenLabs/suins-contracts/issues) asking:
 1. Is the testnet release branch intended to be usable directly as a git dependency?
@@ -223,10 +253,11 @@ The Sui ecosystem is actively working on better solutions:
 ## Troubleshooting
 
 ### Error: "Conflicting assignments for address"
-- **Solution**: Use a fork with addresses uncommented, or use `--with-unpublished-dependencies`
+- **Solution**: Use `main`/`testnet` branches with `suins_*` packages + `published-at` in Move.toml
 
 ### Error: "Name of dependency 'X' does not match dependency's package name 'Y'"
-- **Solution**: Check the actual package name in the dependency's `Move.toml` and match it exactly
+- **Solution**: Check the actual package name in the dependency's `Move.toml` and match it exactly,
+  or use `rename-from` to map the original package name to your preferred dependency name.
 
 ### Error: MVR version conflicts
 - **Solution**: Stick with git dependencies until MVR matures, or ensure all MVR packages use compatible versions
@@ -236,4 +267,4 @@ The Sui ecosystem is actively working on better solutions:
 
 ## Last Updated
 
-January 2025 (Sui framework/mainnet, SuiNS testnet core v2)
+January 2026 (SuiNS main branch + forked testnet core v2 packages with `rename-from`)

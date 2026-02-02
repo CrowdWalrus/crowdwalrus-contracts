@@ -29,7 +29,7 @@ echo "Deployer: $DEPLOYER_ADDRESS"
 
 ## 1) Prepare Build Environment (Move 2024)
 
-Do **not** edit `Move.toml` addresses. The Move 2024 package manager uses `Published.toml` + `--environment`.
+Do **not** edit `Move.toml` addresses. The Move 2024 package manager uses `Published.toml` + the active CLI environment.
 
 If `Published.toml` already has a `testnet` entry and you want a **fresh publish** (not an upgrade), use the unpublished environment for the build/publish:
 
@@ -49,7 +49,8 @@ sui client gas
 
 # Publish the package (fresh publish)
 # Use testnet_unpublished to avoid compiling against an existing published package address.
-sui client publish --environment testnet_unpublished --gas-budget 500000000
+sui client switch --env testnet_unpublished
+sui client publish --gas-budget 500000000
 ```
 
 Copy the following from the publish output (Created Objects and Events):
