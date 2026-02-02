@@ -50,10 +50,8 @@ The current deployment (`0xc762a509…`) is linked against the Pyth “Beta” p
 - Pyth Package (Beta): `0xabf837e98c26087cba0883c0a7a28326b1fa3c5e1e2c5abdb486f9e8f594c837`
 - Pyth State (Beta):   `0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c`
 
-Frontends default to the “current” Pyth package/state:
-
-- Pyth Package (current): `0x431c1cfb9a4da32c77810a1c48aa19cc2edb03010281e0fe411b4b3b38589df1`
-- Pyth State (current):   `0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0`
+Frontends must use the **same** Pyth package/state IDs as the package expects
+(see the Pyth contract addresses page). Any mismatch will cause type errors.
 
 If the frontend refreshes prices using the current state, the `PriceInfoObject` type will be from 0x431c1c…, but the donations entry expects 0xabf837…, resulting in:
 
@@ -90,16 +88,12 @@ node scripts/resolve-beta-priceinfo.js 0x50c67b3fd225db8912a424dd4baed60ffdde625
 
 After this change, the donation call will not fail at argument binding. It may still abort on business rules (e.g., campaign window) until you complete the upgrade below.
 
-## 0.2) Temporarily set `crowd_walrus = "0x0"` in `Move.toml`
+## 0.2) Move 2024 package manager note (no `[addresses]` edits)
 
-The Sui toolchain requires every module in a publish/upgrade build to use address `0x0`. Before running `sui move build` or `sui client upgrade`, edit `Move.toml` so the package line reads:
+With the Move 2024 package manager, **do not** edit `Move.toml` addresses. Address management is handled via `Published.toml` and the selected build environment.
 
-```
-[addresses]
-crowd_walrus = "0x0"
-```
-
-After the upgrade succeeds and you have the new package ID, change the line back to `crowd_walrus = "$PKG_NEW"` so local dev/CLI commands reference the latest deployment.
+- Use `--environment testnet` for upgrades (published package).
+- Use `--environment testnet_unpublished` only for local unpublished builds/tests.
 
 ## 1) Build (sanity)
 
@@ -206,7 +200,7 @@ If something needs adjusting, you can temporarily point the dapp back to `$PKG_O
 ## Notes
 
 - Do not re-create TokenRegistry, BadgeConfig, ProfilesRegistry, or existing Campaign/Stats objects for an upgrade. They continue to work after you switch your moveCall targets to `$PKG_NEW`.
-- Keep the `addresses.crowd_walrus` named address in `Move.toml` as-is; the toolchain manages upgrade metadata in `Move.lock`.
+- With Move 2024, do not edit `Move.toml` addresses; keep `Published.toml` updated for the active environment.
 
 ## 10) Post-upgrade Pyth switch (frontend)
 
@@ -215,8 +209,8 @@ Switch the frontend back to the “current” Pyth state so you use the latest p
 ```
 pyth: {
   hermesUrl: "https://hermes.pyth.network",
-  pythStateId: "0xd3e79c2c083b934e78b3bd58a490ec6b092561954da6e7322e1e2b3c8abfddc0",
-  wormholeStateId: "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790",
+  pythStateId: "0x1f9310238ee9298fb703c3419030b35b22bb1cc37113e3bb5007c99aec79e5b8",
+  wormholeStateId: "0xaeab97f96cf9877fee2883315d459552b2b921edc16d7ceac6eab944dd88919c",
 }
 ```
 
