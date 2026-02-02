@@ -5,7 +5,7 @@ module crowd_walrus::suins_manager_tests;
 use crowd_walrus::suins_manager::{Self as suins_manager, SuiNSManager};
 use std::string::{utf8, String};
 use std::unit_test::assert_eq;
-use subdomains::subdomain_tests as subdomain_tests;
+use suins_subdomains::subdomain_tests as subdomain_tests;
 use sui::clock::Clock;
 use sui::test_scenario::{Self as ts, ctx, Scenario};
 use suins::domain;

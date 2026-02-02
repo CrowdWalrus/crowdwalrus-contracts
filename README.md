@@ -65,6 +65,22 @@ sui client publish --gas-budget 500000000
 
 After publish, follow the [post-deployment checklist](#post-deployment-checklist) to wire SuiNS, tokens, badges, and platform policies.
 
+## Network Branch Strategy (Temporary)
+Because Sui CLI v1.62.x uses the legacy Move package manager (no environments/rename-from), we keep separate branches for mainnet vs testnet until we migrate to v1.63+.
+
+- `mainnet` branch: `Move.toml` targets mainnet deps and uses MystenLabs `suins-contracts` `main` with package names `suins_subdomains`/`suins_denylist`.
+- `testnet` branch: `Move.toml` targets testnet deps and uses the `aminlatifi` fork with package names `subdomains`/`denylist`.
+- `main` currently mirrors the testnet baseline; use explicit `mainnet`/`testnet` branches to avoid confusion.
+
+Quick switch:
+```bash
+git switch mainnet
+# or
+git switch testnet
+```
+
+Once we upgrade to Sui v1.63+ and the new package manager, we can collapse back to a single branch and use environments/dep-replacements.
+
 ## Working With The Contracts
 - Build and test locally with `sui move build` and `sui move test`.
 - Developer-focused PTB recipes, admin runbooks, and price feed guidance live in `docs/phase2/PHASE_2_DEV_DOCUMENT.md` and `docs/phase2/POST_DEPLOYMENT_CONFIG.md`.
