@@ -119,4 +119,8 @@ package-lock.json
 bun.lock
 
 # Scripts
-scripts/
+# scripts/
+
+# Deployment verification artifacts (contain on-chain logs)
+/deployments/verification/
+/mainnet/

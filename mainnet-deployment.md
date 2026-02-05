@@ -94,6 +94,10 @@ Gather/confirm these values **from official sources** (Pyth, SuiNS, Walrus) and 
    - `globals.pythState` (mainnet)
    - `globals.wormholeState` (mainnet)
    - `globals.suinsPackage` (mainnet)
+     - Use the package ID that matches your **SuinsRegistration NFT type**
+       (the original SuiNS ID, e.g., `0xd22b...`), not the `published-at`
+       dependency ID. This must align with the NFT type prefix or the
+       post-deploy script will fail the type check.
 4. `Published.toml` is updated by the CLI for the active environment; commit it alongside deployment records.
 
 ---

@@ -70,6 +70,9 @@ work without `--with-unpublished-dependencies` and without using the deprecated
 5) **Update SuiNS published-at IDs** to latest on-chain packages:
    - Mainnet SuiNS published-at: `0x71af035413ed499710980ed8adb010bbf2cc5cacf4ab37c7710a4bb87eb58ba5`
    - Testnet SuiNS published-at (core v2): `0x67072134f0867b886c9541873d1cb327feb7e161cd56dd76cb6aa9e464410db1`
+   - Note: deployment JSON `globals.suinsPackage` should still use the **original**
+     SuiNS package ID that matches your SuinsRegistration NFT type (e.g., mainnet
+     `0xd22b...`, testnet `0x22fa...`).
 
 6) **Document expected warnings** so they are not mistaken for failures.
 

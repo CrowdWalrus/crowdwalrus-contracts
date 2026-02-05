@@ -1,0 +1,108 @@
+{
+  "network": "testnet",
+  "label": "phase2-template",
+  "deployedAt": "",
+  "txDigest": "",
+  "packageId": "",
+  "accounts": {
+    "deployer": ""
+  },
+  "sharedObjects": {
+    "crowdWalrus": "",
+    "suinsManager": "",
+    "policyRegistry": "",
+    "profilesRegistry": "",
+    "badgeConfig": "",
+    "tokenRegistry": ""
+  },
+  "ownedCaps": {
+    "adminCap": "",
+    "suinsAdminCap": "",
+    "publisher": "",
+    "upgradeCap": ""
+  },
+  "globals": {
+    "clock": "0x6",
+    "pythState": "0x243759059f4c3111179da5878c12f68d612c21a8d54d85edc86164bb18be1c7c",
+    "wormholeState": "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790",
+    "suinsPackage": "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93"
+  },
+  "migration": {
+    "suinsRegistration": {
+      "nftId": "",
+      "registeredWithTx": "",
+      "newManager": "",
+      "newAdminCap": ""
+    }
+  },
+  "postConfig": {
+    "display": {
+      "donorBadgeDisplay": null,
+      "setupTx": null
+    },
+    "policies": {
+      "standard": {
+        "bps": 0,
+        "platformAddress": "",
+        "enabled": true
+      },
+      "commercial": {
+        "bps": 500,
+        "platformAddress": "",
+        "enabled": true,
+        "txDigest": ""
+      }
+    },
+    "tokens": {
+      "0x2::sui::SUI": {
+        "symbol": "SUI",
+        "name": "Sui",
+        "decimals": 9,
+        "feedId": "0x50c67b3fd225db8912a424dd4baed60ffdde625ed2feaaf283724f9608fea266",
+        "maxAgeMs": 300000,
+        "enabled": true
+      },
+      "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC": {
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "decimals": 6,
+        "feedId": "0x41f3625971ca2ed2263e78573fe5ce23e13d2558ed3f2e47ab0f84fb9e7ae722",
+        "maxAgeMs": 300000,
+        "enabled": true
+      },
+      "0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL": {
+        "symbol": "WAL",
+        "name": "WAL Token",
+        "decimals": 9,
+        "feedId": "0xa6ba0195b5364be116059e401fb71484ed3400d4d9bfbdf46bd11eab4f9b7cea",
+        "maxAgeMs": 300000,
+        "enabled": true
+      }
+    },
+    "badges": {
+      "amountThresholdsMicro": [
+        5000000,
+        10000000,
+        15000000,
+        20000000,
+        25000000
+      ],
+      "paymentThresholds": [
+        2,
+        4,
+        6,
+        8,
+        10
+      ],
+      "imageUris": [
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/i-ArkhoFmAVEpPo2joNwyIJeQb2OLoUJvbu1vaiLXKIBAQCvAA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/wyackOXpxuO2LWIER7V1y-FjJb1GE4KU3bvH7sBKSmYBAQDfAA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/iAbbzsnrzI5UEVLq84FXK_A0JUenilVlyajfmonyAZwBAQD9AA",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/URlMKBVMdunHasZyLb5Frdze4PgafqAbr9dUAVyHyuEBAQARAQ",
+        "https://aggregator.walrus-testnet.walrus.space/v1/blobs/by-quilt-patch-id/_8IRK-y241G88V5QeEjBRQJZjuqSdcVI7YeqwJ-OPYcBAQDGAQ"
+      ],
+      "updateTx": ""
+    }
+  }
+}
+

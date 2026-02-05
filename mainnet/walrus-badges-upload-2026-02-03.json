@@ -1,0 +1,51 @@
+{
+  "kind": "walrus_badges_quilt_upload",
+  "network": "mainnet",
+  "uploadedAt": "2026-02-03T10:10:50Z",
+  "sourcePath": "/Users/alireza/Downloads/badges",
+  "epochsAhead": 53,
+  "costFrost": 42813000,
+  "costWal": 0.042813,
+  "quilt": {
+    "blobId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8",
+    "blobObjectId": "0x3cad1ef0f36d28fc66c4326c737f1fcbabef8b145d529d9353237d75109a364b",
+    "storageObjectId": "0xd73b5f156bce9e80ebe0c655a022eb68cfcfa58a13b4ff99f94eb8f371d8f590",
+    "registeredEpoch": 23,
+    "endEpoch": 76,
+    "unencodedSize": 2227780,
+    "encodedSize": 74042000,
+    "encodingType": "RS2"
+  },
+  "patches": [
+    {
+      "level": 1,
+      "identifier": "level1.png",
+      "quiltPatchId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BAQBHAA",
+      "imageUri": "https://aggregator.walrus-mainnet.walrus.space/v1/blobs/by-quilt-patch-id/BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BAQBHAA"
+    },
+    {
+      "level": 2,
+      "identifier": "level2.png",
+      "quiltPatchId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BRwCgAA",
+      "imageUri": "https://aggregator.walrus-mainnet.walrus.space/v1/blobs/by-quilt-patch-id/BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BRwCgAA"
+    },
+    {
+      "level": 3,
+      "identifier": "level3.png",
+      "quiltPatchId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BoAAFAQ",
+      "imageUri": "https://aggregator.walrus-mainnet.walrus.space/v1/blobs/by-quilt-patch-id/BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BoAAFAQ"
+    },
+    {
+      "level": 4,
+      "identifier": "level4.png",
+      "quiltPatchId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BBQFyAQ",
+      "imageUri": "https://aggregator.walrus-mainnet.walrus.space/v1/blobs/by-quilt-patch-id/BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BBQFyAQ"
+    },
+    {
+      "level": 5,
+      "identifier": "level5.png",
+      "quiltPatchId": "BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BcgEnAg",
+      "imageUri": "https://aggregator.walrus-mainnet.walrus.space/v1/blobs/by-quilt-patch-id/BiFXQRMI4aR1nJwo-0VpMKjz9YJURDKll8XGOU1xQY8BcgEnAg"
+    }
+  ]
+}
